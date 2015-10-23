@@ -26,7 +26,6 @@
            #:dump-alien-symbols
            #:dump-extern-symbols
            #:dump-dynamic-list-lds
-           #:combine-run-time-and-core
            #:md5sum-file
            #:set-interpret-mode
            #:set-interactive-mode
@@ -314,7 +313,6 @@
 
 (defun dump-extern-symbols (output-file)
   "Dumps alien symbols as extern symbols to the OUTPUT-FILE in assembler code."
-  ;; TODO: make it work with clang as well as GNU binutils.
   (with-open-file (out output-file :direction :output :if-exists :supersede)
     (format out ".section .note.GNU-stack,\"\",@progbits~%~
                  .section rodata~%~
@@ -329,9 +327,11 @@
 (defun set-interpret-mode (compile-mode)
   "Set the mode of eval to :interpret if COMPILE-MODE is :LOAD. Otherwise, set it to :COMPILE."
   (declare (optimize (speed 1) (safety 3) (compilation-speed 1) (debug 1)))
-  (setf sb-ext:*evaluator-mode*
-        (if (eq compile-mode :load) :interpret :compile))
-  (bazel.log:vv "Set interpret mode to: ~A" sb-ext:*evaluator-mode*)
+  (if (eq compile-mode :load)
+      (handler-case (set 'sb-ext:*evaluator-mode* :fast-interpret)
+        (type-error () (setq sb-ext:*evaluator-mode* :interpret)))
+      (setf sb-ext:*evaluator-mode* :compile))
+  (bazel.log:vv "Set interpret mode to: ~A"  sb-ext:*evaluator-mode*)
   sb-ext:*evaluator-mode*)
 
 (defun set-interactive-mode (&optional (interactive-p t))
@@ -339,84 +339,6 @@
   (if interactive-p
       (sb-ext:enable-debugger)
       (sb-ext:disable-debugger)))
-
-;;;
-;;; Combining C++ run-time and Lisp image core.
-;;;
-
-(defvar *core-magic* (map 'octets #'char-code #(#\L #\C #\B #\S #\Null #\Null #\Null #\Null))
-  "The magic number used to start and end an SBCL's Lisp core.")
-(defconstant +magic-size+ 8 "The size of the magic number used for SBCL's Lisp core.")
-(defconstant +offset-type-size+ 8 "The size of the Lisp core offset.")
-
-(defun find-lisp-core-start (in)
-  "Search for Lisp core in the IN stream. Return the offset or NIL."
-  (flet ((find-magic (position)
-           (let ((bytes (make-array +magic-size+ :element-type 'octet)))
-             (file-position in position)
-             (read-sequence bytes in)
-             (let ((found (equalp bytes *core-magic*)))
-               (bazel.log:verbose "~:[No m~;M~]agic found in ~S at x~X."
-                                  found (enough-namestring in) position)
-               found))))
-    ;; 1. plain core.
-    (when (find-magic 0)
-      (return-from find-lisp-core-start 0))
-    ;; 2. appended core.
-    (unless (find-magic (- (file-length in) +magic-size+))
-      (return-from find-lisp-core-start))
-    ;; Magic found. Read the offset.
-    (let ((offset-position (- (file-length in) +magic-size+ +offset-type-size+)))
-      (file-position in offset-position)
-      (let ((offset (read-u64 in)))
-        (bazel.log:verbose "Read Lisp core offset x~X [at x~X]." offset offset-position)
-        ;; Verify that there is the magic at the offset.
-        (unless (find-magic offset)
-          (return-from find-lisp-core-start))
-        (bazel.log:verbose "Found Lisp core at x~X in ~S." offset (enough-namestring in))
-        offset))))
-
-(defconstant +image-alignment+ -32768 "Alignment requirement for the Lisp image.")
-
-(defun read-run-time (run-time)
-  "Read RUN-TIME part of the image. Return octets stripped of a core and aligned."
-  (with-open-file (run-time run-time :direction :input :element-type 'octet)
-    (let* ((end (or (find-lisp-core-start run-time) (file-length run-time)))
-           (aligned-size (- end (mod end +image-alignment+)))
-           (octets (make-array aligned-size :element-type 'octet)))
-      (file-position run-time 0)
-      (assert (= end (read-sequence octets run-time :end end))) ; NOLINT
-      octets)))
-
-(defun read-lisp-core (core)
-  "Read Lisp CORE part of the image. Return the octets."
-  (with-open-file (core core :direction :input :element-type 'octet)
-    (let* ((start (or (find-lisp-core-start core)
-                      (bazel.log:fatal "Cannot find Lisp core in ~S." (enough-namestring core))))
-           (octets (make-array (- (file-length core) start) :element-type 'octet)))
-      (file-position core start)
-      (assert (= (length octets) (read-sequence octets core))) ; NOLINT
-      octets)))
-
-(defun combine-run-time-and-core (run-time core output)
-  "Combine the C++ RUN-TIME and the Lisp CORE and save it to the OUTPUT stream."
-  (declare (string run-time core output))
-  ;; Lisp core image is stored with a magic number tag in the file.
-  ;; If combined the magic number tag can be found at the end of the file
-  ;; and preceded by the 8 byte (x64) offset into the file where the core starts.
-  (let* ((octets (pmapcar #'funcall `(,#'read-run-time ,#'read-lisp-core) `(,run-time ,core)))
-         (run-time (first octets))
-         (core (second octets))
-         (core-offset (length run-time))
-         (index-offset (- (length core) +magic-size+ +offset-type-size+)))
-    ;; TODO(czak): This is 64 bits.
-    (declare (octets run-time core) (type (unsigned-byte 64) core-offset index-offset))
-    ;; Fix core tail offset.
-    (dotimes (i 8)
-      (setf (aref core (+ index-offset i)) (ldb (byte 8 (* i 8)) core-offset)))
-    (with-open-file (output output :direction :output :element-type 'octet)
-      (write-sequence run-time output)
-      (write-sequence core output))))
 
 ;;;
 ;;; Reading lisp files.
@@ -469,11 +391,10 @@
   (locally (declare (sb-ext:muffle-conditions sb-kernel:redefinition-with-defun))
     (handler-bind ((sb-kernel:redefinition-with-defun #'muffle-warning))
       ;; Override this to remove traces of absolute paths in forge.
-      (defun make-file-source-info (file external-format &optional form-tracking-p)
+      (defun make-file-source-info (file external-format)
         "Override the SB-C::MAKE-FILE-SOURCE-INFO.
  FILE is the file name.
- EXTERNAL-FORMAT is the external format for the file.
- FORM-TRACKING-P is passed down in our copy'n'paste the same way SBCL does."
+ EXTERNAL-FORMAT is the external format for the file."
         (declare (pathname file))
         (truename file)
         (make-source-info
@@ -481,8 +402,4 @@
                      :name file
                      :untruename file
                      :external-format external-format
-                     ;; this copy'n'paste business in QPX has to stop
-                     :subforms
-                     (if form-tracking-p
-                                  (make-array 100 :fill-pointer 0 :adjustable t))
                      :write-date (file-write-date file)))))))

@@ -47,9 +47,7 @@
            #:action-source-files
            #:action-find-output-file
            #:action-failures
-           #:action-deferred-warnings
-           ;; Misc
-           #:add-features))
+           #:action-deferred-warnings))
 
 (in-package #:bazel.main)
 
@@ -119,8 +117,6 @@
   (dump-extern-symbols-file nil :type (or null string))
   ;; A file name to dump the dynamic list lds script file.
   (dump-dynamic-list-lds-file nil :type (or null string))
-  ;; Flag indicating that the compilation should commence even with errors.
-  (force-compilation-p nil :type boolean)
   ;; Flag indicating that the output image should be compressed.
   (compressed-p nil :type boolean)
   ;; Used to precompile the generic functions.
@@ -136,9 +132,6 @@
   (warning-handlers nil :type list)
   ;; The compile mode. One of :dbg, :opt, :fastbuild or :load.
   (compilation-mode nil :type compilation-mode)
-  ;; The safety level to be used for compilation.
-  ;; Default is determined by the compilation mode.
-  (safety nil :type (or null fixnum))
   ;; The mode used to load the .lisp or .srcs files.
   (lisp-load-mode nil :type (or null compile-load-mode))
   ;; The mode used to load the .fasl and .deps files.
@@ -185,7 +178,7 @@
 ;; TODO(czak): Rename source-file-hash.
 (declaim (type hash-table *compiled-sources*))
 (defvar *compiled-sources* (make-hash-table :test #'equal)
-  "Stores compiled source names relative to the WORKSPACE with the corresponding md5 hashes.")
+  "Stores compiled source names relative to google3 with the corresponding md5 hashes.")
 
 (defun action-add-failure (warning &optional (action *action*))
   "Add a WARNING to the failures list of the ACTION."
@@ -370,8 +363,7 @@ This allows for the user to specify their own handlers as a string."
   (when (action-failures action)
     ;; Terminate with error. Blaze will clean up for us.
     (print-conditions "Failures" (action-failures action) (action-gendir action))
-    (unless (action-force-compilation-p action)
-      (fatal "Blaze lisp build failed"))))
+    (fatal "Blaze lisp build failed")))
 
 ;;;
 ;;; Blaze-Lisp specific utilities
@@ -444,13 +436,12 @@ This allows for the user to specify their own handlers as a string."
    :precompile-generics precompile-generics
    :verbose (plusp *verbose*)))
 
-(defun set-compilation-mode (compilation-mode &key safety)
-  "Proclaim the optimization settings based on the COMPILATION-MODE.
- SAFETY is the safety used to override defaults."
+(defun set-compilation-mode (compilation-mode)
+  "Proclaim the optimization settings based on the COMPILATION-MODE."
 
   (vvv "Set compilation mode: ~S" compilation-mode)
 
-  (destructuring-bind (spEed Debug %saFety space Compilation-speed)
+  (destructuring-bind (spEed Debug saFety space Compilation-speed)
       (ecase compilation-mode ; E D F   C
         (:opt                 '(3 0 0 1 1))
         ((:fastbuild nil)     '(1 2 3 1 1))
@@ -458,7 +449,6 @@ This allows for the user to specify their own handlers as a string."
         (:load                '(1 1 1 1 3)))
 
     (set-interpret-mode compilation-mode)
-    (unless safety (setf safety %saFety))
 
     ;; Cause bodies of macroexpanders, including MACROLET and DEFINE-COMPILER-MACRO,
     ;; to be compiled in a policy in which these qualities override the global policy.
@@ -467,8 +457,8 @@ This allows for the user to specify their own handlers as a string."
     (proclaim `(optimize (speed ,speed) (debug ,debug) (safety ,safety)
                          (space ,space) (compilation-speed ,compilation-speed)
                          ;; always insert array bounds, even in otherwise optimized code;
-                         ;; optimizing this out was measured not to be worth the trouble.
-                         #+sbcl(sb-c::insert-array-bounds-checks 3)))))
+                         ;; small cost, but has made bugs more easily debugable in the past.
+                         #+sbcl (sb-c::insert-array-bounds-checks 3)))))
 
 (defun add-feature (feature)
   "Add a single string FEATURE to *features*."
@@ -484,15 +474,12 @@ This allows for the user to specify their own handlers as a string."
   "Checks that build features are in good shape."
   (assert (not (and (member :opt *features*) (member :dbg *features*))))) ; NOLINT
 
-(defun add-default-features (compilation-mode &optional (safety 1))
-  "Add the default features to *features* including COMPILATION-MODE.
- SAFETY level is used to determine if :OPT should be added."
+(defun add-default-features (compilation-mode)
+  "Add the default features to *features* including :google3 and COMPILATION-MODE."
   (declare (type (member :opt :fastbuild :dbg) compilation-mode))
 
   (case compilation-mode
-    (:dbg (add-feature :dbg))
-    (:opt (unless (and safety (>= safety 3))
-            (add-feature :opt))))
+    ((:opt :dbg) (add-feature compilation-mode)))
 
   (check-features))
 
@@ -566,9 +553,8 @@ This allows for the user to specify their own handlers as a string."
         (vv "File ~S compiled without warnings." src))
       (when warnings-p
         (verbose "File ~S compiled with warnings." src))
-      (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
-        (when failures-p
-          (fatal "File ~S failed to compile." src)))
+      (when failures-p
+        (fatal "File ~S failed to compile." src))
       (when save-locations
         (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
       (values fasl warnings-p failures-p))))
@@ -619,9 +605,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defmethod process-file ((action action) (file string) (type (eql :fasl)))
   "Loads a FASL file."
-  ;; Older SBCL's versions would have problems here.
-  (unless (zerop (with-open-file (in file) (file-length in)))
-    (load-file file :action action :load-mode (action-fasl-load-mode action))))
+  (load-file file :action action :load-mode (action-fasl-load-mode action)))
 
 (defmethod process-file ((action action) (file string) (type (eql :cfasl)))
   "Loads a CFASL file. Those are dependencies only loaded when compiling or building a binary."
@@ -654,7 +638,8 @@ This allows for the user to specify their own handlers as a string."
   (verbose "Processing ~D dependencie~:P..." (length deps))
   (with-all-warnings-muffled
     (with-compilation-unit ()
-      (map () #'process-file* deps))))
+      (mapc #'process-file* deps)))
+  (values))
 
 ;;;
 ;;; Command handlers
@@ -669,6 +654,10 @@ This allows for the user to specify their own handlers as a string."
 
 (defmethod finish-action ((action action) (command (eql :binary)))
   "Save the binary from this image."
+  ;; TODO(jyknight/b/22174442): temporarily commented out; either fix QPX to
+  ;; not require docstrings, or decide that deleting docstrings isn't useful.
+  ;; (when (eq compilation-mode :opt)
+  ;;   (delete-doc-strings))
   (nconcf (action-failures action)
           (resolve-deferred-warnings (action-deferred-warnings action)))
   (check-failures action)
@@ -714,9 +703,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defun process (&rest args
                    &key command deps load srcs outs gendir
-                   warnings hashes
                    (compilation-mode :fastbuild)
-                   safety force
                    main features nowarn
                    compressed
                    precompile-generics
@@ -737,11 +724,7 @@ This allows for the user to specify their own handlers as a string."
   SRCS - sources for a binary core or for compilation,
   OUTS - the output files,
   GENDIR - the directory for the generated results (for debug),
-  WARNINGS - is a list of files that contain deferred warnings,
-  HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from blaze -c <compilation-mode>,
-  SAFETY - determines the safety level to be used for compilation.
-  FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
   NOWARN - list of warnings to be muffled,
@@ -757,10 +740,7 @@ This allows for the user to specify their own handlers as a string."
          (deps (unless deps-already-loaded (split deps)))
          (load (split load))
          (srcs (split srcs))
-         (hashes (split hashes))
-         (warnings (split warnings))
          (outs (split outs))
-         (safety (if (stringp safety) (parse-integer safety) safety))
          (compilation-mode (to-keyword compilation-mode))
          (action
            (make-action :args args
@@ -768,10 +748,8 @@ This allows for the user to specify their own handlers as a string."
                         :output-files outs
                         :gendir gendir
                         :compilation-mode compilation-mode
-                        :safety safety
                         :main-function main
                         :compressed-p compressed
-                        :force-compilation-p force
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
                         :emit-cfasl-p emit-cfasl
@@ -799,22 +777,12 @@ This allows for the user to specify their own handlers as a string."
         (unless (or (>= *verbose* 2) (= (length srcs) 1))
           (remf args :srcs)
           (nconcf args (list :srcs (length srcs))))
-        (unless (or (>= *verbose* 2) (= (length load) 1))
-          (remf args :load)
-          (nconcf args (list :load (length load))))
-        (unless (or (>= *verbose* 3) (= (length warnings) 1))
-          (remf args :warnings)
-          (nconcf args (list :warnings (length warnings))))
-        (unless (or (>= *verbose* 3) (= (length hashes) 1))
-          (remf args :hashes)
-          (nconcf args (list :hashes (length hashes))))
 
         (verbose "Params:~{~&~3T~A: ~A~%~}" args)
 
         #+sbcl
         (when (>= *verbose* 2)
-          (verbose "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
-          (verbose "Action: ~A~%" action))))
+          (verbose "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ)))))
 
     ;; Rebind globally.
     (setf *action* action)
@@ -840,86 +808,71 @@ This allows for the user to specify their own handlers as a string."
     (init-action action command)
 
     (add-features features)
-    (add-default-features compilation-mode safety)
+    (add-default-features compilation-mode)
 
-    (map () (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
+    (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 
-    ;; Feature not available in open source bazel.
+    ;; Feature available only in google3 depot.
     (when coverage
       (funcall-named "BAZEL.COVERAGE:TURN-ON-DATA-COLLECTION"))
 
     (process-dependencies deps)
-    ;; Load in any source hash information files.
-    (map () #'process-file* hashes)
 
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
     (verbose "Loading ~D source file~:P..." (length load))
-      (map () #'process-file* load)
+      (mapc #'process-file* load)
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
-      (map () #'process-file* srcs)
-      (verbose "Processing ~D deferred warning file~:P..." (length warnings))
-      (map () #'process-file* warnings)
+      (mapc #'process-file* srcs)
       (verbose "Finalizing the ~A action..." command)
-      (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
+      (set-compilation-mode (action-compilation-mode action))
       (finish-action action command))
 
     (verbose "BAZEL ~A finished" command)))
 
 ;;;
-;;; Used to combine images
-;;;
-
-(defun combine (&key command run-time core output &allow-other-keys)
-  "Combines the RUN-TIME with the CORE and saves it to OUTPUT."
-  (assert (eq :combine command)) ; NOLINT
-  (combine-run-time-and-core run-time core output))
-
-;;;
 ;;; Main entry point
 ;;;
 
-(defun to-keyword-arg (thing)
+(defvar *shortcuts*
+  '(("-c" :compilation-mode)
+    ("-v" :verbose)
+    ("-f" :features)
+    ("-W" :nowarn)
+    ("-I" :interactive)))
+
+(defun to-keyword-arg (thing &optional shortcuts)
   "Converts a command line argument option name to a keyword."
-  (and thing (to-keyword
-              (cond ((prefixp "--" thing)
-                     (subseq thing 2))
-                    ((prefixp "-" thing)
-                     (subseq thing 1))
-                    (t
-                     thing)))))
+  (declare (string thing))
+  (and thing
+       (or (second (assoc thing shortcuts :test #'equal))
+           (to-keyword (if (prefixp "--" thing)
+                           (subseq thing 2)
+                           thing)))))
 
-(defun parse-rest-command-args (args)
-  "Parses the remaining command-line ARGS."
-  (loop while args
-        for arg = (to-keyword-arg (pop args))
-        when arg
-          nconc (list arg (or (null args)
-                              (prefixp "-" (car args))
-                              (pop args)))))
-
-(defun parse-command-args (args)
-  "Parses the command-line and returns ARGS as list of keyword value pairs."
-  (list* :command (to-keyword (first args))
-         (parse-rest-command-args (rest args))))
-
+(defun parse-command-args (args &optional shortcuts)
+  "Parses the command-line and returns args as list of keyword value pairs."
+  (list* :command (to-keyword (pop args))
+         (loop while args
+               for arg = (to-keyword-arg (pop args) shortcuts)
+               when arg
+                 nconc (list arg (or (null args)
+                                     (prefixp "-" (car args))
+                                     (pop args))))))
 (defun main ()
   "Main entry point."
-  (let ((command-args (parse-command-args (command-line-arguments))))
-    (destructuring-bind (&key force verbose interactive &allow-other-keys) command-args
+  (let ((command-args (parse-command-args (command-line-arguments) *shortcuts*)))
+    (destructuring-bind (&key verbose interactive &allow-other-keys) command-args
       (when verbose
         (setf *verbose* (read-from-string verbose)))
-      (set-interactive-mode interactive)
+      (set-interactive-mode interactive))
 
-      (verbose "Program name: ~A" (program-name))
-      (verbose "Current dir: ~A" *default-pathname-defaults*)
-      (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
+    (verbose "Program name: ~A" (program-name))
+    (verbose "Current dir: ~A" *default-pathname-defaults*)
+    (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
 
-      (with-continue-on-error (:when force)
-        (case (getf command-args :command)
-          (:combine (apply 'combine command-args))
-          (t        (apply 'process command-args)))))))
+    (apply 'process command-args)))

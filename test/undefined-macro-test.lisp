@@ -19,7 +19,7 @@
   "Checks ACTION if there was an undefined-function warning for the binary COMMAND."
   ;; TODO(czak): Need to provide a better path here.
   (assert (equalp (bazel.main:action-deferred-warnings action)
-                  '(("test/undefined-macro-reference.lisp"
+                  '(("third_party/lisp/bazel/test/undefined-macro-reference.lisp"
                      :UNDEFINED-FUNCTION UNDEFINED-MACRO))))
   (setf *undefined-function-signaled-p* t)
   (setf (bazel.main:action-deferred-warnings action) nil))

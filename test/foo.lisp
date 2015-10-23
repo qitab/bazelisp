@@ -1,5 +1,5 @@
 ;; TODO(czak): This requires proper path.
-(defconstant +data+ "test/foo.data")
+(defconstant +data+ "third_party/lisp/bazel/test/foo.data")
 
 (eval-when (:compile-toplevel)
   #+sbcl (format t "Compile CWD: ~A~%" (sb-posix:getcwd))
@@ -18,5 +18,4 @@
 
 (defun foo-data-test ()
   (with-open-file (in +data+)
-    (assert (equal 4 (file-length in)))
     (assert (equal 1234 (read in))))) ; NOLINT

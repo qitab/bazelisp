@@ -9,7 +9,7 @@ exports_files(["LICENSE"])
 
 # TODO(czak): Need to provide a proper path here.
 load(
-    "@lisp__bazel//:bazel/rules.bzl",
+    "/third_party/lisp/bazel/rules",
     "lisp_library",
     "lisp_binary",
     "lisp_test",
@@ -88,16 +88,15 @@ lisp_binary(
     ],
 )
 
-# The SRCS files need .sh or .bash extension.
-#sh_test(
-#    name = "run-test",
-#    srcs = ["test"],
-#)
-
 sh_test(
     name = "check_symbols",
     srcs = ["check_symbols.sh"],
     data = ["test"],
+)
+
+sh_test(
+    name = "run-test",
+    srcs = ["test"],
 )
 
 cc_library(
@@ -117,13 +116,12 @@ lisp_binary(
     ],
 )
 
-# Fails because of missing C dependencies in the image.
-#lisp_test(
-#    name = "lisp-test",
-#    size = "small",
-#    srcs = ["empty.lisp"],
-#    image = ":lisp-test-image",
-#)
+lisp_test(
+    name = "lisp-test",
+    size = "small",
+    srcs = ["empty.lisp"],
+    image = ":lisp-test-image",
+)
 
 CIRCULAR_SRCS = [
     "circular1.lisp",
@@ -181,10 +179,4 @@ lisp_test(
     srcs = ["wrong-arg-count-test.lisp"],
     nowarn = ["wrong-argument-count"],
     deps = [":wrong-arg-count-lib"],
-)
-
-# For demonstration purposes.
-lisp_test(
-    name = "compilation-mode",
-    srcs = ["compilation-mode.lisp"],
 )

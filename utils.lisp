@@ -4,7 +4,6 @@
 (defpackage #:bazel.utils
   (:use #:cl)
   (:export #:octet
-           #:octets
            #:nconcf
            #:prefixp
            #:strip-prefix
@@ -13,9 +12,6 @@
            #:to-keyword
            #:write-stringz
            #:read-stringz
-           #:read-u64
-           #:write-u64
-           #:with-continue-on-error
            #:funcall-named
            #:funcall-named*))
 
@@ -23,7 +19,6 @@
 
 
 (deftype octet () '(unsigned-byte 8))
-(deftype octets () '(vector octet))
 
 (define-modify-macro nconcf (&rest lists) nconc
   "Helper macro doing an nconc and setf to the first argument.")
@@ -79,21 +74,6 @@
          collect (code-char code))
    'string))
 
-(defun read-u64 (in)
-  "Reads 8 bytes from the IN stream and returns an integer."
-  (declare (stream in))
-  (let ((u64 0))
-    (declare (type (unsigned-byte 64) u64))
-    (dotimes (i 8)
-      (setf (ldb (byte 8 (* i 8)) u64) (read-byte in)))
-    u64))
-
-(defun write-u64 (u64 out)
-  "Writes 8 bytes representation of u64 to the OUT stream."
-  (declare (type (unsigned-byte 64) u64) (stream out))
-  (dotimes (i 8)
-    (write-byte (ldb (byte 8 (* i 8)) u64) out)))
-
 (defun funcall-named (name &rest args)
   "Call a function with NAME composed of package and function name. Passes ARGS to the function.
  If the package is not found, nothing is called and NIL is returned."
@@ -115,18 +95,3 @@
            (function (and package (find-symbol (second split) package))))
       (when (and function (fboundp function))
         (apply function args)))))
-
-(defun %with-continue-on-error (function test)
-  "Call FUNCTION while wrapping it conditionally (TEST) into a HANDLER-BIND that
- continues from the error if the continue restart is found."
-  (if test
-      (handler-bind ((error
-                      (lambda (c) (declare (ignore c))
-                        (let ((continue (find-restart 'continue)))
-                          (when continue (invoke-restart continue))))))
-        (funcall function))
-      (funcall function)))
-
-(defmacro with-continue-on-error ((&key (when t)) &body body)
-  "Call CONTINUE for all errors. WHEN is an optional condition form."
-  `(%with-continue-on-error (lambda () ,@body) ,when))

@@ -110,11 +110,11 @@
   (cond ((null name) nil)
 
         ((prefixp "SYS:SRC;" name)
-         (format nil "external/lisp__sbcl/src/src/~(~A~)"
+         (format nil "third_party/lisp/sbcl/src/src/~(~A~)"
                  (substitute #\/ #\; (subseq name 8))))
 
         ((prefixp "SYS:CONTRIB;" name)
-         (format nil "external/lisp__sbcl/src/contrib/~(~A~)"
+         (format nil "third_party/lisp/sbcl/src/contrib/~(~A~)"
                  (substitute #\/ #\; (subseq name 12))))
 
         ((and (prefixp "blaze-out" name)
@@ -126,12 +126,11 @@
               (let ((/src/ (search "/src/" name)))
                 ;; Remove SBCL build hash dir names.
                 (when /src/
-                  (format nil "external/lisp__sbcl~A" (subseq name /src/))))))
+                  (format nil "third_party/lisp/sbcl~A" (subseq name /src/))))))
 
-        ;; TODO: don't hardcode WORKSPACE name...
         ((and (prefixp "/build/work/" name)
               (search "/google3/" name))
-         ;; Remove worker build hash dir names.
+         ;; Remove Forge build hash dir names.
          (subseq name (+ (search "/google3/" name) 9)))
 
         ((prefixp "/build/" name)
@@ -215,7 +214,6 @@
                (dump-code-component-symbols obj))))
       (sb-vm::map-allocated-objects #'dump-code-component :dynamic))))
 
-;; TODO: make it work with clang as well as GNU binutils.
 (dump-symtable)
 ;; Magic declaration to tell the assembler we don't need an executable stack.
 (format t ".section .note.GNU-stack,\"\",@progbits~%")
