@@ -457,8 +457,8 @@ This allows for the user to specify their own handlers as a string."
     (proclaim `(optimize (speed ,speed) (debug ,debug) (safety ,safety)
                          (space ,space) (compilation-speed ,compilation-speed)
                          ;; always insert array bounds, even in otherwise optimized code;
-                         ;; small cost, but has made bugs more easily debugable in the past.
-                         #+sbcl (sb-c::insert-array-bounds-checks 3)))))
+                         ;; optimizing this out was measured not to be worth the trouble.
+                         #+sbcl(sb-c::insert-array-bounds-checks 3)))))
 
 (defun add-feature (feature)
   "Add a single string FEATURE to *features*."
