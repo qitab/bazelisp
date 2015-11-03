@@ -835,6 +835,15 @@ This allows for the user to specify their own handlers as a string."
     (verbose "BAZEL ~A finished" command)))
 
 ;;;
+;;; Used to combine images
+;;;
+
+(defun combine (&key command run-time core output &allow-other-keys)
+  "Combines the RUN-TIME with the CORE and saves it to OUTPUT."
+  (assert (eq :combine command)) ; NOLINT
+  (combine-run-time-and-core run-time core output))
+
+;;;
 ;;; Main entry point
 ;;;
 
@@ -875,4 +884,6 @@ This allows for the user to specify their own handlers as a string."
     (verbose "Current dir: ~A" *default-pathname-defaults*)
     (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
 
-    (apply 'process command-args)))
+    (case (getf command-args :command)
+      (:combine (apply 'combine command-args))
+      (t        (apply 'process command-args)))))

@@ -4,6 +4,7 @@
 (defpackage #:bazel.utils
   (:use #:cl)
   (:export #:octet
+           #:octets
            #:nconcf
            #:prefixp
            #:strip-prefix
@@ -12,6 +13,8 @@
            #:to-keyword
            #:write-stringz
            #:read-stringz
+           #:read-u64
+           #:write-u64
            #:funcall-named
            #:funcall-named*))
 
@@ -19,6 +22,7 @@
 
 
 (deftype octet () '(unsigned-byte 8))
+(deftype octets () '(vector octet))
 
 (define-modify-macro nconcf (&rest lists) nconc
   "Helper macro doing an nconc and setf to the first argument.")
@@ -73,6 +77,21 @@
          until (zerop code)
          collect (code-char code))
    'string))
+
+(defun read-u64 (in)
+  "Reads 8 bytes from the IN stream and returns an integer."
+  (declare (stream in))
+  (let ((u64 0))
+    (declare (type (unsigned-byte 64) u64))
+    (dotimes (i 8)
+      (setf (ldb (byte 8 (* i 8)) u64) (read-byte in)))
+    u64))
+
+(defun write-u64 (u64 out)
+  "Writes 8 bytes representation of u64 to the OUT stream."
+  (declare (type (unsigned-byte 64) u64) (stream out))
+  (dotimes (i 8)
+    (write-byte (ldb (byte 8 (* i 8)) u64) out)))
 
 (defun funcall-named (name &rest args)
   "Call a function with NAME composed of package and function name. Passes ARGS to the function.

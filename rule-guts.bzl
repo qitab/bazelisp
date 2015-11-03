@@ -51,6 +51,8 @@ _lisp_common_attrs = {
         # cfg = HOST_CFG,
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
+    # Internal, for testing coverage.
+    "enable_coverage" : attr.bool(),
     "_empty": attr.label(
         allow_files=True,
         single_file=True,
@@ -311,7 +313,8 @@ def _bazel_lisp(ctx):
 
   if verbosep:       flags += ["--verbose", "%d" % verbose_level]
   if trans.features: flags += ["--features", " ".join(list(trans.features))]
-  if ctx.configuration.coverage_enabled: flags += ["--coverage"]
+  if (ctx.configuration.coverage_enabled or ctx.attr.enable_coverage):
+    flags += ["--coverage"]
 
   trans_warnings = trans.warnings
   trans_hashes = trans.hashes
@@ -455,9 +458,11 @@ _combine_lisp_binary_attrs = {
     "runtime": attr.label(allow_files = True, single_file = True),
     "core": attr.label(providers=["image", "runtime_data"]),
     "_combine": attr.label(
-        executable = True,
-        # TODO(czak): Need to implement this in Lisp and provide a path.
-        default = Label("@local_sbcl//:combine-lisp-image"),
+        executable=True,
+        allow_files=True,
+        single_file=True,
+        # TODO(czak): Need to provide a proper path.
+        default = Label("//:bazel"),
         cfg = HOST_CFG)}
 
 def _combine_core_and_runtime(ctx):
@@ -466,9 +471,11 @@ def _combine_core_and_runtime(ctx):
       inputs = [ctx.file.runtime, ctx.attr.core.image],
       outputs = [ctx.outputs.executable],
       progress_message = "Linking %s" % ctx.outputs.executable.short_path,
-      arguments = [ctx.outputs.executable.path,
-                   ctx.file.runtime.path,
-                   ctx.attr.core.image.path],
+      arguments = ["combine",
+                   "--run-time", ctx.file.runtime.path,
+                   "--core", ctx.attr.core.image.path,
+                   "--output", ctx.outputs.executable.path,
+                   "--verbose", ctx.var.get("VERBOSE_LISP_BUILD", "0")],
       executable = ctx.executable._combine)
 
   return struct(runfiles = ctx.runfiles(
