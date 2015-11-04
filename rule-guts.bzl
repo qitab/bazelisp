@@ -9,6 +9,16 @@ The three rules implemented here are:
  lisp_binary_guts - for Lisp binaries,
  lisp_library_guts - for Lisp libraries,
  lisp_test_guts - a test binary run with blaze/bazel test.
+
+
+The code here defines a few Skylark "real" rules and wraps them in
+"Skylark macro" functions. The few real rules have following names:
+ _lisp_binary
+ _lisp_library
+ _combine_lisp_binary
+ _combine_lisp_test
+These "rule class names" are used to find Lisp targets.
+This is useful with 'bazel query' and for tools indexing the Lisp codebase.
 """
 
 # TODO(czak): This needs to have a proper path.
@@ -286,6 +296,7 @@ def compute_transitive_info(image, deps, features=[], data=[], compile_data=[]):
 
 def _bazel_lisp(ctx):
   """General implementation for Lisp specific rules."""
+  # Implementation: _lisp_binary (core), _lisp_library.
   srcs = ctx.files.srcs
   nowarn = ctx.attr.nowarn
   verbose_level = _max(ctx.attr.verbose,
@@ -382,7 +393,8 @@ def _bazel_lisp(ctx):
                       compile_data = trans.compile_data))
 
 # Internal rule used to generate action that creates a Lisp binary core.
-_make_binary_core = rule(
+# Keep the name to be _lisp_binary - Grok depends on this name to find targets.
+_lisp_binary = rule(
     implementation = _bazel_lisp,
     output_to_genfiles = True,
     attrs = _lisp_common_attrs + {
@@ -412,7 +424,8 @@ def _lisp_binary_core(ctx, srcs, deps, data, flags, nowarn):
    flags: are flags passed to the Lisp compilation image.
    nowarn: is a list of suppressed Lisp warning types or warning handlers.
   """
-
+  # Implementation: _lisp_binary (core).
+  #
   # Create a Lisp core containing the Lisp compiled and linked FASLs.
   build_image = ctx.file.image
   dump_symtable = ctx.file._dump_symtable
@@ -452,7 +465,7 @@ def _lisp_binary_core(ctx, srcs, deps, data, flags, nowarn):
       mnemonic = "LispCore",
       command = cmd)
 
-# Attributes used by _combined_lisp_* rules.
+# Attributes used by _combine_lisp_* rules.
 _combine_lisp_binary_attrs = {
     "data": attr.label_list(cfg=DATA_CFG, allow_files=True),
     "runtime": attr.label(allow_files = True, single_file = True),
@@ -467,6 +480,7 @@ _combine_lisp_binary_attrs = {
 
 def _combine_core_and_runtime(ctx):
   """An action that combines a Lisp core and C++ runtime."""
+  # Implementation: _combine_lisp_binary, _combine_lisp_test
   ctx.action(
       inputs = [ctx.file.runtime, ctx.attr.core.image],
       outputs = [ctx.outputs.executable],
@@ -482,20 +496,23 @@ def _combine_core_and_runtime(ctx):
       files = list(set(ctx.files.data) + ctx.attr.core.runtime_data)))
 
 # Internal rule used to combine a Lisp core and C++ binary to a Lisp binary.
-_combined_lisp_binary = rule(
+_combine_lisp_binary = rule(
     implementation = _combine_core_and_runtime,
     executable = True,
     attrs = _combine_lisp_binary_attrs)
 
 # Internal rule used to combine a Lisp core and C++ binary to a Lisp test.
-_combined_lisp_test = rule(
+_combine_lisp_test = rule(
     implementation = _combine_core_and_runtime,
     executable = True,
     test = True,
     attrs = _combine_lisp_binary_attrs)
 
+# DEPS file is used to list all the Lisp sources for a target.
+# It is a quick hack to make (bazel:load ...) work.
 def _dump_lisp_deps_impl(ctx):
   """Creates a file that lists all Lisp files needed by the target in order."""
+  # Implementation: _dump_lisp_deps
   features = set()
   srcs = set()
   for dep in ctx.attr.deps:
@@ -509,7 +526,9 @@ def _dump_lisp_deps_impl(ctx):
           "\n".join(["feature: " + f for f in features] +
                     ["src: " + f.path for f in srcs])))
 
-# Internal rule that creates a Lisp library FASL file.
+# Internal rule that creates a Lisp library DEPS file.
+# DEPS file is used to list all the Lisp sources for a target.
+# It is a quick hack to make (bazel:load ...) work.
 _dump_lisp_deps = rule(
     implementation = _dump_lisp_deps_impl,
     attrs = {
@@ -610,12 +629,13 @@ def lisp_binary_guts(name,
   For more information on the common rule attributes refer to:
   http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
+  # Macro: calling _lisp_binary, cc_binary, _combine_lisp_test/binary
   core = "%s.core.target" % name
   core_dynamic_list_lds = "%s.dynamic-list.lds" % name
   core_extern_symbols = "%s.extern.S" % name
   core_lisp_symbols = "%s.lisp.S" % name
 
-  _make_binary_core(
+  _lisp_binary(
       # Common lisp attributes.
       name = core,
       binary_name = name,
@@ -684,7 +704,7 @@ def lisp_binary_guts(name,
       testonly = testonly)
 
   if test:
-    _combined_lisp_test(
+    _combine_lisp_test(
         name = name,
         runtime = runtime,
         core = core,
@@ -697,7 +717,7 @@ def lisp_binary_guts(name,
         testonly = testonly,
         tags = tags)
   else:
-    _combined_lisp_binary(
+    _combine_lisp_binary(
         name = name,
         runtime = runtime,
         core = core,
@@ -725,10 +745,12 @@ def lisp_test_guts(name, image=BAZEL_LISP, stamp=0, **kwargs):
   For more information on the rule attributes refer lisp_binary and
   http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
+  # Macro: an alias for lisp_binary.
   lisp_binary_guts(name, image=image, stamp=stamp, testonly=1, test=True, **kwargs)
 
 # Internal rule that creates a Lisp library FASL file.
-_make_lisp_library = rule(
+# Keep the _lisp_library rule class name, so Grok can find the targets.
+_lisp_library = rule(
     implementation = _bazel_lisp,
     attrs = _lisp_common_attrs,
     outputs = {"fasl": "%{name}.fasl"},
@@ -765,6 +787,8 @@ def _make_cdeps_library(name,
   Returns:
     The name of the C++ library: <name>.cdeps
   """
+  # Macro: calling cc_library (and cc_binary).
+  # Called from lisp_library and lisp_binary.
   cdeps_library = "%s.cdeps" % name
   cdeps += _make_cdeps_dependencies(deps)
   native.cc_library(
@@ -829,11 +853,12 @@ def lisp_library_guts(name,
   For more information on the common rule attributes refer to:
   http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
+  # Macro: calls _make_cdeps_library, _lisp_library.
   _make_cdeps_library(name = name, deps = [image] + deps,
                       csrcs = csrcs, cdeps = cdeps, copts = copts,
                       visibility = visibility, testonly = testonly)
 
-  _make_lisp_library(
+  _lisp_library(
       # Common lisp attributes.
       name = name,
       srcs = srcs,
