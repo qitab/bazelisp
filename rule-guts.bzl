@@ -57,8 +57,6 @@ _lisp_common_attrs = {
         allow_files=True,
         single_file=True,
         executable=True,
-        # TODO(czak): This fails TAP.
-        # cfg = HOST_CFG,
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
     # Internal, for testing coverage.
@@ -475,8 +473,7 @@ _combine_lisp_binary_attrs = {
         allow_files=True,
         single_file=True,
         # TODO(czak): Need to provide a proper path.
-        default = Label("//:bazel"),
-        cfg = HOST_CFG)}
+        default = Label("//:bazel"))}
 
 def _combine_core_and_runtime(ctx):
   """An action that combines a Lisp core and C++ runtime."""
