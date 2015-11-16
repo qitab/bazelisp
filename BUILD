@@ -30,6 +30,7 @@ genrule(
         "SBCL_HOME=`pwd`/$(location %s)/lib/sbcl" % SBCL +
         " $(location %s)/bin/sbcl" % SBCL +
         " --noinform" +
+        " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
         " --load '$(location utils.lisp)'" +
         " --load '$(location warning.lisp)'" +
         " --load '$(location log.lisp)'" +
