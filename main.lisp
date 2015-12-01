@@ -47,7 +47,9 @@
            #:action-source-files
            #:action-find-output-file
            #:action-failures
-           #:action-deferred-warnings))
+           #:action-deferred-warnings
+           ;; Misc
+           #:add-features))
 
 (in-package #:bazel.main)
 
