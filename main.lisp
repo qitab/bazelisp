@@ -555,8 +555,9 @@ This allows for the user to specify their own handlers as a string."
         (vv "File ~S compiled without warnings." src))
       (when warnings-p
         (verbose "File ~S compiled with warnings." src))
-      (when failures-p
-        (fatal "File ~S failed to compile." src))
+      (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
+        (when failures-p
+          (fatal "File ~S failed to compile." src)))
       (when save-locations
         (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
       (values fasl warnings-p failures-p))))
