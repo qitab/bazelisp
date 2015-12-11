@@ -657,10 +657,6 @@ This allows for the user to specify their own handlers as a string."
 
 (defmethod finish-action ((action action) (command (eql :binary)))
   "Save the binary from this image."
-  ;; TODO(jyknight/b/22174442): temporarily commented out; either fix QPX to
-  ;; not require docstrings, or decide that deleting docstrings isn't useful.
-  ;; (when (eq compilation-mode :opt)
-  ;;   (delete-doc-strings))
   (nconcf (action-failures action)
           (resolve-deferred-warnings (action-deferred-warnings action)))
   (check-failures action)
