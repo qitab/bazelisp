@@ -14,7 +14,7 @@ exports_files(["LICENSE"])
 
 # TODO(czak): Need to provide a proper path here.
 load(
-    "/third_party/lisp/bazel/rules",
+    "//:rules.bzl",
     "lisp_library",
     "lisp_binary",
     "lisp_test",
