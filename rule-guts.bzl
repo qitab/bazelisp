@@ -317,8 +317,10 @@ def _bazel_lisp(ctx):
     # for k in shell_env: print("%s: %s" % (k, shell_env[k]))
     # for k in ctx.var: print("%s: %s" % (k, ctx.var[k]))
 
+  compilation_mode = ctx.var.get("LISP_COMPILATION_MODE",
+                                 ctx.var["COMPILATION_MODE"])
   flags = ["--gendir", ctx.configuration.genfiles_dir.path,
-           "-c", ctx.var["COMPILATION_MODE"]]
+           "-c", compilation_mode]
 
   if verbosep:       flags += ["--verbose", "%d" % verbose_level]
   if trans.features: flags += ["--features", " ".join(list(trans.features))]

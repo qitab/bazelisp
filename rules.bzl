@@ -33,6 +33,10 @@ Examples:
        "//lisp/test",
     ],
  )
+
+The compilation mode (--compilation_mode (fastbuild|opt|dbg)) can be
+overridden for any target by defining LISP_COMPILATION_MODE.  E.g.
+blaze (build|run|test) -c opt --define LISP_COMPILATION_MODE=dbg //target
 """
 # TODO(czak): Need to provide a proper path here. See also the example above.
 load(
