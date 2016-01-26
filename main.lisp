@@ -134,6 +134,9 @@
   (warning-handlers nil :type list)
   ;; The compile mode. One of :dbg, :opt, :fastbuild or :load.
   (compilation-mode nil :type compilation-mode)
+  ;; The safety level to be used for compilation.
+  ;; Default is determined by the compilation mode.
+  (safety nil :type (or null fixnum))
   ;; The mode used to load the .lisp or .srcs files.
   (lisp-load-mode nil :type (or null compile-load-mode))
   ;; The mode used to load the .fasl and .deps files.
@@ -438,12 +441,13 @@ This allows for the user to specify their own handlers as a string."
    :precompile-generics precompile-generics
    :verbose (plusp *verbose*)))
 
-(defun set-compilation-mode (compilation-mode)
-  "Proclaim the optimization settings based on the COMPILATION-MODE."
+(defun set-compilation-mode (compilation-mode &key safety)
+  "Proclaim the optimization settings based on the COMPILATION-MODE.
+ SAFETY is the safety used to override defaults."
 
   (vvv "Set compilation mode: ~S" compilation-mode)
 
-  (destructuring-bind (spEed Debug saFety space Compilation-speed)
+  (destructuring-bind (spEed Debug %saFety space Compilation-speed)
       (ecase compilation-mode ; E D F   C
         (:opt                 '(3 0 0 1 1))
         ((:fastbuild nil)     '(1 2 3 1 1))
@@ -451,6 +455,7 @@ This allows for the user to specify their own handlers as a string."
         (:load                '(1 1 1 1 3)))
 
     (set-interpret-mode compilation-mode)
+    (unless safety (setf safety %saFety))
 
     ;; Cause bodies of macroexpanders, including MACROLET and DEFINE-COMPILER-MACRO,
     ;; to be compiled in a policy in which these qualities override the global policy.
@@ -476,12 +481,15 @@ This allows for the user to specify their own handlers as a string."
   "Checks that build features are in good shape."
   (assert (not (and (member :opt *features*) (member :dbg *features*))))) ; NOLINT
 
-(defun add-default-features (compilation-mode)
-  "Add the default features to *features* including :google3 and COMPILATION-MODE."
+(defun add-default-features (compilation-mode &optional (safety 1))
+  "Add the default features to *features* including :google3 and COMPILATION-MODE.
+ SAFETY level is used to determine if :OPT should be added."
   (declare (type (member :opt :fastbuild :dbg) compilation-mode))
 
   (case compilation-mode
-    ((:opt :dbg) (add-feature compilation-mode)))
+    (:dbg (add-feature :dbg))
+    (:opt (unless (and safety (>= safety 3))
+            (add-feature :opt))))
 
   (check-features))
 
@@ -703,6 +711,7 @@ This allows for the user to specify their own handlers as a string."
 (defun process (&rest args
                    &key command deps load srcs outs gendir
                    (compilation-mode :fastbuild)
+                   safety
                    main features nowarn
                    compressed
                    precompile-generics
@@ -724,6 +733,7 @@ This allows for the user to specify their own handlers as a string."
   OUTS - the output files,
   GENDIR - the directory for the generated results (for debug),
   COMPILATION-MODE - from blaze -c <compilation-mode>,
+  SAFETY - determines the safety level to be used for compilation.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
   NOWARN - list of warnings to be muffled,
@@ -740,6 +750,7 @@ This allows for the user to specify their own handlers as a string."
          (load (split load))
          (srcs (split srcs))
          (outs (split outs))
+         (safety (if (stringp safety) (parse-integer safety) safety))
          (compilation-mode (to-keyword compilation-mode))
          (action
            (make-action :args args
@@ -747,6 +758,7 @@ This allows for the user to specify their own handlers as a string."
                         :output-files outs
                         :gendir gendir
                         :compilation-mode compilation-mode
+                        :safety safety
                         :main-function main
                         :compressed-p compressed
                         :precompile-generics-p precompile-generics
@@ -781,7 +793,8 @@ This allows for the user to specify their own handlers as a string."
 
         #+sbcl
         (when (>= *verbose* 2)
-          (verbose "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ)))))
+          (verbose "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
+          (verbose "Action: ~A~%" action))))
 
     ;; Rebind globally.
     (setf *action* action)
@@ -807,7 +820,7 @@ This allows for the user to specify their own handlers as a string."
     (init-action action command)
 
     (add-features features)
-    (add-default-features compilation-mode)
+    (add-default-features compilation-mode safety)
 
     (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
@@ -828,7 +841,7 @@ This allows for the user to specify their own handlers as a string."
       (verbose "Processing ~D source file~:P..." (length srcs))
       (mapc #'process-file* srcs)
       (verbose "Finalizing the ~A action..." command)
-      (set-compilation-mode (action-compilation-mode action))
+      (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
       (finish-action action command))
 
     (verbose "BAZEL ~A finished" command)))
@@ -846,34 +859,33 @@ This allows for the user to specify their own handlers as a string."
 ;;; Main entry point
 ;;;
 
-(defvar *shortcuts*
-  '(("-c" :compilation-mode)
-    ("-v" :verbose)
-    ("-f" :features)
-    ("-W" :nowarn)
-    ("-I" :interactive)))
-
-(defun to-keyword-arg (thing &optional shortcuts)
+(defun to-keyword-arg (thing)
   "Converts a command line argument option name to a keyword."
-  (declare (string thing))
-  (and thing
-       (or (second (assoc thing shortcuts :test #'equal))
-           (to-keyword (if (prefixp "--" thing)
-                           (subseq thing 2)
-                           thing)))))
+  (and thing (to-keyword
+              (cond ((prefixp "--" thing)
+                     (subseq thing 2))
+                    ((prefixp "-" thing)
+                     (subseq thing 1))
+                    (t
+                     thing)))))
 
-(defun parse-command-args (args &optional shortcuts)
-  "Parses the command-line and returns args as list of keyword value pairs."
-  (list* :command (to-keyword (pop args))
-         (loop while args
-               for arg = (to-keyword-arg (pop args) shortcuts)
-               when arg
-                 nconc (list arg (or (null args)
-                                     (prefixp "-" (car args))
-                                     (pop args))))))
+(defun parse-rest-command-args (args)
+  "Parses the remaining command-line ARGS."
+  (loop while args
+        for arg = (to-keyword-arg (pop args))
+        when arg
+          nconc (list arg (or (null args)
+                              (prefixp "-" (car args))
+                              (pop args)))))
+
+(defun parse-command-args (args)
+  "Parses the command-line and returns ARGS as list of keyword value pairs."
+  (list* :command (to-keyword (first args))
+         (parse-rest-command-args (rest args))))
+
 (defun main ()
   "Main entry point."
-  (let ((command-args (parse-command-args (command-line-arguments) *shortcuts*)))
+  (let ((command-args (parse-command-args (command-line-arguments))))
     (destructuring-bind (&key verbose interactive &allow-other-keys) command-args
       (when verbose
         (setf *verbose* (read-from-string verbose)))

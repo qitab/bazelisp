@@ -185,3 +185,9 @@ lisp_test(
     nowarn = ["wrong-argument-count"],
     deps = [":wrong-arg-count-lib"],
 )
+
+# For demonstration purposes.
+lisp_test(
+    name = "compilation-mode",
+    srcs = ["compilation-mode.lisp"],
+)

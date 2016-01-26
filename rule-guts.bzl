@@ -65,7 +65,7 @@ _lisp_common_attrs = {
         allow_files=True,
         single_file=True,
         # TODO(czak): Provide appropriate path here.
-        default=Label("//:empty.fasl"))
+        default=Label("//:empty.fasl")),
 }
 
 def _paths(files):
@@ -320,12 +320,18 @@ def _bazel_lisp(ctx):
   compilation_mode = ctx.var.get("LISP_COMPILATION_MODE",
                                  ctx.var["COMPILATION_MODE"])
   flags = ["--gendir", ctx.configuration.genfiles_dir.path,
-           "-c", compilation_mode]
+           "--compilation-mode", compilation_mode]
 
   if verbosep:       flags += ["--verbose", "%d" % verbose_level]
   if trans.features: flags += ["--features", " ".join(list(trans.features))]
   if (ctx.configuration.coverage_enabled or ctx.attr.enable_coverage):
     flags += ["--coverage"]
+
+  cpp_options = set(ctx.fragments.cpp.compiler_options([]))
+  if "-UNDEBUG" in cpp_options:
+    flags += ["--safety", "3"]
+  elif "-DNDEBUG" in cpp_options:
+    flags += ["--safety", "0"]
 
   trans_warnings = trans.warnings
   trans_hashes = trans.hashes
@@ -397,6 +403,8 @@ def _bazel_lisp(ctx):
 _lisp_binary = rule(
     implementation = _bazel_lisp,
     output_to_genfiles = True,
+    # Access to the cpp compiler options.
+    fragments = ["cpp"],
     attrs = _lisp_common_attrs + {
         "main": attr.string(default="main"),
         "precompile_generics": attr.bool(),
@@ -752,6 +760,8 @@ def lisp_test_guts(name, image=BAZEL_LISP, stamp=0, **kwargs):
 _lisp_library = rule(
     implementation = _bazel_lisp,
     attrs = _lisp_common_attrs,
+    # Access to the cpp compiler options.
+    fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
     executable = False,
     output_to_genfiles = True)
