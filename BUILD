@@ -6,14 +6,6 @@
 # with the Skylark rules which are defined in rules.bzl
 # See README for more info about this package.
 
-package(
-    default_hdrs_check = "loose",
-    features = [
-        "-layering_check",
-        "-parse_headers",
-    ],
-)
-
 licenses(["unencumbered"])  # New BSD, Google-authored
 
 exports_files(["LICENSE"])
