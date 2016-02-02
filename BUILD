@@ -47,21 +47,3 @@ cc_library(
     name = "bazel.cdeps",
     visibility = ["//visibility:public"],
 )
-
-genrule(
-    name = "make-empty-fasl",
-    srcs = [
-        SBCL,
-        "empty.lisp",
-    ],
-    outs = ["empty.fasl"],
-    cmd = (
-        "SBCL_HOME=`pwd`/$(location %s)/lib/sbcl" % SBCL +
-        " $(location %s)/bin/sbcl" % SBCL +
-        " --noinform" +
-        " --eval" +
-        " \"(compile-file \\\"$(location empty.lisp)\\\" :output-file \\\"`pwd`/$@\\\")\"" +
-        " 2>&1 > /dev/null"
-    ),
-    visibility = ["//visibility:public"],
-)
