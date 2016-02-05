@@ -182,7 +182,7 @@ def _compile_srcs(ctx, srcs, deps, compile_data, flags, nowarn, verbosep):
     if load:   srcs_flags += ["--load", _paths(load)]
     if nowarn: srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = list(set() + [build_image] + compile_data + deps + load)
+    inputs = sorted(set() + [build_image] + compile_data + deps + load)
     msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps))
     if load:
       msg += " and %d srcs)" % len(load)
@@ -225,7 +225,7 @@ def _compile_srcs(ctx, srcs, deps, compile_data, flags, nowarn, verbosep):
     if load:   file_flags += ["--load", _paths(load)]
     if nowarn: file_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = list(set([compile_image, src]) + compile_data + deps + load)
+    inputs = sorted(set([compile_image, src]) + compile_data + deps + load)
     ctx.action(
         outputs = outs,
         inputs = inputs,
@@ -302,7 +302,7 @@ def _lisp_binary_implementation(ctx):
   if verbosep:
     print("Build image: %s" % build_image.short_path)
 
-  inputs = list(set([build_image, dump_symtable])
+  inputs = sorted(set([build_image, dump_symtable])
                 + deps + srcs + trans.compile_data)
 
   core = ctx.outputs.core
@@ -395,7 +395,7 @@ def _combine_core_and_runtime(ctx):
       executable = ctx.executable._combine)
 
   runfiles = ctx.runfiles(
-      files = list(set(ctx.files.data) + ctx.attr.core.runtime_data))
+      files = sorted(set(ctx.files.data) + ctx.attr.core.runtime_data))
 
   if hasattr(ctx.attr.core, "lisp"):
     trans = ctx.attr.core.lisp
