@@ -128,13 +128,16 @@ def _concat_files(ctx, inputs, output):
       mnemonic = "LispConcatFASLs",
       command = cmd)
 
-def _compile_srcs(ctx, srcs, deps, compile_data, flags, nowarn, verbosep):
+def _compile_srcs(ctx, srcs, deps, image, order,
+                  compile_data, flags, nowarn, verbosep):
   """Compiles the 'srcs' in the context 'ctx'.
 
   Args:
    ctx: the context used to instantiate the compile actions.
    srcs: the Lisp file sources.
    deps: are the dependencies for the compilation.
+   image: the Lisp executable image used to compile the sources.
+   order: the order in which sources are loaded and compiled.
    compile_data: is additional data used to compile the sources.
    flags: are the flags to be passed to Lisp compilation image.
    nowarn: is the list of suppressed Lisp warning types or warning handlers.
@@ -142,17 +145,16 @@ def _compile_srcs(ctx, srcs, deps, compile_data, flags, nowarn, verbosep):
   Returns:
    A structure with FASLs, hash files, and warning files.
   """
-  order = ctx.attr.order
-  # TODO(czak): Should be "values" list in the attribute.
+
   if order not in ["multipass", "serial", "parallel"]:
     fail("Accepted values: multipass, serial, parallel", "order")
 
-  build_image = ctx.file.image
+  build_image = list(image.files)[0]
   compile_image = build_image
 
-  if hasattr(ctx.attr.image, "lisp"):
+  if hasattr(image, "lisp"):
     # The image already includes some deps.
-    included = ctx.attr.image.lisp
+    included = image.lisp
     deps = [d for d in deps if not d in included.srcs]
   env = { "LISP_MAIN": BAZEL_LISP_MAIN }
 
@@ -279,6 +281,8 @@ def _lisp_binary_implementation(ctx):
     result = _compile_srcs(ctx = ctx,
                            srcs = ctx.files.srcs,
                            deps = trans.srcs,
+                           image = ctx.attr.image,
+                           order = ctx.attr.order,
                            compile_data = trans.compile_data,
                            flags = flags,
                            nowarn = nowarn,
@@ -577,7 +581,7 @@ def lisp_binary_guts(name,
       visibility = ["//visibility:private"])
 
   # Precompile all C sources in advance, before core symbols are present.
-  cdeps_library = _make_cdeps_library(
+  cdeps_library = make_cdeps_library(
       name = name,
       deps = [image] + deps,
       csrcs = csrcs,
@@ -664,17 +668,23 @@ def lisp_test_guts(name, image=BAZEL_LISP, stamp=0, **kwargs):
 # Lisp Library
 ################################################################################
 
-def _lisp_library_implementation(ctx):
+def lisp_library_implementation(ctx,
+                                srcs = None,
+                                transitive = None,
+                                output_fasl = None,
+                                image = None,
+                                order = None,
+                                nowarn = None):
   """Lisp specific implementation for lisp_library rules."""
   # Implementation: _lisp_library.
-  verbose_level = max(ctx.attr.verbose,
+  verbose_level = max(getattr(ctx.attr, "verbose", 0),
                       int(ctx.var.get("VERBOSE_LISP_BUILD", "0")))
   verbosep = verbose_level > 0
   if verbosep:
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
     print("Library: %s" % ctx.label.name)
 
-  trans = extend_lisp_provider(
+  trans = transitive or extend_lisp_provider(
       transitive_deps(ctx.attr.deps, image = ctx.attr.image),
       # Add those features to trans already.
       features = ctx.attr.lisp_features,
@@ -687,21 +697,23 @@ def _lisp_library_implementation(ctx):
   if verbosep:       flags += ["--verbose", "%d" % verbose_level]
   if trans.features: flags += ["--features", " ".join(list(trans.features))]
   if (ctx.configuration.coverage_enabled or
-      ctx.attr.enable_coverage):
+      (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
     flags += ["--coverage"]
 
-  srcs = ctx.files.srcs
-  output_fasl = ctx.outputs.fasl
+  srcs = srcs or ctx.files.srcs
+  output_fasl = output_fasl or ctx.outputs.fasl
   if not srcs:
     # Need to create the declared output.
     # But it will not be recorded in the provider.
     _concat_files(ctx, [], output_fasl)
     return struct(lisp = trans)
 
-  nowarn = ctx.attr.nowarn
+  nowarn = nowarn or getattr(ctx.attr, "nowarn", [])
   result = _compile_srcs(ctx = ctx,
                          srcs = srcs,
                          deps = trans.srcs,
+                         image = image or ctx.attr.image,
+                         order = order or ctx.attr.order,
                          compile_data = trans.compile_data,
                          flags = flags,
                          nowarn = nowarn,
@@ -719,7 +731,7 @@ def _lisp_library_implementation(ctx):
 # Internal rule that creates a Lisp library FASL file.
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
-    implementation = _lisp_library_implementation,
+    implementation = lisp_library_implementation,
     attrs = _lisp_common_attrs,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
@@ -737,13 +749,13 @@ def _make_cdeps_dependencies(deps):
   """Transform the 'deps' labels into cdeps dependency labels."""
   return [_label(d) + ".cdeps" for d in deps]
 
-def _make_cdeps_library(name,
-                        deps = [],
-                        csrcs = [],
-                        cdeps = [],
-                        copts = [],
-                        visibility = None,
-                        testonly = 0):
+def make_cdeps_library(name,
+                       deps = [],
+                       csrcs = [],
+                       cdeps = [],
+                       copts = [],
+                       visibility = None,
+                       testonly = 0):
   """Create a CDEPS library and a .SO binary for the Lisp library with 'name'.
 
   Args:
@@ -824,9 +836,9 @@ def lisp_library_guts(name,
   http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
   # Macro: calls _make_cdeps_library, _lisp_library.
-  _make_cdeps_library(name = name, deps = [image] + deps,
-                      csrcs = csrcs, cdeps = cdeps, copts = copts,
-                      visibility = visibility, testonly = testonly)
+  make_cdeps_library(name = name, deps = [image] + deps,
+                     csrcs = csrcs, cdeps = cdeps, copts = copts,
+                     visibility = visibility, testonly = testonly)
 
   _lisp_library(
       # Common lisp attributes.

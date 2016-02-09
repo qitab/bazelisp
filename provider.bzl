@@ -85,3 +85,13 @@ def extend_lisp_provider (base, deps=[], srcs=[], hashes=[], warnings=[],
      features = set(list(base.features) + list(features)),
      runtime_data = set(list(base.runtime_data) + list(data)),
      compile_data = set(list(base.compile_data) + list(compile_data)))
+
+def print_provider(p):
+  "Prints the Lisp provider P."
+  if p.deps: print("Deps: %s" % [d.short_path for d in p.deps])
+  if p.srcs: print("Srcs: %s" % [s.short_path for s in p.srcs])
+  if p.hashes: print("Hashes: %s" % [h.short_path for h in p.hashes])
+  if p.warnings: print("Warnings: %s" % [w.short_path for w in p.warnings])
+  if p.features: print("Features: %s" % list(p.features))
+  if p.runtime_data: print("Runtime Data: %s" % list(p.runtime_data))
+  if p.compile_data: print("Compile Data: %s" % list(p.compile_data))
