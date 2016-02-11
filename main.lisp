@@ -788,6 +788,9 @@ This allows for the user to specify their own handlers as a string."
         (unless (or (>= *verbose* 2) (= (length srcs) 1))
           (remf args :srcs)
           (nconcf args (list :srcs (length srcs))))
+        (unless (or (>= *verbose* 2) (= (length load) 1))
+          (remf args :load)
+          (nconcf args (list :load (length load))))
 
         (verbose "Params:~{~&~3T~A: ~A~%~}" args)
 

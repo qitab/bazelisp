@@ -128,6 +128,37 @@ def _concat_files(ctx, inputs, output):
       mnemonic = "LispConcatFASLs",
       command = cmd)
 
+def _default_flags(ctx, trans, verbose_level):
+  """Returns a list of default flags based on the context and trans provider.
+
+  Args:
+   ctx: the context of the compile action.
+   trans: the Lisp provider with transitive dependencies.
+   verbose_level: if positive a --verbose flags is added.
+  Returns:
+    A list of flags
+  """
+  flags = [
+      "--compilation-mode",
+      ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
+      "--gendir", ctx.configuration.genfiles_dir.path,
+      "--features", " ".join(list(trans.features))]
+
+  if (ctx.configuration.coverage_enabled or
+      (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
+    flags += ["--coverage"]
+
+  if verbose_level > 0:
+    flags += ["--verbose", str(verbose_level)]
+
+  cpp_options = set(ctx.fragments.cpp.compiler_options([]))
+  if "-UNDEBUG" in cpp_options:
+    flags += ["--safety", "3"]
+  elif "-DNDEBUG" in cpp_options:
+    flags += ["--safety", "0"]
+
+  return flags
+
 def _compile_srcs(ctx, srcs, deps, image, order,
                   compile_data, flags, nowarn, verbosep):
   """Compiles the 'srcs' in the context 'ctx'.
@@ -166,12 +197,6 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     multipass = True
   elif order == "serial":
     serial = True
-
-  cpp_options = set(ctx.fragments.cpp.compiler_options([]))
-  if "-UNDEBUG" in cpp_options:
-    flags += ["--safety", "3"]
-  elif "-DNDEBUG" in cpp_options:
-    flags += ["--safety", "0"]
 
   # Arbitrary heuristic to reduce load on the build system by bundling
   # FASL and source files load into one compile-image binary.
@@ -266,15 +291,8 @@ def _lisp_binary_implementation(ctx):
       data = ctx.files.data,
       compile_data = ctx.files.compile_data)
 
-  compilation_mode = ctx.var.get("LISP_COMPILATION_MODE",
-                                 ctx.var["COMPILATION_MODE"])
-  flags = ["--gendir", ctx.configuration.genfiles_dir.path,
-           "--compilation-mode", compilation_mode]
+  flags = _default_flags(ctx, trans, verbose_level)
 
-  if verbosep:       flags += ["--verbose", "%d" % verbose_level]
-  if trans.features: flags += ["--features", " ".join(list(trans.features))]
-  if (ctx.configuration.coverage_enabled or ctx.attr.enable_coverage):
-    flags += ["--coverage"]
   nowarn = ctx.attr.nowarn
 
   if ctx.files.srcs:
@@ -691,15 +709,7 @@ def lisp_library_implementation(ctx,
       data = ctx.files.data,
       compile_data = ctx.files.compile_data)
 
-  flags = ["--gendir", ctx.configuration.genfiles_dir.path,
-           "-c", ctx.var["COMPILATION_MODE"]]
-
-  if verbosep:       flags += ["--verbose", "%d" % verbose_level]
-  if trans.features: flags += ["--features", " ".join(list(trans.features))]
-  if (ctx.configuration.coverage_enabled or
-      (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
-    flags += ["--coverage"]
-
+  flags = _default_flags(ctx, trans, verbose_level)
   srcs = srcs or ctx.files.srcs
   output_fasl = output_fasl or ctx.outputs.fasl
   if not srcs:
