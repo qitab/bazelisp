@@ -296,22 +296,23 @@ def _lisp_binary_implementation(ctx):
   nowarn = ctx.attr.nowarn
 
   if ctx.files.srcs:
-    result = _compile_srcs(ctx = ctx,
-                           srcs = ctx.files.srcs,
-                           deps = trans.srcs,
-                           image = ctx.attr.image,
-                           order = ctx.attr.order,
-                           compile_data = trans.compile_data,
-                           flags = flags,
-                           nowarn = nowarn,
-                           verbosep = verbosep)
+    compile = _compile_srcs(
+        ctx = ctx,
+        srcs = ctx.files.srcs,
+        deps = trans.srcs,
+        image = ctx.attr.image,
+        order = ctx.attr.order,
+        compile_data = trans.compile_data,
+        flags = flags,
+        nowarn = nowarn,
+        verbosep = verbosep)
   else:
-    result = struct(fasls=[], hashes=[], warnings=[])
+    compile = struct(fasls=[], hashes=[], warnings=[])
 
   # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
   # TOOD(czak): Fix: set([1, 2, 3]) + set([2, 4])
-  deps = set(trans.deps + trans.hashes + result.hashes)
-  srcs = set(result.fasls + list(trans.warnings + result.warnings))
+  deps = set(trans.deps + trans.hashes + compile.hashes)
+  srcs = set(compile.fasls + list(trans.warnings + compile.warnings))
 
   if hasattr(ctx.attr.image, "lisp"):
     # The image already includes some deps.
@@ -363,8 +364,10 @@ def _lisp_binary_implementation(ctx):
       # TODO(czak): Need to provide the srcs as lisp_library.
       # This way it can be loaded, if this image is used to compile Lisp.
       lisp = extend_lisp_provider(
-          trans, srcs = srcs,
-          hashes = result.hashes, warnings = result.warnings))
+          trans,
+          srcs = ctx.files.srcs,
+          hashes = compile.hashes,
+          warnings = compile.warnings))
 
 # Internal rule used to generate action that creates a Lisp binary core.
 # Keep the name to be _lisp_binary - Grok depends on this name to find targets.
@@ -445,18 +448,16 @@ _combine_lisp_test = rule(
 def _dump_lisp_deps_impl(ctx):
   """Creates a file that lists all Lisp files needed by the target in order."""
   # Implementation: _dump_lisp_deps
-  features = set()
-  srcs = set()
-  for dep in ctx.attr.deps:
-    features += dep.lisp.features
-    srcs += dep.lisp.srcs
-  features += ctx.attr.features
-  srcs += ctx.files.srcs
+  trans = extend_lisp_provider(
+      transitive_deps(ctx.attr.deps, image = ctx.attr.image),
+      # Add those to trans.
+      features = ctx.attr.lisp_features,
+      srcs = ctx.files.srcs)
   ctx.file_action(
       output = ctx.outputs.deps,
       content = (
-          "\n".join(["feature: " + f for f in features] +
-                    ["src: " + f.path for f in srcs])))
+          "\n".join(["feature: " + f for f in trans.features] +
+                    ["src: " + f.path for f in trans.srcs])))
 
 # Internal rule that creates a Lisp library DEPS file.
 # DEPS file is used to list all the Lisp sources for a target.
@@ -465,8 +466,15 @@ _dump_lisp_deps = rule(
     implementation = _dump_lisp_deps_impl,
     attrs = {
         "library_name": attr.string(),
+        # TODO(czak): Share with _lisp_common_attrs.
         "srcs": attr.label_list(allow_files = lisp_files),
         "deps": attr.label_list(providers = ["lisp"]),
+        "lisp_features": attr.string_list(),
+        "image": attr.label(
+            allow_files=True,
+            single_file=True,
+            executable=True,
+            default=Label(BAZEL_LISP)),
         },
     outputs = {"deps": "%{library_name}.deps"},
     executable = False,
@@ -595,7 +603,8 @@ def lisp_binary_guts(name,
       library_name = name,
       srcs = srcs,
       deps = deps,
-      features = features,
+      lisp_features = features,
+      image = image,
       visibility = ["//visibility:private"])
 
   # Precompile all C sources in advance, before core symbols are present.
@@ -719,23 +728,27 @@ def lisp_library_implementation(ctx,
     return struct(lisp = trans)
 
   nowarn = nowarn or getattr(ctx.attr, "nowarn", [])
-  result = _compile_srcs(ctx = ctx,
-                         srcs = srcs,
-                         deps = trans.srcs,
-                         image = image or ctx.attr.image,
-                         order = order or ctx.attr.order,
-                         compile_data = trans.compile_data,
-                         flags = flags,
-                         nowarn = nowarn,
-                         verbosep = verbosep)
+  compile = _compile_srcs(
+      ctx = ctx,
+      srcs = srcs,
+      deps = trans.srcs,
+      image = image or ctx.attr.image,
+      order = order or ctx.attr.order,
+      compile_data = trans.compile_data,
+      flags = flags,
+      nowarn = nowarn,
+      verbosep = verbosep)
 
   # Need to concatenate the FASL files into name.fasl.
-  _concat_files(ctx, result.fasls, output_fasl)
+  _concat_files(ctx, compile.fasls, output_fasl)
   # This is a library, return a struct.
   return struct(
       lisp = extend_lisp_provider(
-          trans, deps = [output_fasl], srcs = srcs,
-          hashes = result.hashes, warnings = result.warnings))
+          trans,
+          deps = [output_fasl],
+          srcs = srcs,
+          hashes = compile.hashes,
+          warnings = compile.warnings))
 
 
 # Internal rule that creates a Lisp library FASL file.
@@ -871,5 +884,6 @@ def lisp_library_guts(name,
       library_name = name,
       srcs = srcs,
       deps = deps,
-      features = features,
+      lisp_features = features,
+      image = image,
       visibility = ["//visibility:private"])
