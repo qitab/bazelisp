@@ -17,7 +17,7 @@ edit the `WORKSPACE` for your bazel installation, to include the following:
 
 Also, edit your copy of `lisp.WORKSPACE.bzl` to reflect the versions you want to use,
 and particularly to reflect where to find an installed binary of SBCL with which to
-bootstrap the rest. For install, if some SBCL is installed in `/usr/local/bin/sbcl`,
+bootstrap the rest. For example, if some SBCL is installed in `/usr/local/bin/sbcl`,
 with the support files in `/usr/local/lib/sbcl/`, then use:
 
     native.new_local_repository(

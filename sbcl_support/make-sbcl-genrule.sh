@@ -55,7 +55,7 @@ esac
 ## TODO: this assumes the same path arguments as for gcc.
 cflags=`echo " $cflags" | sed -e 's, \(-idirafter *\|-include *\|-imacros *\|-iprefix *\|-iwithprefix *\|-iwithprefixbefore *\|-isystem *\|-imultilib *\|-isysroot *\|-isystem *\|-Bprefix *\|-I *\|-iplugindir *\|-iquote *\|-L *\|-specs=\|--sysroot=\), \1'"$PWD"'/,g'`
 cflags="$cflags -I$PWD/$zlib_headers -L $PWD/`dirname $libz`"
-prefix=$PWD/$output_dir/external/lisp__sbcl ### TODO(bazel-team): why external/lisp__sbcl ???
+prefix=$PWD/$output_dir/
 
 # Compile SBCL with all needed environment variables set.
 

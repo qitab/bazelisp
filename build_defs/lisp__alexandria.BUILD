@@ -8,6 +8,31 @@ load("@lisp__bazel//:bazel/rules.bzl", "lisp_library")
 
 lisp_library(
     name = "alexandria",
+    srcs = [
+        "package.lisp",
+        "binding.lisp",
+        "conditions.lisp",
+        "definitions.lisp",
+        "strings.lisp",
+        "symbols.lisp",
+        "macros.lisp",
+        "control-flow.lisp",
+        "functions.lisp",
+        "hash-tables.lisp",
+        "features.lisp",
+        "lists.lisp",
+        "types.lisp",
+        "arrays.lisp",
+        "io.lisp",
+        "sequences.lisp",
+        "numbers.lisp",
+    ],
+    order = "serial",
+    visibility = ["//visibility:public"],
+)
+
+lisp_library(
+    name = "alexandria_serial_parallel",
     deps = [":numbers"],
     visibility = ["//visibility:public"],
 )
