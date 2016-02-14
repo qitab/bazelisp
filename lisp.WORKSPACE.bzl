@@ -15,7 +15,7 @@ def lisp_repositories (base_dir):
   ### operating system's packages in the version-controled perimeter, or e.g. use NixOS.
   ### NB: If said binary distribution of sbcl already contains libsbcl.a and
   ### libsbcl-exported-symbols.lds, and is properly version-controled, then you can directly
-  ### use SBCL_PACKAGE = "@lisp__sbcl_binary_distribution//:" in @lisp__bazel//:bazel/rule-guts.bzl
+  ### use SBCL_PACKAGE = "@lisp__sbcl_binary_distribution//:" in @lisp__bazel//:bazel/rules.bzl
   ### and save yourself having to build sbcl with bazel.
   native.new_local_repository(
       name = "lisp__sbcl_binary_distribution",

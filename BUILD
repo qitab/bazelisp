@@ -12,7 +12,7 @@ exports_files(["LICENSE"])
 
 exports_files(["bazel/dump-symtable.lisp"])
 
-load(":bazel/rule-guts.bzl", "SBCL_PACKAGE")
+load(":bazel/rules.bzl", "SBCL_PACKAGE")
 
 genrule(
     name = "make-bazel",
