@@ -83,7 +83,7 @@ sh ./install.sh
 
 # TODO: upstream that patch or something equivalent to SBCL.
 # See https://bugs.launchpad.net/sbcl/+bug/1500628
-( cat src/runtime/GNUmakefile ; echo 'libsbcl.a: $(OBJS)' ; echo '	ar rcs $@ $^'
+( cat src/runtime/GNUmakefile ; echo 'libsbcl.a: $(OBJS)' ; echo '	rm -f $@ ; ar rcs $@ $^'
 ) >> src/runtime/runtime.Makefile
 
 # Also make a static library, and copy it over.

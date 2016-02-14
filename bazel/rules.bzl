@@ -631,6 +631,7 @@ def lisp_binary(name,
   native.cc_binary(
       name = runtime,
       linkopts = [
+          "-lpthread", "-Wl,--no-fatal-warnings", "-static-libgcc",
           # SBCL cannot generate position-independent code, and -pie
           # is becoming the default. (NOTE: until the SBCL-compiled
           # functions are actually built as an ELF library,
@@ -638,7 +639,7 @@ def lisp_binary(name,
           # build for libsbcl.a, but that'd be basically a lie since
           # most of the code would still be mapped at a fixed
           # address.)
-          "-Wl,-no-pie",
+          ##"-Wl,-no-pie", ## This causes the linker to fail !?!?
           # Ensure that symbols needed by lisp code (which grabs them
           # via dlsym at runtime) are exported in the dynamic symbol
           # table.
