@@ -631,7 +631,6 @@ def lisp_binary(name,
   native.cc_binary(
       name = runtime,
       linkopts = [
-          "-lpthread", "-Wl,--no-fatal-warnings", "-static-libgcc",
           # SBCL cannot generate position-independent code, and -pie
           # is becoming the default. (NOTE: until the SBCL-compiled
           # functions are actually built as an ELF library,
@@ -639,11 +638,15 @@ def lisp_binary(name,
           # build for libsbcl.a, but that'd be basically a lie since
           # most of the code would still be mapped at a fixed
           # address.)
-          ##"-Wl,-no-pie", ## This causes the linker to fail !?!?
+          ## This causes the linker to fail on Ubuntu 14.04.3 LTS's gcc 4.8.4
+          ## SBCL's src/runtime/Config.x86-64-linux says if cc -dumpspecs contains nopie
+          #"-Wl,-nopie",
           # Ensure that symbols needed by lisp code (which grabs them
           # via dlsym at runtime) are exported in the dynamic symbol
           # table.
-          "-Wl,--dynamic-list", core_dynamic_list_lds],
+          "-Wl,--dynamic-list", core_dynamic_list_lds,
+          "-ldl", "-lpthread", "-lm"
+      ],
       srcs = [core_extern_symbols, core_lisp_symbols],
       deps = deps_rt,
       visibility = ["//visibility:private"],

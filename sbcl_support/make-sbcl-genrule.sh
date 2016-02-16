@@ -65,6 +65,33 @@ if [ ! -f version.lisp-expr ] ; then
   echo "\"$version\"" > version.lisp-expr
 fi
 
+cat <<EOF > customize-target-features.lisp
+(lambda (features)
+  (flet ((enable (x) (pushnew x features))
+         (disable (x) (setf features (remove x features))))
+    (enable :sb-fasteval)
+    (disable :sb-eval)
+    (enable :sb-thread)
+    (enable :sb-core-compression)
+    ;; Make core file not depend on exact runtime addresses
+    ;; -- allows relinking runtime.
+    (enable :sb-dynamic-core)
+    features))
+EOF
+
+# TODO: upstream that patch or something equivalent to SBCL.
+# See https://bugs.launchpad.net/sbcl/+bug/1500628
+( sed -e \
+  's,\$(TARGET): \$(OBJS),\$(TARGET): sbcl.o, ;
+   s/LINKFLAGS = -g/LINKFLAGS = -g -Wl,-z,relro,-z,now -no-canonical-prefixes -pass-exit-codes -Wl,--build-id=md5 -Wl,--hash-style=gnu -Wl,-S/' < src/runtime/GNUmakefile
+  echo 'sbcl.o: $(OBJS)' ;
+  echo '	ld -r -o $@ $^'
+  echo 'libsbcl.a: sbcl.o' ;
+  echo '	rm -f $@ ; ar rcs $@ $^'
+) >> src/runtime/Makefile
+rm -f src/runtime/GNUmakefile
+mv src/runtime/Makefile src/runtime/GNUmakefile
+
 CC=$cc \
 CFLAGS=$cflags \
 CPPFLAGS=$cflags \
@@ -81,12 +108,8 @@ echo "Calling install.sh"
 # But we don't care.
 sh ./install.sh
 
-# TODO: upstream that patch or something equivalent to SBCL.
-# See https://bugs.launchpad.net/sbcl/+bug/1500628
-( cat src/runtime/GNUmakefile ; echo 'libsbcl.a: $(OBJS)' ; echo '	rm -f $@ ; ar rcs $@ $^'
-) >> src/runtime/runtime.Makefile
-
 # Also make a static library, and copy it over.
 echo "Calling make -C src/runtime libsbcl.a"
-make -C src/runtime -f runtime.Makefile libsbcl.a
-cp src/runtime/libsbcl.a $prefix/lib/
+make -C src/runtime libsbcl.a sbcl.o
+cp src/runtime/libsbcl.a $prefix/lib/sbcl/
+cp src/runtime/sbcl.o $prefix/lib/sbcl/
