@@ -283,7 +283,7 @@ This allows for the user to specify their own handlers as a string."
               (setf (action-deferred-warnings action)
                     (union (action-deferred-warnings action) warnings :test #'equalp))
             finally
-         (message :info (if (plusp count) 1 2)
+         (message :info (if (plusp count) 1 3)
                   "Read ~D warning~:P from: ~A" count warnings-file)))))
 
 (defun resolve-deferred-warnings (warnings)
@@ -710,6 +710,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defun process (&rest args
                    &key command deps load srcs outs gendir
+                   warnings hashes
                    (compilation-mode :fastbuild)
                    safety
                    main features nowarn
@@ -732,6 +733,8 @@ This allows for the user to specify their own handlers as a string."
   SRCS - sources for a binary core or for compilation,
   OUTS - the output files,
   GENDIR - the directory for the generated results (for debug),
+  WARNINGS - is a list of files that contain deferred warnings,
+  HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from blaze -c <compilation-mode>,
   SAFETY - determines the safety level to be used for compilation.
   MAIN - the name of the main function for a binary,
@@ -749,6 +752,8 @@ This allows for the user to specify their own handlers as a string."
          (deps (unless deps-already-loaded (split deps)))
          (load (split load))
          (srcs (split srcs))
+         (hashes (split hashes))
+         (warnings (split warnings))
          (outs (split outs))
          (safety (if (stringp safety) (parse-integer safety) safety))
          (compilation-mode (to-keyword compilation-mode))
@@ -791,6 +796,12 @@ This allows for the user to specify their own handlers as a string."
         (unless (or (>= *verbose* 2) (= (length load) 1))
           (remf args :load)
           (nconcf args (list :load (length load))))
+        (unless (or (>= *verbose* 3) (= (length warnings) 1))
+          (remf args :warnings)
+          (nconcf args (list :warnings (length warnings))))
+        (unless (or (>= *verbose* 3) (= (length hashes) 1))
+          (remf args :hashes)
+          (nconcf args (list :hashes (length hashes))))
 
         (verbose "Params:~{~&~3T~A: ~A~%~}" args)
 
@@ -834,6 +845,8 @@ This allows for the user to specify their own handlers as a string."
       (funcall-named "BAZEL.COVERAGE:TURN-ON-DATA-COLLECTION"))
 
     (process-dependencies deps)
+    ;; Load in any source hash information files.
+    (mapc #'process-file* hashes)
 
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
@@ -843,6 +856,8 @@ This allows for the user to specify their own handlers as a string."
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
       (mapc #'process-file* srcs)
+      (verbose "Processing ~D deferred warning file~:P..." (length warnings))
+      (mapc #'process-file* warnings)
       (verbose "Finalizing the ~A action..." command)
       (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
       (finish-action action command))

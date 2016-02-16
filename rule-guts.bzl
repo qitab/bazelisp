@@ -311,22 +311,24 @@ def _lisp_binary_implementation(ctx):
 
   # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
   # TOOD(czak): Fix: set([1, 2, 3]) + set([2, 4])
-  deps = set(trans.deps + trans.hashes + compile.hashes)
-  srcs = set(compile.fasls + list(trans.warnings + compile.warnings))
+  deps = trans.deps
+  hashes = trans.hashes + compile.hashes
+  warnings = trans.warnings + compile.warnings
 
   if hasattr(ctx.attr.image, "lisp"):
     # The image already includes some deps.
     included = ctx.attr.image.lisp
-    img_deps = included.hashes + included.deps
-    deps = set([d for d in deps if not d in img_deps])
-    srcs = set([s for s in srcs if not s in included.warnings])
+    deps = set([d for d in deps if not d in included.deps])
+    hashes = set([h for h in hashes if not h in included.hashes])
+    warnings = set([w for w in warnings if not w in included.warnings])
   dump_symtable = ctx.file._dump_symtable
   build_image = ctx.file.image
   if verbosep:
     print("Build image: %s" % build_image.short_path)
 
   inputs = sorted(set([build_image, dump_symtable])
-                + deps + srcs + trans.compile_data)
+                  + deps + compile.fasls + trans.compile_data
+                  + hashes + warnings)
 
   core = ctx.outputs.core
   dynamic_list_lds = ctx.outputs.dynamic_list_lds
@@ -335,7 +337,9 @@ def _lisp_binary_implementation(ctx):
   outs = [core, dynamic_list_lds, extern_symbols, lisp_symbols]
 
   flags += ["--deps", _paths(deps)]
-  flags += ["--srcs", _paths(srcs)]
+  flags += ["--srcs", _paths(compile.fasls)]
+  flags += ["--warnings", _paths(warnings)]
+  flags += ["--hashes", _paths(hashes)]
   flags += ["--outs", _paths(outs)]
   flags += ["--dump-extern-symbols", extern_symbols.path]
   flags += ["--dump-dynamic-list-lds", dynamic_list_lds.path]

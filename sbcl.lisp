@@ -332,7 +332,7 @@
       (handler-case (set 'sb-ext:*evaluator-mode* :fast-interpret)
         (type-error () (setq sb-ext:*evaluator-mode* :interpret)))
       (setf sb-ext:*evaluator-mode* :compile))
-  (bazel.log:vv "Set interpret mode to: ~A"  sb-ext:*evaluator-mode*)
+  (bazel.log:vvv "Set interpret mode to: ~A"  sb-ext:*evaluator-mode*)
   sb-ext:*evaluator-mode*)
 
 (defun set-interactive-mode (&optional (interactive-p t))
