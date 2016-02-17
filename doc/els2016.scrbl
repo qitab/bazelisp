@@ -132,25 +132,54 @@ The features that we will demonstrate include:
 
 TO BE WRITTEN
 
+Increased parallelism with reduced latency by loading dependencies in a fast interpreter,
+rather than waiting for them to be compiled first.
+This works fine as long as, with some restrictions:
+(a) Some code may use @cl{eval-when} incorrectly and fail to support loading without compiling;
+it will have to be fixed.
+(b) Some code may do heavy computations at macro-expansion time and run somewhat slowly
+because it's not compiled; explicitly calling @cl{compile} may speed up that code.
+
+@section{Inside the Lisp rules}
+
+TO BE WRITTEN
+
+@section{Speed}
+
+TO BE WRITTEN
+
+Comparison between building with ASDF vs building with Bazel:
+Incremental build vs build all Lisp code "from scratch"
+vs build all code "really from scratch" (including SBCL).
+Consider speedup from using a multiprocessor (vanilla ASDF can't take advantage of them).
+
 @section{Requirements}
 
 The current version of these Common Lisp rules for Bazel only work with SBCL.
 Porting to a different Lisp implementation, while possible,
 may require non-trivial work, especially with respect to linking C libraries into an executable,
-or to achieving the low latency that was reached with SBCL.
+or to reproducing the low latency that was achieved with SBCL.
 
-These Common Lisp rules have only been tested on Linux on the x86-64 architecture,
-but should be relatively easy to get to work on a different operating system and architecture,
-as long as they are supported by both SBCL and Bazel.
+These Common Lisp rules have only been tested on Linux on the x86-64 architecture;
+but they should be relatively easy to get to work on a different operating system and architecture,
+as long as they are supported by both SBCL and Bazel:
+for instance on MacOS X, and possibly, on Windows or on mobile devices.
 
 Bazel itself is an application written in Java that takes many seconds to start the first time;
-then it becomes a server that eats a few gigabytes of memory but can start your build instantly.
-It isn't a lightweight solution for the casual Lisp programmer;
-but it is a robust solution for building quality software in an industrial setting.
+then it becomes a server that eats several gigabytes of memory, but can start your build instantly.
+It isn't a lightweight solution for programming Lisp in the small;
+but it is a robust solution for building quality software in Lisp in an industrial setting.
 
 
 @section{Conclusion and Future Work}
 
-TO BE WRITTEN
+We have demonstrated simultaneously
+how Common Lisp applications can be built in a fast and robust way,
+and how Bazel can be extended to reasonably support a new language unforeseen by its authors.
+
+In the future, we may want to add Lisp-side support for interactively controlling Bazel:
+we would like to be able to build code, and load the result code into the current image,
+without reloading unmodified fasls and object files;
+we would also like to be able to run tests with Bazel and interactively debug those that fail.
 
 @(generate-bib)
