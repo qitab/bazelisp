@@ -49,7 +49,7 @@
 
 (defpretty tt
   lisp_binary lisp_library lisp_test cc_library
-  srcs deps csrcs cdeps data compile_data
+  srcs deps csrcs copts cdeps data compile_data
   order features nowarn visibility
 )
 (defpretty file

@@ -134,6 +134,8 @@ The features that we will demonstrate include:
 
 @; ------------- lisp_binary ---------------------
 
+@subsection{lisp_binary}
+
 A @(lisp_binary) rule is used to link statically an executable with embedded
 Lisp runtime and Lisp core image. The inputs to the binary are Lisp sources @(srcs),
 Lisp libraries @(deps), C++ sources @(csrcs) and libraries @(cdeps),
@@ -159,12 +161,14 @@ An example "hello, world" application is simply declared as follows:
 ;-> BUILD
 
 load("@lisp__bazel//:bazel/rules.bzl",
-    "lisp_binary")
+     "lisp_binary")
 
 lisp_binary(
     name = "hello",
     srcs = ["hello.lisp"]
-)}|
+)
+
+}|
 
 The above example contains the @(cl-user::main) function that is called
 at image startup from the @(lisp_binary) wrapper specific to the Lisp implementation.
@@ -177,9 +181,14 @@ needs to be defined in the corresponding @(WORKSPACE) files.
 Then it applies the @(lisp_binary) rule to the source file giving the target
 "hello" as a name. The program is compiled, linked, and executed using the following command:
 
-@verbatim{> bazel run :hello}
+@verbatim[#:indent 5]{
+
+> bazel run :hello
+}
 
 @; ------------- lisp_library ---------------------
+
+@subsection{lisp_library}
 
 A @(lisp_library) is useful to declare an intermediate target which can be
 referenced from other Lisp BUILD rules. For SBCL the @(lisp_library) creates
@@ -212,10 +221,11 @@ It accepts names of condition types or names of condition handlers.
 There is a set of predefined warning types found in the @cl{bazel.warning} package.
 
 @verbatim|{
+
 ;-> alexandria/BUILD
 
 load("@lisp__bazel//:bazel/rules.bzl",
-    "lisp_library")
+     "lisp_library")
 
 lisp_library(
     name = "package",
@@ -234,7 +244,9 @@ lisp_library(
     deps = [":package"],
     order = "parallel",
     visibility = ["//visibility:public"],
-)}|
+)
+
+}|
 
 The above example of a Lisp library is for "alexandria".
 The library is compiled in the "parallel" @(order) because the sources just
@@ -248,13 +260,18 @@ to other @(BUILD) packages. In this example, there is no restriction and the tar
 To build the library one needs to invoke the following Bazel command which will produce
 @file{alexandria.fasl} file.
 
-@verbatim{> bazel build :alexandria}
+@verbatim[#:indent 5]{
+
+> bazel build :alexandria
+}
 
 The FASL file can be located in the @file{blaze-genfiles} folder and contains the compiled
 Lisp sources except for the @file{package.lisp} file, which are to be found in and loaded up-front
 from the corresponding @file{package.fasl} file.
 
 @; ------------- lisp_test ---------------------
+
+@subsection{lisp_test}
 
 The last, but not least, BUILD rule to be introduced here is the @(lisp_test) rule.
 The test rule is a variation on the @(lisp_binary) rule. It also produces
@@ -265,18 +282,22 @@ with the @tt{bazel test} command.
 @verbatim|{
 
 ;-> foo/test.lisp
+
 (defun main ()
   (assert (= 720 (alexandria:factorial 6))))
 
 ;-> foo/BUILD
 
-load("@lisp__bazel//:bazel/rules.bzl", "lisp_test")
+load("@lisp__bazel//:bazel/rules.bzl",
+     "lisp_test")
 
 lisp_test(
   name = "test",
   srcs = ["test.lisp"],
   deps = ["@lisp__alexandria//:alexandria"],
-)}|
+)
+
+}|
 
 The above example contains a @file{foo/test.lisp} file with a @(cl-user::main)
 referencing the @cl{alexandria:factorial} function and an assertion.
@@ -284,14 +305,40 @@ The corresponding @(BUILD) file has a @tt{foo:test} target defined which depends
 the above defined "alexandria" @(BUILD) target and library.
 
 The corresponding test can be run using the following Bazel command line:
-@verbatim{> bazel test foo:test}
 
+@verbatim[#:indent 5]{
+
+> bazel test foo:test
+}
 
 @; ------------- C++ dependencies ---------------------
 
-TO BE WRITTEN
+@subsection{C dependencies}
+
+The Lisp executable binaries are linked statically which makes them more reliable
+when deployed on a multitude of hosts in the cloud. It also assures that
+the test and the production environment differ less then if the
+Lisp programs would be required to load the dependencies dynamically.
+
+The C++ dependencies can be specified directly in each of the Lisp build rules
+using the @(csrcs) and @(copts) rule attributes which translate to a native
+Bazel @(cc_library) target internally. Otherwise, the @(cdeps) rule attribute
+allows to link any @(cc_library) referenced by a target label.
+
+The Lisp build process for the C++ sources and the SBCL C runtime is parallel
+to the Lisp source compilation and to the creation of the Lisp core image.
+This was done to improve the build parallelism, but prevents calling any new C
+functions from Lisp at the time of source compilation.
+
+In order to facilitate linking, discover missing C/C++ symbols, and only link
+necessary C/C++ functionality statically, when the final Lisp core image is
+created, all UNDEFINED-ALIEN symbols are dumped into a linker script file.
+That @file{*.lds} file is then used to link the SBCL/C runtime part of the final
+executable.
 
 @; ------------- Etc ---------------------
+
+@subsection{Parallel compilation}
 
 Increased parallelism with reduced latency by loading dependencies in a fast interpreter,
 rather than waiting for them to be compiled first.
