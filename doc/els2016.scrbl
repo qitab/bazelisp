@@ -307,12 +307,18 @@ TO BE WRITTEN
 
 @section{Speed}
 
-TO BE WRITTEN
+A typical build of QPX using these build rules went from about 15 minutes to about 90 seconds,
+or a tenfold improvement, with qualitative effects on developer experience.
+This however, is for a very large project, using a distributed farm of build machines
+for compilation.
+The open source version of Bazel currently lacks the ability to farm builds that way,
+though it can already take advantage of multiple processing cores on a single machine
+to speed up the build.
+The typical Lisp user will therefore probably not experience such as large a build speedup
+when using the Bazel lisp rules;
+but he will may still enjoy the increased reliability and reproducibility of Bazel
+over traditional build methods.
 
-Comparison between building with ASDF vs building with Bazel:
-Incremental build vs build all Lisp code "from scratch"
-vs build all code "really from scratch" (including SBCL).
-Consider speedup from using a multiprocessor (vanilla ASDF can't take advantage of them).
 
 @section{Requirements}
 
