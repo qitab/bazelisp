@@ -263,6 +263,7 @@ To build the library one needs to invoke the following Bazel command which will 
 @verbatim[#:indent 5]{
 
 > bazel build :alexandria
+
 }
 
 The FASL file can be located in the @file{blaze-genfiles} folder and contains the compiled
