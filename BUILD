@@ -49,13 +49,6 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
-# This is no longer needed.
-#py_binary(
-#    name = "combine-sbcl-image",
-#    srcs = ["sbcl_support/combine-sbcl-image.py"],
-#    visibility = ["//visibility:public"],
-#)
-
 filegroup(
     name = "make-sbcl-genrule",
     srcs = ["sbcl_support/make-sbcl-genrule.sh"],

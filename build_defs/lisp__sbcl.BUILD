@@ -137,32 +137,3 @@ cc_library(
         "libsbcl-exported-symbols.lds",
     ],
 )
-
-### Tests:
-
-cc_binary(
-    name = "smoketest-libsbcl-runtime",
-    linkopts = ["-Wl,-nopie"],
-    deps = [
-        "libsbcl",
-        # TODO(bazel-team): this dependency should be transitive from the
-        # libsbcl rule, but isn't. Without this extra dep, it cannot find the
-        # .lds file
-        "libsbcl-exported-symbols.lds",
-    ],
-)
-
-genrule(
-    name = "smoketest-libsbcl_rule",
-    srcs = [
-        ":smoketest-libsbcl-runtime",
-        ":lib/sbcl/sbcl.core",
-    ],
-    outs = ["smoketest-libsbcl"],
-    cmd = "$(location @lisp__bazel//:sbcl_support/combine-sbcl-image) $@"
-    + " $(location :smoketest-libsbcl-runtime) $(location :lib/sbcl/sbcl.core)",
-    executable = 1,
-    tools = [
-        "@lisp__bazel//:sbcl_support/combine-lisp-image",
-    ],
-)
