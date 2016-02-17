@@ -147,21 +147,21 @@ which is the @italic{cl-user::main} function by default.
 
 An example "hello, world" application is simply declared as follows:
 
-@verbatim{
+@verbatim|{
 
 ;-> hello.lisp
 
-(@bold{defun} main ()
-  (@bold{format} t "Hello, world!~%"))
+(defun main ()
+  (format t "Hello, world!~%"))
 
 ;-> BUILD
 
-@bold{load}("@lisp__bazel//:bazel/rules.bzl", "lisp_binary")
+load("@lisp__bazel//:bazel/rules.bzl", "lisp_binary")
 
-@bold{lisp_binary}(
+lisp_binary(
     name = "hello",
     srcs = ["hello.lisp"]
-)}
+)}|
 
 The above example contains the @italic{cl-user::main} function that is called
 at image startup from the @italic{lisp_binary} wrapper specific to the Lisp implementation.
@@ -208,7 +208,7 @@ In order to compile some "hairy" sources the @italic{nowarn} attribute can be us
 It accepts names of condition types or names of condition handlers.
 There is a set of predefined warning types found in the @italic{bazel.warning} package.
 
-@verbatim{
+@verbatim|{
 ;-> alexandria/BUILD
 
 load("@lisp__bazel//:bazel/rules.bzl", "lisp_library")
@@ -223,14 +223,14 @@ lisp_library(
     srcs = [
         "binding.lisp",
         "conditions.lisp",
-	@italic{# ... some omitted}
+	# ... some omitted
         "features.lisp",
         "io.lisp",
     ],
     deps = [":package"],
     order = "parallel",
     visibility = ["//visibility:public"],
-)}
+)}|
 
 The above example of a Lisp library is for "alexandria".
 The library is compiled in the "parallel" @italic{order} because the sources just
@@ -258,7 +258,7 @@ an executable program with a main entry point that can be executed on the comman
 The special purpose of the test rule is to run tests when invoked
 with the @italic{bazel test} command.
 
-@verbatim{
+@verbatim|{
 
 ;-> foo/test.lisp
 (defun main ()
@@ -272,7 +272,7 @@ lisp_test(
   name = "test",
   srcs = ["test.lisp"],
   deps = ["@lisp__alexandria//:alexandria"],
-)}
+)}|
 
 The above example contains a @italic{foo/test.lisp} file with a @italic{cl-user::main}
 referencing the @italic{alexandria:factorial} function and an assertion.
