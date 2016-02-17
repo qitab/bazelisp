@@ -31,6 +31,9 @@
 (define (cl . str)
   (apply tt str))
 
+(define (file . str)
+  (apply tt str))
+
 (define (CL) "Common Lisp")
 (define (CLOS) "Common Lisp Object System")
 
@@ -46,6 +49,15 @@
 
 (defpretty tt
   lisp_binary lisp_library lisp_test cc_library
+  srcs deps csrcs cdeps data compile_data
+  order features nowarn visibility
+)
+(defpretty file
+  BUILD WORKSPACE
+)
+
+(defpretty cl
+  main cl-user::main
 )
 
 (define-cite ~cite cite-noun generate-bib) ;; #:style number-style)
