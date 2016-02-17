@@ -10,5 +10,4 @@
   ;; exercise alexandria
   (assert (= 720 (factorial 6)))
   ;; exercise uiop
-  (format t "Hello, World!~%")
-  (sb-ext:exit :code 0))
+  (format t "Hello, World!~%"))
