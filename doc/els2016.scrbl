@@ -279,9 +279,7 @@ To build the library one needs to invoke the following Bazel command which will 
 }
 
 The FASL file can be located in the @file{blaze-genfiles} folder
-and contains the compiled Lisp sources except for the @file{package.lisp} file,
-which are to be found in and loaded up-front
-from the corresponding @file{package.fasl} file.
+and contains the compiled Lisp sources for the library.
 
 @; ------------- lisp_test ---------------------
 
