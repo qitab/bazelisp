@@ -247,31 +247,21 @@ load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 
 lisp_library(
-    name = "package",
-    srcs = ["package.lisp"],
-)
-
-lisp_library(
     name = "alexandria",
     srcs = [
-        "binding.lisp",
-        "conditions.lisp",
+	"package.lisp",
+	"binding.lisp",
 	# ... some omitted
         "features.lisp",
         "io.lisp",
     ],
-    deps = [":package"],
-    order = "parallel",
     visibility = ["//visibility:public"],
 )
 
 }|
 
 The above example of a Lisp library is for "alexandria".
-The library is compiled in the "parallel" @(order) because the sources just
-depend on the @file{package.lisp} file but not on each other. In practice
-there is not much gain from compiling in "parallel" as opposed to the "serial" order -
-the main advantage being the enforced independence of the sources through library evolution.
+The library is compiled in the default "serial" @(order) because the sources depend on each other.
 The @(deps) attribute specifies other Lisp library targets the "alexandria" library
 depends on. The @(visibility) attribute allows to restrict the availability of that's rule target
 to other @(BUILD) packages. In this example, there is no restriction and the target is "public".
