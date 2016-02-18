@@ -374,41 +374,51 @@ because it's not compiled; explicitly calling @cl{compile} may speed up that cod
 
 @section{Inside the Lisp rules}
 
-The Lisp BUILD rules have been implemented using Bazel extension language - @italic{Skylark}.
-The implementation has several levels, starting with @italic{Skylark's macros} -
+The Lisp BUILD rules have been implemented using Bazel extension language --- @italic{Skylark}.
+The implementation has several levels, starting with Skylark @italic{macros} ---
 basically Python functions.
-The @(lisp_binary), @(lisp_library) rules are implemented as macros invoking @italic{Skylark's rules}.
+The @(lisp_binary), @(lisp_library) rules are implemented as macros invoking Skylark @italic{rules}.
 Skylark rules are constructs that consist of an implementation function,
-a defined list of attributes with input type checking,
-and possibly a declaration of the outputs for the rule.
+and a list of attribute specifications that notably define type-checked inputs and outputs.
 
-The indirect use of a Skylark "macro" is necessary in order to establish two separate graphs of
-compilation targets for Lisp and the C counterpart, which are then connected at the
-binary executable terminals. So @(lisp_library) "macro" calls @(_lisp_library) rule to create
-Lisp related actions and also calls the @(make_cdeps_library) to create the C related targets
-using Skylark's @(native.cc_library).
+The indirect use of a Skylark "macro" is necessary in order to establish
+two separate graphs of compilation targets for Lisp and the C counterpart,
+which are then connected into a final binary executable target.
+So @(lisp_library) "macro" calls @(_lisp_library) rule to create
+Lisp related actions and also calls the @(make_cdeps_library)
+to create the C related targets using Skylark's @(native.cc_library).
 
-The @(_lisp_library) rule implementation computes the transitive dependencies from referenced
-targets, compiles the sources using Skylark's @(ctx.action), and returns a Lisp @italic{provider}
-structure to be used by other Lisp rules. Each of the Lisp sources are compiled in a separate
-process, possibly running on different machines. The compilation effects of one source are
-not seen when compiling other Lisp sources.
+The @(_lisp_library) rule implementation
+computes the transitive dependencies from referenced targets,
+compiles the sources using Skylark's @(ctx.action),
+and returns a Lisp @italic{provider} structure (synthesized attribute)
+to be used by other Lisp rules.
+Each of the Lisp sources are compiled in a separate process,
+possibly running on different machines.
+The compilation effects of one source are not seen when compiling other Lisp sources.
 The Lisp provider contains transitive information about:
-the FASL files produced by each Library target; all Lisp sources used and their md5 hashes;
-the Lisp features declared; the deferred warnings from each compilation; as well as the
-runtime and compilation data from each library.
+the FASL files produced by each Library target;
+all Lisp sources used and their md5 hashes;
+the Lisp features declared;
+the deferred warnings from each compilation;
+the runtime and compilation data from each library.
 
-The Lisp sources of the dependencies are loaded interpreted before compiling an
-intermediate target. The FASL files are only used when linking the final
-binary target. The deferred compilation warnings - mostly undefined function warnings -
+The Lisp @italic{sources} of the dependencies (not the compiled FASLs)
+are loaded before compiling an intermediate target;
+they will thus be processed by the implementation's interpreter rather than compiler.
+The FASL files are only used when linking the final binary target.
+The deferred compilation warnings --- mostly undefined function warnings ---
 can also only be checked when all FASL sources have been loaded in the final target.
 
-The @(lisp_binary) "macro" has similar tasks to perform as @(lisp_library). In addition
-it will compile the C runtime executable and link all but a minimal
-subset of the C libraries statically using @(make_cdeps_library) and Skylark's
-@(native.cc_binary). It will produce a Lisp core containing all the loaded FASL files
-using @(_lisp_binary) rule and finally it will combine the runtime and the core to form
+The @(lisp_binary) "macro" involves similar tasks to perform as @(lisp_library).
+In addition, it will compile the C runtime executable and
+link all but a minimal subset of the C libraries statically
+using @(make_cdeps_library) and Skylark's @(native.cc_binary).
+It will produce a Lisp core containing all the loaded FASL files
+using the private @(_lisp_binary) rule
+and finally it will combine the runtime and the core to form
 the final executable by swapping out the Lisp core part in the runtime.
+
 
 @section{Speed}
 
