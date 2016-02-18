@@ -862,10 +862,7 @@ def lisp_library_guts(name,
   For more information on the common rule attributes refer to:
   http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
-  # Macro: calls _make_cdeps_library, _lisp_library.
-  make_cdeps_library(name = name, deps = [image] + deps,
-                     csrcs = csrcs, cdeps = cdeps, copts = copts,
-                     visibility = visibility, testonly = testonly)
+  # This macro calls _make_cdeps_library, _lisp_library.
 
   _lisp_library(
       # Common lisp attributes.
@@ -883,6 +880,12 @@ def lisp_library_guts(name,
       testonly = testonly,
       verbose = verbose,
       **kwargs)
+
+  make_cdeps_library(
+      name = name, deps = [image] + deps,
+      csrcs = csrcs, cdeps = cdeps, copts = copts,
+      visibility = visibility, testonly = testonly)
+
   _dump_lisp_deps(
       name = "~" + name + ".deps",
       library_name = name,
