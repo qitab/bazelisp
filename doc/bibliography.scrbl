@@ -109,7 +109,7 @@
 
 (define-bib Inside-Orbitz
   #:title "Carl de Marcken: Inside Orbitz"
-  #:author "Carl de Marcken"
+  #:author (author-name "Carl" "de Marcken")
   #:date "2001"
   #:url "http://www.paulgraham.com/carl.html")
 
