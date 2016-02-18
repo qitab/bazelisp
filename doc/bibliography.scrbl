@@ -124,3 +124,9 @@
   #:author "Google"
   #:date "2016"
   #:url "http://github.com/qitab/bazelisp")
+
+(define-bib FASTEVAL
+  #:title "SBCL's Fasteval"
+  #:author "Douglas Katzman"
+  #:date "2015"
+  #:url "https://github.com/sbcl/sbcl/tree/master/src/interpreter")

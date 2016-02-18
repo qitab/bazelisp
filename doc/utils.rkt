@@ -48,9 +48,15 @@
              (define (name) (pretty string)) ...))])))
 
 (defpretty tt
-  lisp_binary lisp_library lisp_test cc_library
+  lisp_binary _lisp_binary
+  lisp_library _lisp_library
+  lisp_test cc_library
   srcs deps csrcs copts cdeps data compile_data
   order features nowarn visibility
+  make_cdeps_library
+  native.cc_library
+  native.cc_binary
+  ctx.action
 )
 (defpretty file
   BUILD WORKSPACE

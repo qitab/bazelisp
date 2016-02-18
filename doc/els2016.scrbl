@@ -11,7 +11,7 @@
           (only-in scribble/core style)
           "bibliography.scrbl" "utils.rkt")
 
-@authorinfo["Douglas Katzman" "Google" "dougk@google.com"]
+@;authorinfo["Douglas Katzman" "Google" "dougk@google.com"]
 @authorinfo["James Y. Knight" "Google" "jyknight@google.com"]
 @authorinfo["François-René Rideau" "Google" "tunes@google.com"]
 @authorinfo["Andrzej Walczak" "Google" "czak@google.com"]
@@ -40,8 +40,6 @@ Hermetic
   With Bazel, you can also statically link C libraries into your SBCL runtime,
   allowing for self-contained deployment of your program as a single executable file.
   Currently, only SBCL is supported, and has only been tested on Linux.
-  A faster evaluator for SBCL also reduces latency due to loading dependencies
-  while maintaining compilation in isolated processes.
 }
 
 @section{Introduction}
@@ -121,7 +119,7 @@ Therefore, the replacement for that build script had to be able to handle that "
 The features that we will demonstrate include:
 @itemlist[
 @item{
-  Building a simple "hello, world" application in Common Lisp, using @(lisp_binary).
+  Building a simple "hello, world" application in Common Lisp using @(lisp_binary).
 }
 @item{
   Building a simple library using @(lisp_library).
@@ -133,14 +131,15 @@ The features that we will demonstrate include:
   Including C libraries in a Lisp binary by depending on a @(cc_library).
 }
 @item{
-  More complex dependency graphs using multiple @(lisp_library) rules.
+  More complex dependency graphs using multiple
+  @(lisp_library) rules.
 }
 @item{
   Handling dependency hairballs using the @tt{"multipass"} feature.
 }
-@item{ @; Note that :sb-fasteval is already standard in SBCL.
-  Low-latency in loading dependencies using the new @tt{:sb-fasteval} feature of SBCL.
-}]
+@;item{ @; Note that :sb-fasteval is already standard in SBCL.
+@;  Low-latency in loading dependencies using the new @tt{:sb-fasteval} feature of SBCL.}
+]
 
 @section{Discussion}
 
@@ -278,9 +277,10 @@ depends on. The @(visibility) attribute allows to restrict the availability of t
 to other @(BUILD) packages. In this example, there is no restriction and the target is "public".
 
 To build the library one needs to invoke the following Bazel command which will produce
-@file{alexandria.fasl} file.@note{
-  The actual @(BUILD) file for alexandria has more complex dependencies than that.
-}
+@file{alexandria.fasl} file.
+
+@; Actually, no, the example here is more complex in order to show dependencies on between package.lisp and the rest.
+@;note{The actual @(BUILD) file for alexandria has more complex dependencies than that.}
 
 @verbatim[#:indent 5]{
 
@@ -374,7 +374,7 @@ it also allows to statically detect any missing or misspelled C/C++ symbol.
 @subsection{Parallel compilation}
 
 The Bazel Lisp rules compile each file in parallel with other files,
-after loading its declared dependencies in a fast interpreter.
+after loading its declared dependencies using SBCL's fast interpreter@~cite[FASTEVAL].
 This increases build parallelism and reduces latency,
 as contrasted to waiting for each of dependency to be compiled first
 before its compilation output may be loaded.
@@ -386,11 +386,45 @@ because it's not compiled; explicitly calling @cl{compile} may speed up that cod
 
 @section{Inside the Lisp rules}
 
-TO BE WRITTEN
+The Lisp BUILD rules have been implemented using Bazel extension language - @italic{Skylark}.
+The implementation has several levels, starting with @italic{Skylark's macros} -
+basically Python functions.
+The @(lisp_binary), @(lisp_library) rules are implemented as macros invoking @italic{Skylark's rules}.
+Skylark rules are constructs that consist of an implementation function,
+a defined list of attributes with input type checking,
+and possibly a declaration of the outputs for the rule.
+
+The indirect use of a Skylark "macro" is necessary in order to establish two separate graphs of
+compilation targets for Lisp and the C counterpart, which are then connected at the
+binary executable terminals. So @(lisp_library) "macro" calls @(_lisp_library) rule to create
+Lisp related actions and also calls the @(make_cdeps_library) to create the C related targets
+using Skylark's @(native.cc_library).
+
+The @(_lisp_library) rule implementation computes the transitive dependencies from referenced
+targets, compiles the sources using Skylark's @(ctx.action), and returns a Lisp @italic{provider}
+structure to be used by other Lisp rules. Each of the Lisp sources are compiled in a separate
+process, possibly running on different machines. The compilation effects of one source are
+not seen when compiling other Lisp sources.
+The Lisp provider contains transitive information about:
+the FASL files produced by each Library target; all Lisp sources used and their md5 hashes;
+the Lisp features declared; the deferred warnings from each compilation; as well as the
+runtime and compilation data from each library.
+
+The Lisp sources of the dependencies are loaded interpreted before compiling an
+intermediate target. The FASL files are only used when linking the final
+binary target. The deferred compilation warnings - mostly undefined function warnings -
+can also only be checked when all FASL sources have been loaded in the final target.
+
+The @(lisp_binary) "macro" has similar tasks to perform as @(lisp_library). In addition
+it will compile the C runtime executable and link all but a minimal
+subset of the C libraries statically using @(make_cdeps_library) and Skylark's
+@(native.cc_binary). It will produce a Lisp core containing all the loaded FASL files
+using @(_lisp_binary) rule and finally it will combine the runtime and the core to form
+the final executable by swapping out the Lisp core part in the runtime.
 
 @section{Speed}
 
-Thanks to these rules, the duration of a typical build of QPX
+Thanks to these rules, the duration of the incremental QPX build
 went from about 15 minutes to about 90 seconds, or a tenfold improvement,
 with qualitative effects on developer experience.
 This however is for a very large project
@@ -402,13 +436,12 @@ when using the Bazel lisp rules;
 but he will may still enjoy the increased reliability and reproducibility of Bazel
 over traditional build methods.
 
-
 @section{Requirements}
 
 The current version of these Common Lisp rules for Bazel only work with SBCL.
 Porting to a different Lisp implementation, while possible,
 may require non-trivial work, especially with respect to linking C libraries into an executable,
-or reproducing the low latency that was achieved with SBCL's fasteval interpreter.
+or reproducing the low latency that was achieved with SBCL's fasteval interpreter@~cite[FASTEVAL].
 
 These Common Lisp rules have only been tested on Linux on the x86-64 architecture;
 but they should be relatively easy to get to work on a different operating system and architecture,
