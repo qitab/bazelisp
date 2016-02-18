@@ -28,12 +28,13 @@ Lisp,
 Common Lisp,
 Bazel,
 Deterministic,
+Reproducible,
 Hermetic
 }
 
 @abstract{
   We will demonstrate how to build Common Lisp programs using Bazel,
-  Google's hermetic and deterministic build system.
+  Google's hermetic and reproducible build system.
   Unlike the previous state of the art for building Lisp programs,
   Bazel ensures that incremental builds are always both fast and correct.
   With Bazel, you can also statically link C libraries into your SBCL runtime,
@@ -45,26 +46,37 @@ Hermetic
 
 @section{Introduction}
 
-Common Lisp is a universal programming language, @; Orbitz is gone :(
+Common Lisp is a universal programming language,
 notably used at Google for its well-known server application QPX @~cite[Inside-Orbitz].
+@; NB: Orbitz is a customer no more :-(
 Google updated its Lisp code base so it can be built incrementally
 using its internal build system, recently open-sourced as Bazel @~cite[Bazel].
 
-Bazel is designed to build your software deterministically —
+Bazel is designed to build your software reproducibly —
 assuming you maintain hermeticity, as Google does.
 Hermeticity in this context means that the build should only depend but
 on programs and files that are checked into source control;
 thus, Bazel can see when they are modified, and rebuild;
 or it can see that they haven't been modified, and reuse cached build artifacts.
-Bazel helps enforce determinism by executing each build action in a container
+Reproducibility means that building the same target multiple times from the same source code
+should deterministically produce the same output every time;
+this is important for debugging production code as well as for testing in general.
+To achieve reproducibility,
+compilers and other build tools have to be tuned to remove sources of non-determinism,
+such as timestamps, PRNG seeds, hash values dependent on unstable addresses, I/O dependencies, etc.
+Tools used at Google, including the Lisp compiler, have been tuned accordingly.
+Bazel further helps enforce determinism by executing each build action in a container
 whereby only the action may only read from declared inputs,
 and must produce all declared outputs, after which
 all other temporary files are discarded.
 Thanks to this isolation, build actions can be easily parallelized,
-either locally on a multiprocessor, or to a distributed farm of build workers.
+either locally on a multiprocessor, or to a distributed farm of build workers;
+they can also be cached, making for reliable incremental builds
+that don't need to recompute outputs and intermediate results
+that only depend on unmodified source files.
 
 While mainly written in Java, Bazel is also extensible using Skylark,
-a programming language that is essentially a subset of Python.
+a programming language that is essentially a subset of Python with strict limits on side-effects.
 Using Skylark, three new rules were written to support building software written in Common Lisp:
 @(lisp_library) for libraries (e.g. alexandria, or cl-ppcre),
 @(lisp_binary) for executable binaries (e.g. the QPX server, or your favorite application),
@@ -173,13 +185,17 @@ lisp_binary(
 The above example contains the @(cl-user::main) function that is called
 at image startup from the @(lisp_binary) wrapper specific to the Lisp implementation.
 The @(main) function does not receive any arguments, as access to command line
-arguments is not unified between Lisp implementations.
-The @(BUILD) file contains the system description. First, Bazel needs to
-load the corresponding definition of the @(lisp_binary) rule. It does find the
-definitions by refering to the external repository label @tt{lisp__bazel} which
-needs to be defined in the corresponding @(WORKSPACE) files.
-Then it applies the @(lisp_binary) rule to the source file giving the target
-"hello" as a name. The program is compiled, linked, and executed using the following command:
+arguments is not unified between Lisp implementations
+(you can access them in an implementation-specific way
+or through a portability layer such as the UIOP library).
+The @(BUILD) file contains the system description.
+First, Bazel needs to load the corresponding definition of the @(lisp_binary) rule.
+It does find the definitions by importing the Lisp rules,
+from a Bazel extension defined in the known "external repository" @tt{lisp__bazel},
+which itself needs to be suitably declared in your project's @(WORKSPACE) file.
+Then it calls the @(lisp_binary) rule to create a target named "hello",
+that uses the source file.
+The program is compiled, linked, and executed using the following command:
 
 @verbatim[#:indent 5]{
 
@@ -191,8 +207,9 @@ Then it applies the @(lisp_binary) rule to the source file giving the target
 @subsection{lisp_library}
 
 A @(lisp_library) is useful to declare an intermediate target which can be
-referenced from other Lisp BUILD rules. For SBCL the @(lisp_library) creates
-a fast load (FASL) archive, which is possibly a concatenation of FASL files produced
+referenced from other Lisp BUILD rules.
+Using SBCL, the @(lisp_library) creates a fast load (FASL) archive,
+which is possibly a concatenation of FASL files produced
 from compilation of each of its Lisp sources (@(srcs)).
 
 The attributes of the @(lisp_library) rule are Lisp sources @(srcs),
@@ -201,23 +218,26 @@ and auxiliary runtime @(data) or compile data @(compile_data).
 The runtime data will be available to all executable targets depending on this library.
 The compile data is available at compile time.
 
-The rule also accepts other Lisp build options. @(order) specifies the order
-in which the files are loaded and compiled. The default "serial" order will
-load each of the sources specified in sequence to compile the next Lisp source.
-So each successive Lisp source can depend on data and info from previous Lisp sources.
-The "parallel" compilation assures that each of the sources will be compiled without
-the compilation loading other sources. And finally "multipass" order will load
-all sources first before compiling each one separately. The last option is usefull
-for compiling "hairball" kind of Lisp aggregates.
+The rule also accepts other Lisp build options.
+@(order) specifies the order in which the files are loaded and compiled.
+The default @tt{"serial"} order will load each of the sources specified in sequence
+before to compile the next Lisp source;
+thus, each successive Lisp source can depend on data and info from previous Lisp sources.
+The @tt{"parallel"} order assures that each of the sources will be compiled
+without having loaded any of the other Lisp source files.
+Finally, the @tt{"multipass"} order will load all Lisp sources files first
+before compiling each one separately;
+this last option is useful for compiling "hairball" kind of Lisp aggregates.
 
-The Lisp compilation can be modified by specifying reader features using the @(features)
-attribute. The features are set before loading any dependencies or compiling any sources for
-the target. The features also propagate transitively to any targets that depend on the one
-library which specified the reader features.
+The Lisp compilation can be modified by specifying reader features using the @(features) attribute.
+The features are set before loading any dependencies or compiling any sources for the target.
+The features also propagate transitively to any targets
+that depend on the one library which specified the reader features.
 
 By default the Lisp compilation is strict and any warnings will fail the compilation.
-In order to compile some "hairy" sources the @(nowarn) attribute can be useful.
-It accepts names of condition types or names of condition handlers.
+In order to compile some "hairy" sources the @(nowarn) attribute can be useful:
+it accepts names of condition types or names of condition-recognizing predicates
+that identify conditions that must be ignored.
 There is a set of predefined warning types found in the @cl{bazel.warning} package.
 
 @verbatim|{
@@ -251,14 +271,16 @@ lisp_library(
 The above example of a Lisp library is for "alexandria".
 The library is compiled in the "parallel" @(order) because the sources just
 depend on the @file{package.lisp} file but not on each other. In practice
-there is no much gain from compiling in "parallel" as opposed to the "serial" order -
+there is not much gain from compiling in "parallel" as opposed to the "serial" order -
 the main advantage being the enforced independence of the sources through library evolution.
 The @(deps) attribute specifies other Lisp library targets the "alexandria" library
 depends on. The @(visibility) attribute allows to restrict the availability of that's rule target
 to other @(BUILD) packages. In this example, there is no restriction and the target is "public".
 
 To build the library one needs to invoke the following Bazel command which will produce
-@file{alexandria.fasl} file.
+@file{alexandria.fasl} file.@note{
+  The actual @(BUILD) file for alexandria has more complex dependencies than that.
+}
 
 @verbatim[#:indent 5]{
 
@@ -266,17 +288,19 @@ To build the library one needs to invoke the following Bazel command which will 
 
 }
 
-The FASL file can be located in the @file{blaze-genfiles} folder and contains the compiled
-Lisp sources except for the @file{package.lisp} file, which are to be found in and loaded up-front
+The FASL file can be located in the @file{blaze-genfiles} folder
+and contains the compiled Lisp sources except for the @file{package.lisp} file,
+which are to be found in and loaded up-front
 from the corresponding @file{package.fasl} file.
 
 @; ------------- lisp_test ---------------------
 
 @subsection{lisp_test}
 
-The last, but not least, BUILD rule to be introduced here is the @(lisp_test) rule.
-The test rule is a variation on the @(lisp_binary) rule. It also produces
-an executable program with a main entry point that can be executed on the command line.
+Last but not least, the Lisp support for Bazel includes the @(lisp_test) rule.
+The test rule is a variation on the @(lisp_binary) rule:
+it too produces an executable program with a main entry point
+that can be executed on the command line.
 The special purpose of the test rule is to run tests when invoked
 with the @tt{bazel test} command.
 
@@ -316,33 +340,44 @@ The corresponding test can be run using the following Bazel command line:
 
 @subsection{C dependencies}
 
-The Lisp executable binaries are linked statically which makes them more reliable
-when deployed on a multitude of hosts in the cloud. It also assures that
-the test and the production environment differ less then if the
-Lisp programs would be required to load the dependencies dynamically.
+A @(lisp_binary) can directly or transitively depend on C or C++ libraries,
+that will be statically linked into the executable program.
+Only basic runtime libraries such as @tt{libc}, @tt{libm}, @tt{libdl} and @tt{libpthread}
+remain dynamically linked; they must be specially provided by the execution environment.
 
-The C++ dependencies can be specified directly in each of the Lisp build rules
-using the @(csrcs) and @(copts) rule attributes which translate to a native
-Bazel @(cc_library) target internally. Otherwise, the @(cdeps) rule attribute
-allows to link any @(cc_library) referenced by a target label.
+This static linking makes it more reliable to deploy such a binary
+on a multitude of hosts in the cloud, without the opportunity to get library dependencies wrong;
+in particular, static linking helps minimize discrepancies between
+the test and production environments.
+This is also a vast improvement over way Lisp programs with C libraries
+were typically compiled and deployed.
 
-The Lisp build process for the C++ sources and the SBCL C runtime is parallel
-to the Lisp source compilation and to the creation of the Lisp core image.
-This was done to improve the build parallelism, but prevents calling any new C
-functions from Lisp at the time of source compilation.
+C and C++ dependencies can be specified via the the @(cdeps) rule attribute,
+which can refer to any @(cc_library) that can be built with Bazel.
+The @(csrcs) and @(copts) rule attributes also allow to directly specify C or C++ source files,
+which the Lisp rules will internally translate to a native Bazel @(cc_library).
 
-In order to facilitate linking, discover missing C/C++ symbols, and only link
-necessary C/C++ functionality statically, when the final Lisp core image is
-created, all UNDEFINED-ALIEN symbols are dumped into a linker script file.
-That @file{*.lds} file is then used to link the SBCL/C runtime part of the final
-executable.
+The Lisp rules build compile C++ sources and Lisp sources in parallel with each other,
+and the resulting compilation outputs are combined together in a last step.
+This improves the build parallelism and reduces build latency;
+the downside is that Lisp code that runs at Lisp-compilation time cannot call C++ functions.
+
+In order to facilitate linking, all C/C++ symbols referred at Lisp-compilation time
+are dumped into a linker script file.
+That @file{.lds} file is then used to link the SBCL/C runtime part of the final executable.
+Computing this file allows to only include object files containing referred symbols,
+out of those provided by the C/C++ libraries;
+it also allows to statically detect any missing or misspelled C/C++ symbol.
 
 @; ------------- Etc ---------------------
 
 @subsection{Parallel compilation}
 
-Increased parallelism with reduced latency by loading dependencies in a fast interpreter,
-rather than waiting for them to be compiled first.
+The Bazel Lisp rules compile each file in parallel with other files,
+after loading its declared dependencies in a fast interpreter.
+This increases build parallelism and reduces latency,
+as contrasted to waiting for each of dependency to be compiled first
+before its compilation output may be loaded.
 This works fine with some restrictions:
 (a) Some code may use @cl{eval-when} incorrectly and fail to support loading without compiling;
 it will have to be fixed.
@@ -355,13 +390,13 @@ TO BE WRITTEN
 
 @section{Speed}
 
-A typical build of QPX using these build rules went from about 15 minutes to about 90 seconds,
-or a tenfold improvement, with qualitative effects on developer experience.
-This however, is for a very large project, using a distributed farm of build machines
-for compilation.
-The open source version of Bazel currently lacks the ability to farm builds that way,
-though it can already take advantage of multiple processing cores on a single machine
-to speed up the build.
+Thanks to these rules, the duration of a typical build of QPX
+went from about 15 minutes to about 90 seconds, or a tenfold improvement,
+with qualitative effects on developer experience.
+This however is for a very large project
+while using a distributed farm of build machines for compilation.
+The open source version of Bazel currently lacks the ability to distribute builds that way,
+though it can already take advantage of multiple processing cores on a single machine.
 The typical Lisp user will therefore probably not experience such as large a build speedup
 when using the Bazel lisp rules;
 but he will may still enjoy the increased reliability and reproducibility of Bazel
@@ -373,12 +408,12 @@ over traditional build methods.
 The current version of these Common Lisp rules for Bazel only work with SBCL.
 Porting to a different Lisp implementation, while possible,
 may require non-trivial work, especially with respect to linking C libraries into an executable,
-or reproducing the low latency that was achieved with SBCL fasteval interpreter.
+or reproducing the low latency that was achieved with SBCL's fasteval interpreter.
 
 These Common Lisp rules have only been tested on Linux on the x86-64 architecture;
 but they should be relatively easy to get to work on a different operating system and architecture,
 as long as they are supported by both SBCL and Bazel:
-for instance on MacOS X, and possibly, on Windows or on mobile devices.
+for instance, on MacOS X, and possibly, on Windows or on mobile devices.
 
 Bazel itself is an application written in Java that takes many seconds to start the first time;
 then it becomes a server that eats several gigabytes of memory, but can start your build instantly.
