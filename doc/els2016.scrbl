@@ -262,8 +262,7 @@ lisp_library(
 
 The above example of a Lisp library is for "alexandria".
 The library is compiled in the default "serial" @(order) because the sources depend on each other.
-The @(deps) attribute specifies other Lisp library targets the "alexandria" library
-depends on. The @(visibility) attribute allows to restrict the availability of that's rule target
+The @(visibility) attribute allows to restrict the availability of the rule's target
 to other @(BUILD) packages. In this example, there is no restriction and the target is "public".
 
 To build the library one needs to invoke the following Bazel command which will produce
@@ -364,22 +363,23 @@ it also allows to statically detect any missing or misspelled C/C++ symbol.
 The Bazel Lisp rules compile each file in parallel with other files,
 after loading its declared dependencies using SBCL's fast interpreter@~cite[FASTEVAL].
 This increases build parallelism and reduces latency,
-as contrasted to waiting for each of dependency to be compiled first
+as contrasted to waiting for each dependency to be compiled first
 before its compilation output may be loaded.
 This works fine with some restrictions:
 (a) Some code may use @cl{eval-when} incorrectly and fail to support loading without compiling;
 it will have to be fixed.
 (b) Some code may do heavy computations at macro-expansion time and run somewhat slowly
-because it's not compiled; explicitly calling @cl{compile} may speed up that code.
+because it is not compiled; explicitly calling @cl{compile} may speed up that code.
 
 @section{Inside the Lisp rules}
 
-The Lisp BUILD rules have been implemented using Bazel extension language --- @italic{Skylark}.
+The Lisp BUILD rules have been implemented using Bazel's extension language --- @italic{Skylark}.
 The implementation has several levels, starting with Skylark @italic{macros} ---
 basically Python functions.
-The @(lisp_binary), @(lisp_library) rules are implemented as macros invoking Skylark @italic{rules}.
-Skylark rules are constructs that consist of an implementation function,
-and a list of attribute specifications that notably define type-checked inputs and outputs.
+The @(lisp_binary), @(lisp_library), and @(lisp_test) rules are implemented as macros
+invoking Skylark @italic{rules}. Skylark rules are constructs that consist of an
+implementation function, and a list of attribute specifications that
+notably define type-checked inputs and outputs.
 
 The indirect use of a Skylark "macro" is necessary in order to establish
 two separate graphs of compilation targets for Lisp and the C counterpart,
@@ -410,7 +410,7 @@ The FASL files are only used when linking the final binary target.
 The deferred compilation warnings --- mostly undefined function warnings ---
 can also only be checked when all FASL sources have been loaded in the final target.
 
-The @(lisp_binary) "macro" involves similar tasks to perform as @(lisp_library).
+The @(lisp_binary) "macro" performs similar tasks as the @(lisp_library).
 In addition, it will compile the C runtime executable and
 link all but a minimal subset of the C libraries statically
 using @(make_cdeps_library) and Skylark's @(native.cc_binary).
@@ -419,17 +419,15 @@ using the private @(_lisp_binary) rule
 and finally it will combine the runtime and the core to form
 the final executable by swapping out the Lisp core part in the runtime.
 
-
 @section{Speed}
 
 Thanks to these rules, the duration of the incremental QPX build
 went from about 15 minutes to about 90 seconds, or a tenfold improvement,
 with qualitative effects on developer experience.
-This however is for a very large project
-while using a distributed farm of build machines for compilation.
+This however is for a very large project using a large computing cloud for compilation.
 The open source version of Bazel currently lacks the ability to distribute builds that way,
 though it can already take advantage of multiple processing cores on a single machine.
-The typical Lisp user will therefore probably not experience such as large a build speedup
+The typical Lisp user will therefore not experience the speedup
 when using the Bazel lisp rules;
 but he will may still enjoy the increased reliability and reproducibility of Bazel
 over traditional build methods.
