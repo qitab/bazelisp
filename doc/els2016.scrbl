@@ -64,7 +64,7 @@ compilers and other build tools have to be tuned to remove sources of non-determ
 such as timestamps, PRNG seeds, hash values dependent on unstable addresses, I/O dependencies, etc.
 Tools used at Google, including the Lisp compiler, have been tuned accordingly.
 Bazel further helps enforce determinism by executing each build action in a container
-whereby only the action may only read from declared inputs,
+whereby the action may only read from declared inputs,
 and must produce all declared outputs, after which
 all other temporary files are discarded.
 Thanks to this isolation, build actions can be easily parallelized,
@@ -101,7 +101,7 @@ including a lack of a sufficiently smooth transition from previous build systems
 and lack of managerial support, until resources were diverted towards ASDF and Bazel.
 
 Meanwhile, QPX itself was built using an ad-hoc script that had to load all of hundreds of files
-before to compile them and reload them:
+before compiling them and reloading them:
 this multi-stage build was made necessary because
 there were circular dependencies between those files;
 from the point of view of dependencies they formed a big "hairball".
