@@ -157,6 +157,9 @@ def _default_flags(ctx, trans, verbose_level):
   elif "-DNDEBUG" in cpp_options:
     flags += ["--safety", "0"]
 
+  if int(ctx.var.get("LISP_BUILD_FORCE", "0")) > 0:
+    flags += ["--force"]
+
   return flags
 
 def _compile_srcs(ctx, srcs, deps, image, order,

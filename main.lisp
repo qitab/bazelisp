@@ -119,6 +119,8 @@
   (dump-extern-symbols-file nil :type (or null string))
   ;; A file name to dump the dynamic list lds script file.
   (dump-dynamic-list-lds-file nil :type (or null string))
+  ;; Flag indicating that the compilation should commence even with errors.
+  (force-compilation-p nil :type boolean)
   ;; Flag indicating that the output image should be compressed.
   (compressed-p nil :type boolean)
   ;; Used to precompile the generic functions.
@@ -368,7 +370,8 @@ This allows for the user to specify their own handlers as a string."
   (when (action-failures action)
     ;; Terminate with error. Blaze will clean up for us.
     (print-conditions "Failures" (action-failures action) (action-gendir action))
-    (fatal "Blaze lisp build failed")))
+    (unless (action-force-compilation-p action)
+      (fatal "Blaze lisp build failed"))))
 
 ;;;
 ;;; Blaze-Lisp specific utilities
@@ -712,7 +715,7 @@ This allows for the user to specify their own handlers as a string."
                    &key command deps load srcs outs gendir
                    warnings hashes
                    (compilation-mode :fastbuild)
-                   safety
+                   safety force
                    main features nowarn
                    compressed
                    precompile-generics
@@ -737,6 +740,7 @@ This allows for the user to specify their own handlers as a string."
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from blaze -c <compilation-mode>,
   SAFETY - determines the safety level to be used for compilation.
+  FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
   NOWARN - list of warnings to be muffled,
@@ -766,6 +770,7 @@ This allows for the user to specify their own handlers as a string."
                         :safety safety
                         :main-function main
                         :compressed-p compressed
+                        :force-compilation-p force
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
                         :emit-cfasl-p emit-cfasl
@@ -903,16 +908,17 @@ This allows for the user to specify their own handlers as a string."
 
 (defun main ()
   "Main entry point."
-  (let ((command-args (parse-command-args (command-line-arguments))))
-    (destructuring-bind (&key verbose interactive &allow-other-keys) command-args
+  (let* ((command-args (parse-command-args (command-line-arguments))))
+    (destructuring-bind (&key force verbose interactive &allow-other-keys) command-args
       (when verbose
         (setf *verbose* (read-from-string verbose)))
-      (set-interactive-mode interactive))
+      (set-interactive-mode interactive)
 
-    (verbose "Program name: ~A" (program-name))
-    (verbose "Current dir: ~A" *default-pathname-defaults*)
-    (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
+      (verbose "Program name: ~A" (program-name))
+      (verbose "Current dir: ~A" *default-pathname-defaults*)
+      (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
 
-    (case (getf command-args :command)
-      (:combine (apply 'combine command-args))
-      (t        (apply 'process command-args)))))
+      (with-continue-on-error (:when force)
+        (case (getf command-args :command)
+          (:combine (apply 'combine command-args))
+          (t        (apply 'process command-args)))))))
