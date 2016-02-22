@@ -52,7 +52,7 @@ using its internal build system, recently open-sourced as Bazel @~cite[Bazel].
 
 Bazel is designed to build your software reproducibly —
 assuming you maintain hermeticity, as Google does.
-Hermeticity in this context means that the build should only depend but
+Hermeticity in this context means that the build should only depend
 on programs and files that are checked into source control;
 thus, Bazel can see when they are modified, and rebuild;
 or it can see that they haven't been modified, and reuse cached build artifacts.
@@ -220,7 +220,7 @@ The compile data is available at compile time.
 The rule also accepts other Lisp build options.
 @(order) specifies the order in which the files are loaded and compiled.
 The default @tt{"serial"} order will load each of the sources specified in sequence
-before to compile the next Lisp source;
+before compiling the next Lisp source;
 thus, each successive Lisp source can depend on data and info from previous Lisp sources.
 The @tt{"parallel"} order assures that each of the sources will be compiled
 without having loaded any of the other Lisp source files.
@@ -262,8 +262,8 @@ lisp_library(
 
 The above example of a Lisp library is for "alexandria".
 The library is compiled in the default "serial" @(order) because the sources depend on each other.
-The @(visibility) attribute allows to restrict the availability of the rule's target
-to other @(BUILD) packages. In this example, there is no restriction and the target is "public".
+The @(visibility) attribute restricts the availability of the rule's target
+to specified @(BUILD) packages. In this example, there is no restriction and the target is "public".
 
 To build the library one needs to invoke the following Bazel command which will produce
 @file{alexandria.fasl} file.
@@ -336,7 +336,7 @@ This static linking makes it more reliable to deploy such a binary
 on a multitude of hosts in the cloud, without the opportunity to get library dependencies wrong;
 in particular, static linking helps minimize discrepancies between
 the test and production environments.
-This is also a vast improvement over way Lisp programs with C libraries
+This is also a vast improvement over the way Lisp programs with C libraries
 were typically compiled and deployed.
 
 C and C++ dependencies can be specified via the the @(cdeps) rule attribute,
@@ -344,16 +344,16 @@ which can refer to any @(cc_library) that can be built with Bazel.
 The @(csrcs) and @(copts) rule attributes also allow to directly specify C or C++ source files,
 which the Lisp rules will internally translate to a native Bazel @(cc_library).
 
-The Lisp rules build compile C++ sources and Lisp sources in parallel with each other,
+The Lisp rules compile C++ sources and Lisp sources parallel each other,
 and the resulting compilation outputs are combined together in a last step.
 This improves the build parallelism and reduces build latency;
 the downside is that Lisp code that runs at Lisp-compilation time cannot call C++ functions.
 
-In order to facilitate linking, all C/C++ symbols referred at Lisp-compilation time
+In order to facilitate linking, all C/C++ symbols referred to at Lisp-compilation time
 are dumped into a linker script file.
 That @file{.lds} file is then used to link the SBCL/C runtime part of the final executable.
-Computing this file allows to only include object files containing referred symbols,
-out of those provided by the C/C++ libraries;
+Computing this file makes the final linking step to only include object files
+containing referred symbols, out of those provided by the C/C++ libraries;
 it also allows to statically detect any missing or misspelled C/C++ symbol.
 
 @; ------------- Etc ---------------------
@@ -446,8 +446,8 @@ for instance, on MacOS X, and possibly, on Windows or on mobile devices.
 
 Bazel itself is an application written in Java that takes many seconds to start the first time;
 then it becomes a server that eats several gigabytes of memory, but can start your build instantly.
-It isn't a lightweight solution for programming Lisp in the small;
-but it is a robust solution for building quality software in Lisp in an industrial setting.
+It isn't a lightweight solution for programming Lisp in a small setting;
+yet it is a robust solution for building quality software in Lisp in an industrial one.
 
 @section{Conclusion and Future Work}
 
