@@ -64,7 +64,7 @@ produces all declared outputs, after which all temporary files are discarded.
 Thanks to the isolation, build actions are easily parallelized
 locally or in a distributed environment. Actions are also cached.
 
-While mainly written in Java, Bazel is extensible using Skylark ---
+While mainly written in Java, Bazel is extensible using Skylark --
 essentially a subset of Python with strict limits on side-effects.
 Using Skylark, three new rules were added to support building software written in Common Lisp:
 @(lisp_library) for libraries (e.g. alexandria),
@@ -80,7 +80,7 @@ incremental builds are affected by all kinds of compilation side-effects.
 The only completely reliable way to get a deterministic build is to build from scratch.
 Making ASDF to build deterministically in isolated processes,
 while imaginable, wasn't possible because of the less understood dependency model of ASDF
-— at least, until fixed in 2013 @~cite[ASDF3-2014] - for which work remains to be done.
+-- at least, until fixed in 2013 @~cite[ASDF3-2014] -- for which work remains to be done.
 Another attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
 failed for social and technical reasons when the resources were diverted towards ASDF and Bazel.
 
@@ -98,19 +98,16 @@ The replacement for the build script had to handle the "hairball".
 We will demonstrate how to build a simple test applicatoin using the @(lisp_test) rule
 and how to declare its dependecy on a standrd Lisp library declared with @(lisp_library).
 Running the application and tests will also be demonstrated. We will discuss how to
-include C libraries as dependencies in the resulting Lisp binaries and discuss the
-build feature called @tt{"multipass"} used to compile "hairball" sources.
+include C libraries as dependencies in the resulting Lisp binaries.
 
 @; ------------- lisp_library ---------------------
-
-@subsection{lisp_library}
 
 A @(lisp_library) is useful to declare an intermediate target which can be
 referenced from other Lisp BUILD rules.
 Using SBCL, the @(lisp_library) creates a fast load (FASL) archive,
 a concatenation of FASL files produced from compilation of each of its Lisp sources (@(srcs)).
 
-The attributes of the @(lisp_library) rule are the sources @(srcs),
+The attributes of the @(lisp_library) rule are the Lisp sources @(srcs),
 Lisp libraries @(deps), C sources @(csrcs) and C libraries @(cdeps),
 auxiliary runtime @(data), or compile data @(compile_data).
 The runtime data will be available to all executable targets depending on the library.
@@ -119,30 +116,18 @@ The compile data is available at its compile time.
 The rule also accepts other Lisp build options.
 @(order) specifies the order in which the files are loaded and compiled.
 The default @tt{"serial"} order loads each of the sources in sequence
-before compiling the next Lisp source.
-The @tt{"parallel"} order assures that each of the sources is compiled
-without seeing the other Lisp source files.
-Finally, the @tt{"multipass"} order loads all Lisp sources files first
-before compiling each one separately which is usefull compiling a "hairball" aggregate.
-
-Lisp compilation can be modified by specifying the @(features) attribute.
-The features are set before loading any dependencies or compiling any sources for the target
-are propagate transitively to any targets depending on the library.
-
-The @(nowarn) attribute allow to compile "hairy" sources for which the normal compilation
-would fail because of compilation and style warning. It accepts condtion names or predicates
-thereon. A set of predefined warning types is found in the @cl{bazel.warning} package.
+before compiling the next Lisp source. The @tt{"multipass"} order
+loads all Lisp sources files first before compiling each one separately
+which is usefull to compile a "hairball" aggregate.
 
 @verbatim[#:indent 3]|{
 
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
-
 lisp_library(
     name = "alexandria",
     srcs = [
 	"package.lisp",
-	"binding.lisp",
 	# ... some omitted
         "io.lisp",
     ],
@@ -152,34 +137,24 @@ lisp_library(
 
 The above example is from the BUILD file of the "alexandria" library.
 First, Bazel needs to load the corresponding definition of the @(lisp_library) rule.
-It finds the definitions by loading it,
-from a Bazel extension defined in the "external repository" @tt{lisp__bazel},
-which itself needs to be declared in the project's @(WORKSPACE) file.
-The library is compiled in the default "serial" @(order).
+It finds the definitions by loading it from the @tt{lisp__bazel} "external repository".
 The @(visibility) attribute restricts the availability of the rule's target
-to specified @(BUILD) packages. In this example the target is "public".
+to specified @(BUILD) packages.
 
 The @file{alexandria.fasl} file can be located in the @file{blaze-genfiles} folder
 after issuing the command:
-@verbatim[#:indent 3]{> bazel build :alexandria}
+@verbatim[#:indent 3]{> bazel build :alexandria
+
+}
 
 @; ------------- lisp_binary ---------------------
 
-@subsection{lisp_binary and lisp_test}
-
 A @(lisp_binary) rule is used to link statically an executable with embedded
-Lisp runtime and Lisp core image. The inputs to the binary are Lisp sources @(srcs),
-Lisp libraries @(deps), C sources @(csrcs) and libraries @(cdeps),
-and auxiliary compile or runtime data.
+Lisp runtime and Lisp core image. It accepts similar attributes as @(lisp_library).
 If Lisp or C sources are specified, those will be compiled into corresponding
 Lisp/C library components before being statically linked into the final binary.
 
-The produced executable binary can be run as any program. For this purpose the
-@(main) rule attribute specifies the symbol of the entry point,
-which is the @(cl-user::main) function by default.
-
-Last but not least, the Lisp support for Bazel includes the @(lisp_test) rule.
-The test rule is a variation on the @(lisp_binary) rule:
+The @(lisp_test) rule is a variation on the @(lisp_binary) rule:
 it also produces an executable program that can be executed on the command line.
 The special purpose of the test rule is to run tests when invoked
 with the @tt{bazel test} command.
@@ -189,13 +164,11 @@ with the @tt{bazel test} command.
 ;; foo/test.lisp
 (defun main ()
   (format t "Hello, world!~%")
-  (assert
-    (= 720 (alexandria:factorial 6))))
+  (assert (alexandria:xor t)))
 
 # foo/BUILD
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_test")
-
 lisp_test(
   name = "test",
   srcs = ["test.lisp"],
@@ -203,16 +176,17 @@ lisp_test(
     "@lisp__alexandria//:alexandria"])
 
 }|
-The above example contains a @(cl-user::main) function called
+@; Insert a line above.
+The above example contains a @(main) function called
 at image startup from the @(lisp_test) wrapper specific to the Lisp implementation.
-The @(BUILD) file contains the system description.
-The rule references the above defined "alexandria" @(BUILD) target and library.
+The @(BUILD) file contains the system description with a @(lisp_test)
+rule which references the above defined "alexandria" @(BUILD) target.
 The program is compiled and executed using:
-@verbatim[#:indent 3]{> bazel test foo:test}
+@verbatim[#:indent 3]{> bazel test foo:test
+
+}
 
 @; ------------- C++ dependencies ---------------------
-
-@subsection{C dependencies}
 
 A @(lisp_binary) can directly or transitively depend on C or C++ libraries.
 Static linking of the libraries makes it more reliable to deploy such a binary
@@ -246,8 +220,8 @@ implementation function, and a list of attribute specifications that
 notably define type-checked inputs and outputs.
 
 The indirect use of a Skylark "macro" is necessary in order to establish
-two separate graphs of compilation targets for Lisp and the C counterpart,
-which are then connected into a final binary executable target.
+two separate graphs of compilation targets for Lisp and the C counterparts,
+which are then connected at the final binary targets.
 So @(lisp_library) "macro" calls @(_lisp_library) rule to create
 Lisp related actions and also calls the @(make_cdeps_library)
 to create the C related targets using Skylark's @(native.cc_library).
