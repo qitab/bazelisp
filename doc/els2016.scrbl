@@ -48,7 +48,7 @@ Google can built its Lisp code base incrementally
 using its recently open-sourced Bazel built system @~cite[Bazel].
 
 Bazel is designed to build software in a reproducible and hermetic way.
-Hermeticity means all build dependencies are to be checked into source control.
+Hermeticity means all build dependencies are checked into source control.
 Reproducibility means building the same target multiple times from the same source code
 produces the same output.
 Thus, Bazel can assess what was or wasn't modified,
@@ -86,10 +86,10 @@ which any replacement for the build script had to handle.
 
 @section{Discussion}
 
-We will demonstrate how to build a simple test application using the @(lisp_binary) rule
+Let's discuss how to build a simple test application using the @(lisp_binary) rule
 and how to declare its dependency on a Lisp library with @(lisp_library).
-Running the application and tests will also be demonstrated.
-We will discuss how to include C libraries as dependencies in the resulting Lisp binaries.
+Including C libraries as dependencies in the resulting Lisp binaries,
+as well as running the applications and test will also be mentioned.
 
 @; ------------- lisp_library ---------------------
 
@@ -109,8 +109,8 @@ the default @tt{"serial"} order loads each source file in sequence
 before compiling the next file.
 The @tt{"parallel"} order compiles all files in parallel without loading other ones.
 The @tt{"multipass"} order first loads all sources files,
-then compiles each one separately in parallel;
-it is useful to compile a "hairball" aggregate.
+then compiles each one separately in parallel which is useful 
+to compile a "hairball" aggregate.
 
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
@@ -123,15 +123,17 @@ lisp_library(
     visibility = ["//visibility:public"])
 }|
 
-The above example is from the @(BUILD) file of the library "alexandria".
+The above example is from the @(BUILD) file of the "alexandria" library.
 First, Bazel loads the definition of the @(lisp_library)
 from its conventional @italic{build label} using the @tt{lisp__bazel} "external repository".
 The @(visibility) attribute indicates which @(BUILD) packages
-are allowed to reference the rule's target --- in this case, any package.
+are allowed to reference the rule's target --- in this case, it is visible to any package.
 
-The @file{alexandria.fasl} file can be located in the @file{blaze-genfiles} folder
+The @file{alexandria.fasl} file can be located in the @file{bazel-genfiles} folder
 by issuing the command:
-@verbatim[#:indent 3]{bazel build :alexandria}
+@verbatim[#:indent 3]{bazel build :alexandria
+
+}
 
 @; ------------- lisp_binary ---------------------
 
@@ -157,7 +159,9 @@ This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
 At startup, function @cl{myapp:main} will be called with no arguments.
 The program is compiled and executed using:
-@verbatim[#:indent 3]{bazel run :myapp}
+@verbatim[#:indent 3]{bazel run :myapp
+
+}
 
 @; ------------- C++ dependencies ---------------------
 
@@ -191,7 +195,7 @@ and a list of attribute specifications that
 notably define type-checked inputs and outputs for the rule's target.
 
 The use of a Skylark "macro" is necessary in order to establish
-two separate graphs of compilation targets for Lisp and the C counterparts,
+two separate graphs of compilation for Lisp and the C counterparts,
 which are then connected at the final binary targets.
 So, the @(lisp_library) "macro" calls @(_lisp_library) rule to create
 Lisp related actions and also calls the @(make_cdeps_library)
@@ -233,7 +237,7 @@ are checked only after all FASL files have been loaded into the final target.
 
 @section{Requirements}
 
-The current version of the build rules work only with SBCL.
+The current version of the build rules works only with SBCL.
 Porting to a different Lisp implementation, while possible,
 requires non-trivial work, especially with respect to linking C libraries into an executable,
 or reproducing the low latency that achieved with SBCL's fasteval interpreter@~cite[FASTEVAL].
