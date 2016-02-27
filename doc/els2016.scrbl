@@ -89,7 +89,7 @@ which any replacement for the build script had to handle.
 Let's discuss how to build a simple test application using the @(lisp_binary) rule
 and how to declare its dependency on a Lisp library with @(lisp_library).
 Including C libraries as dependencies in the resulting Lisp binaries,
-as well as running the applications and test will also be mentioned.
+as well as running the applications and tests will also be mentioned.
 
 @; ------------- lisp_library ---------------------
 
