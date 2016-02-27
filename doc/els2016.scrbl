@@ -48,7 +48,7 @@ Google can built its Lisp code base incrementally
 using its recently open-sourced Bazel built system @~cite[Bazel].
 
 Bazel is designed to build software in a reproducible and hermetic way.
-Hermeticity means all build dependencies are checked into source control.
+Hermeticity means that all build dependencies are checked into a source control.
 Reproducibility means building the same target multiple times from the same source code
 produces the same output.
 Thus, Bazel can assess what was or wasn't modified,
@@ -131,9 +131,7 @@ are allowed to reference the rule's target --- in this case, it is visible to an
 
 The @file{alexandria.fasl} file can be located in the @file{bazel-genfiles} folder
 by issuing the command:
-@verbatim[#:indent 3]{bazel build :alexandria
-
-}
+@verbatim[#:indent 5]{bazel build :alexandria}
 
 @; ------------- lisp_binary ---------------------
 
@@ -159,9 +157,7 @@ This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
 At startup, function @cl{myapp:main} will be called with no arguments.
 The program is compiled and executed using:
-@verbatim[#:indent 3]{bazel run :myapp
-
-}
+@verbatim[#:indent 5]{bazel run :myapp}
 
 @; ------------- C++ dependencies ---------------------
 
