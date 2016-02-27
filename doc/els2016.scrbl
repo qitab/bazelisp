@@ -50,10 +50,10 @@ using its recently open-sourced Bazel built system @~cite[Bazel].
 Bazel is designed to build software in a reproducible and hermetic way.
 Hermeticity means all build dependencies are to be checked into source control.
 Reproducibility means building the same target multiple times from the same source code
-produces the same output every time.
+produces the same output.
 Thus, Bazel can assess what was or wasn't modified,
 and either rebuild or reuse cached artifacts.
-Reproducibility also facilitates testing, and debugging production code.
+Reproducibility also facilitates testing and debugging production code.
 Bazel further enforces determinism by executing each build action in a container
 wherein only declared inputs may be read, and any non-declared output is discarded.
 Thanks to isolation, build actions can be parallelized, either locally or in a remote worker farm.
@@ -74,7 +74,7 @@ A descendent of the original Lisp DEFSYSTEM from the 1970s,
 ASDF builds all the code in the current Lisp image;
 incremental builds may therefore be affected
 by all kinds of potential side-effects in the current image;
-and only a build from scratch can be guaranteed to be deterministic.
+and only a build from scratch can guarantee to be deterministic.
 An attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
 failed for social and technical reasons, though it had a working prototype.
 
@@ -95,8 +95,8 @@ We will discuss how to include C libraries as dependencies in the resulting Lisp
 
 A @(lisp_library) is useful to declare an intermediate target
 which can be referenced from other Lisp BUILD rules.
-Using SBCL, the @(lisp_library) creates a FASt Load (FASL) archive
-by concatenating the FASL files produced by compiling of each of its Lisp sources.
+With SBCL, the @(lisp_library) creates a FASt Load (FASL) archive
+by concatenating the FASL files produced by compiling each of its Lisp sources.
 
 The attributes of the @(lisp_library) rule are the Lisp sources @(srcs),
 Lisp libraries @(deps), C sources @(csrcs) and C libraries @(cdeps),
@@ -136,7 +136,7 @@ by issuing the command:
 @; ------------- lisp_binary ---------------------
 
 A @(lisp_binary) rule is used to statically link an executable including both
-Lisp runtime and Lisp core image. Its accepts attributes similar to @(lisp_library).
+Lisp runtime and Lisp core image. It accepts attributes similar to @(lisp_library).
 If Lisp or C sources are specified, those will be compiled into corresponding
 Lisp and C components before being statically linked into the final binary.
 The @(lisp_test) rule is a variation on the @(lisp_binary) rule with
@@ -157,7 +157,7 @@ This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
 At startup, function @cl{myapp:main} will be called with no arguments.
 The program is compiled and executed using:
-@verbatim[#:indent 3]{bazel run myapp}
+@verbatim[#:indent 3]{bazel run :myapp}
 
 @; ------------- C++ dependencies ---------------------
 
@@ -183,22 +183,22 @@ but he may enjoy the reproducibility.
 @section{Inside the Lisp rules}
 
 The build rules have been implemented using Bazel's extension language @italic{Skylark}.
-The implementation has several levels, starting with Skylark @italic{macros} ---
+The implementation has several levels, starting with Skylark @italic{macros}
 which are basically Python functions.
 The @(lisp_binary), @(lisp_library), and @(lisp_test) rules are implemented as macros
 invoking Skylark @italic{rules}. Skylark rules consist of an implementation function
 and a list of attribute specifications that
-notably define type-checked inputs and outputs of targets defined using the rule.
+notably define type-checked inputs and outputs for the rule's target.
 
 The use of a Skylark "macro" is necessary in order to establish
 two separate graphs of compilation targets for Lisp and the C counterparts,
 which are then connected at the final binary targets.
-So the @(lisp_library) "macro" calls @(_lisp_library) rule to create
+So, the @(lisp_library) "macro" calls @(_lisp_library) rule to create
 Lisp related actions and also calls the @(make_cdeps_library)
 to create the C related targets using Skylark's @(native.cc_library).
 
 The rules compile C sources and Lisp sources in parallel to each other,
-and the resulting compilation outputs are combined together in a last step.
+and the resulting compilation outputs are combined together in the last step.
 This improves the build parallelism and reduces the latency.
 In order to facilitate linking, all C symbols referred to at Lisp-compilation time
 are dumped into a linker script file.
@@ -215,22 +215,21 @@ compiles the sources using Skylark's @(ctx.action),
 and returns a Lisp @italic{provider} structure to be used by other Lisp rules.
 Each of the Lisp sources are compiled in a separate process,
 possibly running on different machines.
-This increases build parallelism and reduces the latency;
-contrasted to waiting for each dependency to be compiled first
-before its compilation output may be loaded.
-
+This increases build parallelism and reduces the latency
+when contrasted with waiting for each dependency to be compiled first
+before its compilation output is loaded.
 The compilation effects of one source are not seen when compiling other Lisp sources.
-The Lisp provider contains transitive information about:
+
+The Lisp provider structure contains transitive information about:
 FASL files from each Library target;
 all Lisp sources and reader features declared;
 deferred warnings from each compilation;
 the runtime and compilation data for each library.
-
 The Lisp text @italic{sources} of the dependencies
 are loaded before compiling an intermediate target.
 The FASL files are only used when linking the final binary target.
 The deferred compilation warnings --- mostly for undefined functions ---
-are only be checked when all FASL files have been loaded into the final target.
+are checked only after all FASL files have been loaded into the final target.
 
 @section{Requirements}
 
