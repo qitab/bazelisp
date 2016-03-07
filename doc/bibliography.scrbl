@@ -130,3 +130,10 @@
   #:author "Douglas Katzman"
   #:date "2015"
   #:url "https://github.com/sbcl/sbcl/tree/master/src/interpreter")
+
+(define-bib in-the-large-small
+  #:title "Programming-in-the-large versus Programming-in-the-small"
+  #:author "Frank DeRemer and Hans Kron"
+  #:date "1975"
+  ;; IEEE Transactions on Software Engineering 2(2)
+  #:url "http://www.cs.umd.edu/class/spring2005/cmsc838p/General/pitl.pdf")

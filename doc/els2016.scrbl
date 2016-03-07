@@ -104,7 +104,7 @@ Bazel users specify @emph{attributes} when defining rules.
 For Lisp rules, these include the Lisp sources @(srcs),
 Lisp libraries @(deps), C sources @(csrcs) and C libraries @(cdeps),
 auxiliary @(data) available at runtime to all executable targets depending on the library,
-and auxiliary @(compile_data) available at compile-time while building.
+and auxiliary @(compile_data) available at compile-time.
 
 The rule has additional build options.
 The @(order) attribute notably specifies a build strategy;
@@ -138,11 +138,11 @@ The following command builds @file{alexandria.fasl} and makes it available at a 
 @; ------------- lisp_binary ---------------------
 
 A @(lisp_binary) rule is used to statically link an executable including both
-Lisp runtime and Lisp core image. It accepts attributes similar to @(lisp_library).
-If Lisp or C sources are specified, those will be compiled into corresponding
+Lisp runtime and Lisp core image.
+If Lisp or C sources are specified, they will be compiled into corresponding
 Lisp and C components before being statically linked into the final binary.
-The @(lisp_test) rule is a variation on the @(lisp_binary) rule with
-the special purpose to be invoked with the @tt{bazel test} command.
+The @(lisp_test) rule is a variation on the @(lisp_binary) rule meant
+to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
@@ -170,7 +170,7 @@ in particular, it helps to minimize discrepancies between test and production en
 C and C++ dependencies can be specified via the @(cdeps) rule attribute,
 which can refer to any @(cc_library) built with Bazel.
 The @(csrcs) and @(copts) rule attributes allow to directly specify C source files
-for which an internal C @(BUILD) target will be generated.
+for which an internal target will be generated.
 
 @; ------------- Speed ---------------------
 
@@ -248,9 +248,11 @@ Bazel itself is an application written in Java.
 It takes seconds to start for the first time;
 then it becomes a server that can start an incremental build instantly
 but consumes gigabytes of memory.
-It isn't a lightweight solution for programming Lisp @italic{in the small};
-but it is a robust solution for building software @italic{in the large}.
-@; TODO: cite something for in the small vs in the large (?)
+It isn't a lightweight solution for programming Lisp
+@hyperlink["https://en.wikipedia.org/wiki/Programming_in_the_large_and_programming_in_the_small"]{@italic{in the small}};
+but it is a robust solution for building software
+@hyperlink["https://en.wikipedia.org/wiki/Programming_in_the_large_and_programming_in_the_small"]{@italic{in the large}}@;
+@~cite[in-the-large-small].
 
 @section{Conclusion and Future Work}
 
