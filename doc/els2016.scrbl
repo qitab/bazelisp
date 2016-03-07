@@ -1,7 +1,7 @@
 #lang scribble/sigplan
 @; @nocopyright @preprint
 @;-*- Scheme -*-
-@; To be build with:
+@; To be built with:
 @;   scribble --pdf els2016.scrbl
 
 @(require scribble/base
@@ -44,21 +44,22 @@ Hermetic
 
 Common Lisp, a universal programming language,
 is notably used at Google for the well-known QPX server application @~cite[Inside-Orbitz].
-Google can built its Lisp code base incrementally
-using its recently open-sourced Bazel built system @~cite[Bazel].
+Google can build its Lisp code base incrementally
+using its recently open-sourced Bazel build system @~cite[Bazel].
 
 Bazel is designed to build software in a reproducible and hermetic way.
-Hermeticity means that all build dependencies are checked into a source control.
+Hermeticity means all build dependencies, including build tools such as compilers,
+are kept under source control.
+Bazel can thus assess what was or wasn't modified,
+and either rebuild or reuse cached artifacts.
 Reproducibility means building the same target multiple times from the same source code
 produces the same output.
-Thus, Bazel can assess what was or wasn't modified,
-and either rebuild or reuse cached artifacts.
-Reproducibility also facilitates testing and debugging production code.
+Reproducibility facilitates testing and debugging production code.
+Compilers and other build tools must be tuned to remove sources of non-determinism
+such as timestamps, PRNG seeds, etc.
 Bazel further enforces determinism by executing each build action in a container
 wherein only declared inputs may be read, and any non-declared output is discarded.
-Thanks to isolation, build actions can be parallelized, either locally or in a remote worker farm.
-Compilers and other build tools must be tuned to remove sources of non-determinism,
-such as timestamps, PRNG seeds, etc.
+Bazel can thus parallelize build actions, either locally or to remote workers.
 
 While mainly written in Java, Bazel is extensible using @italic{Skylark} ---
 a subset of Python with strict limits on side-effects.
@@ -95,10 +96,12 @@ as well as running the applications and tests will also be mentioned.
 
 A @(lisp_library) is useful to declare an intermediate target
 which can be referenced from other Lisp BUILD rules.
-With SBCL, the @(lisp_library) creates a FASt Load (FASL) archive
+With SBCL (Steel Bank Common Lisp),
+the @(lisp_library) creates a FASt Load (FASL) archive
 by concatenating the FASL files produced by compiling each of its Lisp sources.
 
-The attributes of the @(lisp_library) rule are the Lisp sources @(srcs),
+Bazel users specify @emph{attributes} when defining rules.
+For Lisp rules, these include the Lisp sources @(srcs),
 Lisp libraries @(deps), C sources @(csrcs) and C libraries @(cdeps),
 auxiliary @(data) available at runtime to all executable targets depending on the library,
 and auxiliary @(compile_data) available at compile-time while building.
@@ -109,8 +112,8 @@ the default @tt{"serial"} order loads each source file in sequence
 before compiling the next file.
 The @tt{"parallel"} order compiles all files in parallel without loading other ones.
 The @tt{"multipass"} order first loads all sources files,
-then compiles each one separately in parallel which is useful 
-to compile a "hairball" aggregate.
+then compiles each one separately in parallel,
+which is useful to compile a "hairball" aggregate.
 
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
@@ -129,8 +132,7 @@ from its conventional @italic{build label} using the @tt{lisp__bazel} "external 
 The @(visibility) attribute indicates which @(BUILD) packages
 are allowed to reference the rule's target --- in this case, it is visible to any package.
 
-The @file{alexandria.fasl} file can be located in the @file{bazel-genfiles} folder
-by issuing the command:
+The following command builds @file{alexandria.fasl} and makes it available at a well defined path:
 @verbatim[#:indent 5]{bazel build :alexandria}
 
 @; ------------- lisp_binary ---------------------
@@ -174,27 +176,28 @@ for which an internal C @(BUILD) target will be generated.
 
 Thanks to these build rules, the duration of the incremental QPX build
 went from about 15 minutes to about 90 seconds, with qualitative effects on developer experience.
-However, this is for a large project using a computing cloud for compilation.
+However, this is for a large project, using a computing cloud for compilation.
 The open source version of Bazel currently lacks the ability to distribute builds,
 though it can already take advantage of multiple cores on a single machine.
-The typical Lisp user will therefore not experience a speedup when using the Bazel lisp rules;
-but he may enjoy the reproducibility.
+The typical Lisp user will therefore not experience a similar speedup
+when using the Bazel lisp rules;
+but he may enjoy the incremental reproducibility.
 
 @section{Inside the Lisp rules}
 
-The build rules have been implemented using Bazel's extension language @italic{Skylark}.
-The implementation has several levels, starting with Skylark @italic{macros}
-which are basically Python functions.
-The @(lisp_binary), @(lisp_library), and @(lisp_test) rules are implemented as macros
-invoking Skylark @italic{rules}. Skylark rules consist of an implementation function
-and a list of attribute specifications that
-notably define type-checked inputs and outputs for the rule's target.
-
-The use of a Skylark "macro" is necessary in order to establish
-two separate graphs of compilation for Lisp and the C counterparts,
-which are then connected at the final binary targets.
-So, the @(lisp_library) "macro" calls @(_lisp_library) rule to create
-Lisp related actions and also calls the @(make_cdeps_library)
+Lisp support was implemented using Bazel's extension language @italic{Skylark}.
+@(lisp_binary), @(lisp_library), and @(lisp_test) are implemented as Skylark @italic{macros}
+invoking several Skylark @italic{rules}.
+A Skylark @italic{rule} consists of an implementation function
+and a list of attribute specifications that notably define
+type-checked inputs and outputs for the rule's target.
+A Skylark @italic{macro} is a function that
+can create a (directed acyclic) graph involving multiple rules.
+The Lisp support uses macros to establish a separate graph
+for each of the Lisp and C parts of the build,
+then connecting these two graphs at the final binary targets.
+Thus, the @(lisp_library) macro calls the @(_lisp_library) rule to create
+Lisp related actions, and also calls the @(make_cdeps_library) macro
 to create the C related targets using Skylark's @(native.cc_library).
 
 The rules compile C sources and Lisp sources in parallel to each other,
@@ -221,11 +224,11 @@ before its compilation output is loaded.
 The compilation effects of one source are not seen when compiling other Lisp sources.
 
 The Lisp provider structure contains transitive information about:
-FASL files from each Library target;
+FASL files from each @(lisp_library) target;
 all Lisp sources and reader features declared;
 deferred warnings from each compilation;
 the runtime and compilation data for each library.
-The Lisp text @italic{sources} of the dependencies
+The Lisp text @emph{sources} of the dependencies
 are loaded before compiling an intermediate target.
 The FASL files are only used when linking the final binary target.
 The deferred compilation warnings --- mostly for undefined functions ---
@@ -233,19 +236,21 @@ are checked only after all FASL files have been loaded into the final target.
 
 @section{Requirements}
 
-The current version of the build rules works only with SBCL.
-Porting to a different Lisp implementation, while possible,
-requires non-trivial work, especially with respect to linking C libraries into an executable,
-or reproducing the low latency that achieved with SBCL's fasteval interpreter@~cite[FASTEVAL].
+The current version of the Lisp support for Bazel
+has only been made to work with SBCL on Linux on the x86-64 architecture.
+It should be relatively easy to get it working
+on any platform that is supported by both SBCL and Bazel.
+However, porting to a different Lisp implementation, while possible,
+will require non-trivial work, especially with respect to linking C libraries into an executable,
+or reproducing the low latency achieved with SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL].
 
-The rules have only been tested on Linux on the x86-64 architecture;
-they should be relatively easy to get working on different platforms,
-as long as they are supported by both SBCL and Bazel.
-
-Bazel itself is an application written in Java taking seconds to start for the first time;
-then it becomes a server consuming gigabytes of memory, and can start an incremental build instantly.
-It isn't a lightweight solution for programming Lisp in a small;
-yet it is a robust solution for building software in the large.
+Bazel itself is an application written in Java.
+It takes seconds to start for the first time;
+then it becomes a server that can start an incremental build instantly
+but consumes gigabytes of memory.
+It isn't a lightweight solution for programming Lisp @italic{in the small};
+but it is a robust solution for building software @italic{in the large}.
+@; TODO: cite something for in the small vs in the large (?)
 
 @section{Conclusion and Future Work}
 
