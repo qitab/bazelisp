@@ -43,8 +43,8 @@ Hermetic
 @section{Introduction}
 
 Common Lisp, a universal programming language,
-is notably used at Google for the well-known QPX server application @~cite[Inside-Orbitz].
-Google can build its Lisp code base incrementally
+is notably used at Google for the well-known low-fare search engine QPX @~cite[Inside-Orbitz].
+Google now builds its Lisp code incrementally,
 using its recently open-sourced Bazel build system @~cite[Bazel].
 
 Bazel is designed to build software in a reproducible and hermetic way.
@@ -61,9 +61,9 @@ Bazel further enforces determinism by executing each build action in a container
 wherein only declared inputs may be read, and any non-declared output is discarded.
 Bazel can thus parallelize build actions, either locally or to remote workers.
 
-While mainly written in Java, Bazel is extensible using @italic{Skylark} ---
+While mainly written in Java, Bazel is extensible using @italic{Skylark},
 a subset of Python with strict limits on side-effects.
-Using Skylark, three new rules were added to support building software written in Common Lisp:
+We thus used Skylark to add support for building software written in Common Lisp:
 @(lisp_library) for libraries (e.g. alexandria),
 @(lisp_binary) for executables, and @(lisp_test) for tests.
 
@@ -85,19 +85,14 @@ The multi-stage build was necessary because of circular dependencies between the
 the dependencies formed a big "hairball"
 which any replacement for the build script had to handle.
 
-@section{Discussion}
-
-Let's discuss how to build a simple test application using the @(lisp_binary) rule
-and how to declare its dependency on a Lisp library with @(lisp_library).
-Including C libraries as dependencies in the resulting Lisp binaries,
-as well as running the applications and tests will also be mentioned.
+@section{Building Lisp Software with Bazel}
 
 @; ------------- lisp_library ---------------------
 
-A @(lisp_library) is useful to declare an intermediate target
-which can be referenced from other Lisp BUILD rules.
+Our first Lisp support function, @(lisp_library),
+declares an intermediate target which can be referenced from other Lisp @(BUILD) rules.
 With SBCL (Steel Bank Common Lisp),
-the @(lisp_library) creates a FASt Load (FASL) archive
+@(lisp_library) creates a FASt Load (FASL) archive
 by concatenating the FASL files produced by compiling each of its Lisp sources.
 
 Bazel users specify @emph{attributes} when defining rules.
@@ -137,12 +132,12 @@ The following command builds @file{alexandria.fasl} and makes it available at a 
 
 @; ------------- lisp_binary ---------------------
 
-A @(lisp_binary) rule is used to statically link an executable including both
-Lisp runtime and Lisp core image.
+Our second Lisp support function, @(lisp_binary),
+statically links an executable including both Lisp runtime and Lisp core image.
 If Lisp or C sources are specified, they will be compiled into corresponding
 Lisp and C components before being statically linked into the final binary.
-The @(lisp_test) rule is a variation on the @(lisp_binary) rule meant
-to be invoked with the @tt{bazel test} command.
+Our third Lisp support function, @(lisp_test),
+is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
@@ -259,6 +254,9 @@ but it is a robust solution for building software
 We have demonstrated simultaneously
 how Common Lisp applications can be built in a fast and robust way,
 and how Bazel can be extended to reasonably support a new language unforeseen by its authors.
+Our code can be found at:
+
+@hyperlink["http://github.com/qitab/bazelisp"]{@tt{http://github.com/qitab/bazelisp}}
 
 In the future, we may want to add Lisp-side support for interactively controlling Bazel:
 we would like to be able to build code, and load the result code into the current image,
