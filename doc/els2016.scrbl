@@ -22,30 +22,32 @@
 @title{Building Common Lisp programs using Bazel
               @(linebreak) @smaller{or Correct, Fast, Deterministic Builds for Lisp}}
 
+@abstract{
+  We will demonstrate how to build Common Lisp programs using Bazel,
+  Google's hermetic and reproducible build system.
+  Unlike the state of the art so far for building Lisp programs,
+  Bazel ensures that incremental builds are always both fast and correct.
+  With Bazel, one can statically link C libraries into one's SBCL runtime,
+  making the executable file self-contained.
+}
+
+@category["D.2.3" "Software Engineering"]{Coding Tools and Techniques}
+
 @keywords{
 Build System,
 Common Lisp,
 Bazel,
-Deterministic,
-Reproducible,
-Hermetic
-}
-
-@abstract{
-  We will demonstrate how to build Common Lisp programs using Bazel,
-  Google's hermetic and reproducible build system.
-  Unlike the previous state of the art for building Lisp programs,
-  Bazel ensures that incremental builds are always both fast and correct.
-  With Bazel, one can statically link C libraries into your SBCL runtime,
-  making the executable file self-contained.
+Determinism,
+Reproducibility,
+Hermeticity
 }
 
 @section{Introduction}
 
-Common Lisp, a universal programming language,
-is notably used at Google for the well-known low-fare search engine QPX @~cite[Inside-Orbitz].
+Common Lisp, a general-purpose programming language,
+is used at Google for the well-known low-fare search engine QPX @~cite[Inside-Orbitz].
 Google now builds its Lisp code incrementally,
-using its recently open-sourced Bazel build system @~cite[Bazel].
+using Bazel, its recently open-sourced scalable build system.
 
 Bazel is designed to build software in a reproducible and hermetic way.
 Hermeticity means all build dependencies, including build tools such as compilers,
@@ -55,27 +57,28 @@ and either rebuild or reuse cached artifacts.
 Reproducibility means building the same target multiple times from the same source code
 produces the same output.
 Reproducibility facilitates testing and debugging production code.
-Compilers and other build tools must be tuned to remove sources of non-determinism
-such as timestamps, PRNG seeds, etc.
 Bazel further enforces determinism by executing each build action in a container
 wherein only declared inputs may be read, and any non-declared output is discarded.
 Bazel can thus parallelize build actions, either locally or to remote workers.
+Bazel supports writing software in a mix of languages notably including
+C++, Java, Python, Go and Javascript.
+Compilers and other build tools must be tuned to remove sources of non-determinism
+such as timestamps, PRNG seeds, etc.
 
 While mainly written in Java, Bazel is extensible using @italic{Skylark},
 a subset of Python with strict limits on side-effects.
-We thus used Skylark to add support for building software written in Common Lisp:
-@(lisp_library) for libraries (e.g. alexandria),
-@(lisp_binary) for executables, and @(lisp_test) for tests.
+We used Skylark to add support for building software written in Common Lisp.
 
 @section{Previous Work}
 
-The previous state of the art for building large Common Lisp applications
-was ASDF @~cite[ASDF3-2014].
+The state of the art so far for building large Common Lisp applications
+is ASDF @~cite[ASDF3-2014].
 A descendent of the original Lisp DEFSYSTEM from the 1970s,
 ASDF builds all the code in the current Lisp image;
 incremental builds may therefore be affected
 by all kinds of potential side-effects in the current image;
-and only a build from scratch can guarantee to be deterministic.
+and to guarantee a deterministic build one has to build from scratch.
+ASDF also lacks good support for multi-language software.
 An attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
 failed for social and technical reasons, though it had a working prototype.
 
@@ -83,14 +86,18 @@ Meanwhile, QPX was built using an ad-hoc script loading hundreds of source files
 before compiling them and reloading the resulting FASLs.
 The multi-stage build was necessary because of circular dependencies between the files;
 the dependencies formed a big "hairball"
-which any replacement for the build script had to handle.
+which any replacement build solution had to handle.
 
 @section{Building Lisp Software with Bazel}
+
+The input to Bazel is a set of @(BUILD) files with Python-like syntax,
+wherein users declaratively specify their software @emph{targets}
+using @emph{rules}, and @emph{macros} that expand into one or more rules.
 
 @; ------------- lisp_library ---------------------
 
 Our first Lisp support function, @(lisp_library),
-declares an intermediate target which can be referenced from other Lisp @(BUILD) rules.
+declares an intermediate target which can be referenced from other Lisp rules.
 With SBCL (Steel Bank Common Lisp),
 @(lisp_library) creates a FASt Load (FASL) archive
 by concatenating the FASL files produced by compiling each of its Lisp sources.
@@ -101,12 +108,12 @@ Lisp libraries @(deps), C sources @(csrcs) and C libraries @(cdeps),
 auxiliary @(data) available at runtime to all executable targets depending on the library,
 and auxiliary @(compile_data) available at compile-time.
 
-The rule has additional build options.
+Lisp rules have additional build options.
 The @(order) attribute notably specifies a build strategy;
 the default @tt{"serial"} order loads each source file in sequence
 before compiling the next file.
 The @tt{"parallel"} order compiles all files in parallel without loading other ones.
-The @tt{"multipass"} order first loads all sources files,
+The @tt{"multipass"} order first loads all source files,
 then compiles each one separately in parallel,
 which is useful to compile a "hairball" aggregate.
 
@@ -121,11 +128,11 @@ lisp_library(
     visibility = ["//visibility:public"])
 }|
 
-The above example is from the @(BUILD) file of the "alexandria" library.
-First, Bazel loads the definition of the @(lisp_library)
+The above example is from the @(BUILD) file for the "alexandria" library of general utilities.
+First, Bazel loads the definition of @(lisp_library)
 from its conventional @italic{build label} using the @tt{lisp__bazel} "external repository".
 The @(visibility) attribute indicates which @(BUILD) packages
-are allowed to reference the rule's target --- in this case, it is visible to any package.
+are allowed to reference the rule's target --- in this case, it is visible to all packages.
 
 The following command builds @file{alexandria.fasl} and makes it available at a well defined path:
 @verbatim[#:indent 5]{bazel build :alexandria}
@@ -142,7 +149,7 @@ is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_binary")
-lisp_test(
+lisp_binary(
   name = "myapp",
   srcs = ["myapp.lisp"],
   main = "myapp:main",
@@ -152,7 +159,7 @@ lisp_test(
 @; Insert a line above.
 This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
-At startup, function @cl{myapp:main} will be called with no arguments.
+At startup, Lisp function @cl{myapp:main} will be called with no arguments.
 The program is compiled and executed using:
 @verbatim[#:indent 5]{bazel run :myapp}
 
@@ -200,12 +207,12 @@ and the resulting compilation outputs are combined together in the last step.
 This improves the build parallelism and reduces the latency.
 In order to facilitate linking, all C symbols referred to at Lisp-compilation time
 are dumped into a linker script file.
-That @file{.lds} file is then used to link the SBCL/C runtime part for the final executable.
-It makes the final linking step only include object files
-containing referred symbols, out of those provided by the C libraries;
-it also allows to statically detect any missing or misspelled C symbol.
-The @(lisp_binary) and the @(lisp_test) "macro" combines the SBCL/C runtime
-with the FASL based core by swapping the Lisp core part out in the runtime binary.
+The final linking step uses that @file{.lds} file to
+include from C libraries only those object files containing referred symbols,
+and to statically detect any missing or misspelled C symbol.
+The @(lisp_binary) and the @(lisp_test) macros then create the executable
+by combining the linked SBCL/C runtime with
+a core image dumped after loading all FASLs.
 
 The @(_lisp_library) rule implementation
 computes the transitive dependencies from referenced targets,
