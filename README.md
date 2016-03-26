@@ -3,6 +3,25 @@ Common Lisp support for Bazel
 
 This repository provides support for compiling Common Lisp code using [bazel](http://bazel.io).
 
+Bazel provides safe and fast, hermetic and deterministic, incremental build for software written
+in a mix of language notably including C++, Java, Go, Python, Javascript, and now Common Lisp.
+
+Our Lisp support will use SBCL to build standalone Lisp executables that statically link
+all C/C++ libraries except the most basic ones: libc, libm, etc.
+This makes it easier to deploy or debug production binaries without having to worry
+about subtle installation issues or discrepancies between installations.
+
+ASDF cannot do any of the above. However Bazel has some restrictions for Commom Lisp.
+Notably, Bazel isn't lightweight at all, and for now doesn't allow
+building then loading code in the current image.
+
+Currently, only SBCL is supported, and only on x86-64 for now.
+The only operating system tested was Linux, though
+it might work on MacOS X and possibly on Windows.
+
+See our [article for ELS 2016](doc/els2016.pdf) for an explanation of what is Bazel,
+what our Lisp support does and how it works.
+
 Support is currently experimental, and currently requires you to manually setup your `WORKSPACE`.
 
 
@@ -36,12 +55,23 @@ with any dash or period replaced by an underscore.
 
 Please send us updates to such definitions, e.g. via pull requests.
 
+
 Using bazel to build Lisp code
 ------------------------------
 
-Once your WORKSPACE is setup, you can build Lisp code with a command like:
+Once your `WORKSPACE` is setup, you can build Lisp code with a command like:
 
    ( cd /path/to/bazel ; JAVA_HOME=/path/to/jdk8 ./output/bazel build @lisp__hello//:hello )
 
 Of course, you can and probably should create a small shell script or shell function
 that will properly invoke bazel for you.
+
+
+Building more Lisp code with Bazel
+----------------------------------
+
+You'll have to edit the `lisp.WORKSPACE.bzl` file and/or your `WORKSPACE` file,
+and to add a `BUILD` file to each package you build, either together with the source code,
+or in the [build_defs/](build_defs/) directory.
+For now, you'll have to see existing `BUILD` files as examples,
+because this documentation is otherwise lacking.
