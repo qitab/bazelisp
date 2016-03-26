@@ -9,11 +9,11 @@ Support is currently experimental, and currently requires you to manually setup 
 Setting up your WORKSPACE
 -------------------------
 
-Copy [lisp.WORKSPACE.bzl](lisp.WORKSPACE.bzl) into the top of your bazel installation, and
-edit the `WORKSPACE` for your bazel installation, to include the following:
+Copy or symlink [lisp.WORKSPACE.bzl](lisp.WORKSPACE.bzl) into the top of your bazel installation,
+and edit the `WORKSPACE` for your bazel installation, to include the following:
 
     load("/lisp.WORKSPACE", "lisp_repositories")
-    lisp_repository("/full/path/to/where/you/checked/out/bazelisp")
+    lisp_repositories("/full/path/to/where/you/checked/out/bazelisp")
 
 Also, edit your copy of `lisp.WORKSPACE.bzl` to reflect the versions you want to use,
 and particularly to reflect where to find an installed binary of SBCL with which to
@@ -35,3 +35,13 @@ for the workspace is `lisp__foo_bar` where `foo_bar` is the name of your package
 with any dash or period replaced by an underscore.
 
 Please send us updates to such definitions, e.g. via pull requests.
+
+Using bazel to build Lisp code
+------------------------------
+
+Once your WORKSPACE is setup, you can build Lisp code with a command like:
+
+   ( cd /path/to/bazel ; JAVA_HOME=/path/to/jdk8 ./output/bazel build @lisp__hello//:hello )
+
+Of course, you can and probably should create a small shell script or shell function
+that will properly invoke bazel for you.
