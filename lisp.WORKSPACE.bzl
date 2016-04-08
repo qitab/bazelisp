@@ -185,6 +185,13 @@ def lisp_repositories (base_dir):
       build_file = base_dir + "/build_defs/lisp__closure_common.BUILD"
   )
 
+  native.new_git_repository(
+      name = "lisp__com_google_base",
+      commit = "498fd7224748a1cceaa6127edcedab6e3563aa84",
+      remote = "https://github.com/brown/base.git",
+      build_file = base_dir + "/build_defs/lisp__com_google_base.BUILD"
+  )
+
 #  native.new_git_repository(
 #      name = "lisp__cxml",
 #      commit = "9365c4b93c3e5adc55a6512b3fb453693d06a707",
