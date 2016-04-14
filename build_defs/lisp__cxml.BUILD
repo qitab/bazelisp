@@ -9,17 +9,20 @@ package(default_visibility = ["//visibility:public"])
 load("@lisp__bazel//:bazel/rules.bzl", "lisp_library", "lisp_test")
 
 genrule(
-    name = "system",
-    outs = ["system.lisp"],
-    tools = ["cxml.asd"],
-    cmd = "cat $(location :cxml.asd) > $@",
+    name = "setup",
+    outs = ["setup.lisp"],
+    tools = [":cxml.asd", "@lisp__bazel//:build_defs/lisp__cxml.setup.lisp", ":catalog.dtd"],
+    cmd = (
+        "( cat $(location :cxml.asd) $(location @lisp__bazel//:build_defs/lisp__cxml.setup.lisp) ; " +
+        "  echo '(eval-when (:compile-toplevel :execute)' " +
+	"    '(cxml-setup:setup \"$(location :catalog.dtd)\" \"$(@D)\"))' ) > $@" ),
 )
 
 lisp_library(
     name = "xml",
     srcs = [
         # Serial
-        ":system.lisp",
+        ":setup.lisp",
         "xml/package.lisp",
         "xml/util.lisp",
         "xml/sax-handler.lisp",

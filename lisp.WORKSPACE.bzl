@@ -1,34 +1,23 @@
-### You must call this function with the path to the base directory
-### in which lisp__bazel is installed, e.g. "/home/tunes/src/google/bazelisp"
-###
-### Example: Assuming your WORKSPACE is under ~/src/google/bazel,
-### symlink lisp.WORKSPACE.bzl into ~/src/google/bazel/ and add
-### to your ~/src/google/bazel/WORKSPACE the following lines (uncommented):
-###    load("/lisp.WORKSPACE", "lisp_repositories")
-###    lisp_repositories("/home/fare/src/google/bazelisp")
-###
-### But you must also edit the entry for lisp__sbcl_binary_distribution.
+### Setting up your Bazel WORKSPACE for Common Lisp support.
+#
+# USAGE: You *must*:
+# (1) Symlink or copy this edited file to your main Bazel WORKSPACE directly.
+# (2) From your main Bazel WORKSPACE file `load("/lisp.WORKSPACE.bzl", "lisp_repositories")`
+#   then call the function lisp_repositories() with two arguments:
+#   (a) the full Unix path to the bazelisp directory, e.g. "/home/fare/src/google/bazelisp", and
+#   (b) the full Unix path to the base of a bootstrap SBCL binary distribution, e.g. "/usr/local"
+#     such that bin/sbcl and lib/sbcl/ are under that base directory.
+#
 
-def lisp_repositories (base_dir):
+def lisp_repositories (base_dir, sbcl_binary_distribution):
   native.local_repository(
       name = "lisp__bazel",
       path = base_dir,
   )
 
-  ### EDIT ME! For bootstrap purpose, you need a sbcl binary distribution to compile sbcl.
-  ### Here we checkin /usr as a default that might work on your machine if e.g. you install
-  ### the sbcl package from Debian or Ubuntu. If you compile and install SBCL yourself from
-  ### source with the default settings, that'd be "/usr/local". On my machine it's in
-  ### "~/local/stow/sbcl". YMMV. In a production setting, we strongly recommend that you either
-  ### check in the binary distribution in your source control, or that you include the underlying
-  ### operating system's packages in the version-controled perimeter, or e.g. use NixOS.
-  ### NB: If said binary distribution of sbcl already contains libsbcl.a and
-  ### libsbcl-exported-symbols.lds, and is properly version-controled, then you can directly
-  ### use SBCL_PACKAGE = "@lisp__sbcl_binary_distribution//:" in @lisp__bazel//:bazel/rules.bzl
-  ### instead of SBCL_PACKAGE = "@lisp__sbcl//:" and save yourself having to build sbcl with bazel.
   native.new_local_repository(
       name = "lisp__sbcl_binary_distribution",
-      path = "/home/fare/local/stow/sbcl",
+      path = sbcl_binary_distribution,
       build_file = base_dir + "/build_defs/lisp__sbcl_binary_distribution.BUILD"
   )
 
@@ -192,12 +181,12 @@ def lisp_repositories (base_dir):
       build_file = base_dir + "/build_defs/lisp__com_google_base.BUILD"
   )
 
-#  native.new_git_repository(
-#      name = "lisp__cxml",
-#      commit = "9365c4b93c3e5adc55a6512b3fb453693d06a707",
-#      remote = "git://repo.or.cz/cxml.git",
-#      build_file = base_dir + "/build_defs/lisp__cxml.BUILD"
-#  )
+  native.new_git_repository(
+      name = "lisp__cxml",
+      commit = "9365c4b93c3e5adc55a6512b3fb453693d06a707",
+      remote = "git://repo.or.cz/cxml.git",
+      build_file = base_dir + "/build_defs/lisp__cxml.BUILD"
+  )
 
   native.new_git_repository(
       name = "lisp__eos",
@@ -316,12 +305,12 @@ def lisp_repositories (base_dir):
       build_file = base_dir + "/build_defs/lisp__parse_number.BUILD"
   )
 
-#  native.new_git_repository(
-#      name = "lisp__xpath",
-#      commit = "7abb91be81d8b18066b37db564862dda34ee4d93",
-#      remote = "https://github.com/gonzojive/plexippus-xpath.git",
-#      build_file = base_dir + "/build_defs/lisp__xpath.BUILD"
-#  )
+  native.new_git_repository(
+      name = "lisp__xpath",
+      commit = "7abb91be81d8b18066b37db564862dda34ee4d93",
+      remote = "https://github.com/gonzojive/plexippus-xpath.git",
+      build_file = base_dir + "/build_defs/lisp__xpath.BUILD"
+  )
 
   native.new_git_repository(
       name = "lisp__poiu",
@@ -351,12 +340,12 @@ def lisp_repositories (base_dir):
       build_file = base_dir + "/build_defs/lisp__slime.BUILD"
   )
 
-#  native.new_git_repository(
-#      name = "lisp__swank_client",
-#      commit = "c1d01dd66cbbbe886ee4e38b6f417452e534dc59",
-#      remote = "https://github.com/brown/swank-client.git",
-#      build_file = base_dir + "/build_defs/lisp__swank_client.BUILD"
-#  )
+  native.new_git_repository(
+      name = "lisp__swank_client",
+      commit = "c1d01dd66cbbbe886ee4e38b6f417452e534dc59",
+      remote = "https://github.com/brown/swank-client.git",
+      build_file = base_dir + "/build_defs/lisp__swank_client.BUILD"
+  )
 
   native.new_git_repository(
       name = "lisp__trivial_backtrace",

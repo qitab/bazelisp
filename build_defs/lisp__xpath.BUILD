@@ -19,9 +19,12 @@ lisp_library(
         "utils.lisp",
         "pipes.lisp",
         "protocol.lisp",
+	## TODO: split deftest instance out of xnum-ieee, and move that and test.lisp
+	## to the xpath_test target below.
+        "test.lisp",
         "xnum-ieee.lisp",
         "types.lisp",
-        "extensions.lisp",
+        "extensions.lisp", ## TODO: remove style-warning from that, then remove nowarn below.
         "environment.lisp",
         "axes.lisp",
         "node-tests.lisp",
@@ -41,13 +44,15 @@ lisp_library(
         "@lisp__cxml//:cxml",
         "@lisp__parse_number//:parse_number",
     ],
+    nowarn = [
+        "style",
+    ],
 )
 
 lisp_test(
-    name = "xpath-test",
+    name = "xpath_test",
     srcs = [
         # Serial
-        "test.lisp",
         "xpath-test.lisp",
         #"xnum-ieee-test.lisp",
     ],

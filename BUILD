@@ -1,16 +1,22 @@
 # Copyright 2015 Google Inc.  All rights reserved.
 # Author: andrzejwalczak@google.com (Andrzej Walczak)
 # Description:
-# The package implements the Lisp plugin to the Bazel.
-# This BUILD file describes a Lisp side driver used
-# with the Skylark rules which are defined in rules.bzl
-# See README for more info about this package.
+# This package implements Common Lisp support for Bazel.
+#
+# README.md contains an introduction to this package and how to use it.
+# doc/ contains a higher-level description of what this is all about.
+# bazel/ contains the Lisp driver and Skylark rules.
+# build_defs/ contains BUILD and support files for various Lisp projects.
+# test/ contains various unit tests for the Bazel support for Common Lisp.
+# hello/ contains a trivial example package that uses this Lisp support.
+# lisp.WORKSPACE.bzl contains external repository definitions to load from your main WORKSPACE.
+# WORKSPACE declares to Bazel the name of this external repository.
+# LICENSE is a copy of the Apache License version 2.0, which applies to this package.
+# TODO.md contains various TODO items for improving Common Lisp support for Bazel.
 
-licenses(["unencumbered"])  # New BSD, Google-authored
+licenses(["notice"])  # Apache 2, Google-authored
 
-exports_files(["LICENSE"])
-
-exports_files(["bazel/dump-symtable.lisp"])
+exports_files(["LICENSE", "bazel/dump-symtable.lisp"] + glob(["build_defs/*.*.*"]))
 
 load(":bazel/rules.bzl", "SBCL_PACKAGE")
 
@@ -46,11 +52,5 @@ genrule(
 
 cc_library(
     name = "bazel.cdeps",
-    visibility = ["//visibility:public"],
-)
-
-filegroup(
-    name = "make-sbcl-genrule",
-    srcs = ["sbcl_support/make-sbcl-genrule.sh"],
     visibility = ["//visibility:public"],
 )

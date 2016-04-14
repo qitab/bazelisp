@@ -5,13 +5,12 @@ Things to do to improve Common Lisp support for Bazel:
 
   * Fix the following repos:
 
-      * `lisp__cxml` (can't locate its `catalog.dtd`).
       * `lisp__mixalot` (requires a `cffi_grovel` rule).
       * `lisp__slime` (missing `google-init.lisp`).
       * `swank-client` (depends on `lisp__slime`).
       * Anything with a TODO entry.
 
-  * Support a `lisp_library` with empty `srcs` (then fix the `fare-quasiquote` BUILD).
+  * Support a `lisp_library` with empty `srcs` (then fix `lisp__fare_quasiquote.BUILD`).
 
   * Add a rule `cffi_grovel` for cffi-grovel generated files.
 
@@ -26,7 +25,7 @@ Things to do to improve Common Lisp support for Bazel:
     to otherwise generate arbitrary files.
 
   * Provide a lightweight way to compile Lisp-only BUILDs without involving
-    a multi-gigabyte Java application.
+    a multi-gigabyte Java application(?)
 
   * Convert more Common Lisp systems to use Bazel.
 

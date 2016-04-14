@@ -50,7 +50,7 @@ genrule(
 genrule(
     name = "make-sbcl",
     srcs = [
-        "@lisp__bazel//:make-sbcl-genrule",
+        "@lisp__bazel//:build_defs/lisp__sbcl.make_sbcl.sh",
         "libz.a",
         "@c__zlib//:headers",
         "@lisp__sbcl_binary_distribution//:sbcl",
@@ -62,7 +62,7 @@ genrule(
         "bin/sbcl",
         "lib/sbcl/sbcl.core",
     ],
-    cmd = ("$(location @lisp__bazel//:make-sbcl-genrule) $(CC) \"$(CC_FLAGS)\"" +
+    cmd = ("$(location @lisp__bazel//:build_defs/lisp__sbcl.make_sbcl.sh) $(CC) \"$(CC_FLAGS)\"" +
            " $(location libz.a) '$(locations @c__zlib//:headers)'" +
            " $(location @lisp__sbcl_binary_distribution//:sbcl)" +
            " $(location :make.sh)" +
