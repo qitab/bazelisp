@@ -24,7 +24,7 @@ src=$(dirname $src_file)
 
 # When running a genrule in a container, you may wind up inside a symlink tree that
 # looks like your original input tree, with the links pointing inside
-# content-addressed storage (e.g. @lisp__sbcl//:make.sh will be a
+# content-addressed storage (e.g. @lisp__sbcl//:make.sh may be a
 # symlink pointing to /build/cas/c89/c895571cd4c419db000bc0fe101662ac).  This
 # is all fine and good -- except that both SBCL itself as well as ASDF expect
 # to be able to take the truename of an input file in order to find its
@@ -52,7 +52,7 @@ case "$cc" in
   /*) ;;
   *) cc=$PWD/$cc ;;
 esac
-## TODO: this assumes the same path arguments as for gcc.
+## NB: this assumes the same path arguments as for gcc.
 cflags=`echo " $cflags" | sed -e 's, \(-idirafter *\|-include *\|-imacros *\|-iprefix *\|-iwithprefix *\|-iwithprefixbefore *\|-isystem *\|-imultilib *\|-isysroot *\|-isystem *\|-Bprefix *\|-I *\|-iplugindir *\|-iquote *\|-L *\|-specs=\|--sysroot=\), \1'"$PWD"'/,g'`
 cflags="$cflags -I$PWD/$zlib_headers -L $PWD/`dirname $libz`"
 prefix=$PWD/$output_dir/

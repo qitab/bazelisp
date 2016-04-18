@@ -3,6 +3,8 @@
 # (XPath) Version 1.0. As of now, its API isn't stabilized yet and there isn't
 # any documentation except the source.
 
+# TODO: follow up with https://github.com/gonzojive/plexippus-xpath/issues/1
+
 licenses(["notice"])  # X11-style
 
 exports_files(["LICENSE"])

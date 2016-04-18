@@ -38,8 +38,6 @@ lisp_library(
         "xml/catalog.lisp",
         "xml/atdoc-configuration.lisp",
     ],
-    ## TODO: make catalog.dtd appear at the right place, or
-    ## somehow teach xml/catalog.lisp about where it is.
     compile_data = ["catalog.dtd"],
     nowarn = [
         "implicit-generic",
