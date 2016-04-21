@@ -1,4 +1,4 @@
-#lang scribble/sigplan
+#lang scribble/sigplan @nocopyright
 @; @nocopyright @preprint
 @;-*- Scheme -*-
 @; To be built with:
@@ -17,7 +17,7 @@
 @authorinfo["Andrzej Walczak" "Google" "czak@google.com"]
 
 @conferenceinfo["ELS 2016" "May 9--10, Kraków, Poland"]
-@copyrightyear{2016}
+@;copyrightyear{2016}
 
 @title{Building Common Lisp programs using Bazel
               @(linebreak) @smaller{or Correct, Fast, Deterministic Builds for Lisp}}
@@ -27,7 +27,7 @@
   Google's hermetic and reproducible build system.
   Unlike the state of the art so far for building Lisp programs,
   Bazel ensures that incremental builds are always both fast and correct.
-  With Bazel, one can statically link C libraries into one's SBCL runtime,
+  With Bazel, one can statically link C libraries with the SBCL runtime,
   making the executable file self-contained.
 }
 
@@ -53,7 +53,7 @@ Bazel is designed to build software in a reproducible and hermetic way.
 Hermeticity means all build dependencies, including build tools such as compilers,
 are kept under source control.
 Bazel can thus assess what was or wasn't modified,
-and either rebuild or reuse cached artifacts.
+and either rebuild or reuse cached build artifacts.
 Reproducibility means building the same target multiple times from the same source code
 produces the same output.
 Reproducibility facilitates testing and debugging production code.
@@ -79,7 +79,7 @@ incremental builds may therefore be affected
 by all kinds of potential side-effects in the current image;
 and to guarantee a deterministic build one has to build from scratch.
 ASDF also lacks good support for multi-language software.
-An attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
+Another attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
 failed for social and technical reasons, though it had a working prototype.
 
 Meanwhile, QPX was built using an ad-hoc script loading hundreds of source files
@@ -118,17 +118,20 @@ then compiles each one separately in parallel,
 which is useful to compile a "hairball" aggregate.
 
 @verbatim[#:indent 3]|{
+
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 lisp_library(
     name = "alexandria",
-    srcs = ["package.lisp",
+    srcs = [
+	"package.lisp",
 	# ...
         "io.lisp"],
     visibility = ["//visibility:public"])
+
 }|
 
-The above example is from the @(BUILD) file for the "alexandria" library of general utilities.
+The above example is from the @(BUILD) file for the "alexandria" general utility library.
 First, Bazel loads the definition of @(lisp_library)
 from its conventional @italic{build label} using the @tt{lisp__bazel} "external repository".
 The @(visibility) attribute indicates which @(BUILD) packages
@@ -147,6 +150,7 @@ Our third Lisp support function, @(lisp_test),
 is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
+
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_binary")
 lisp_binary(
@@ -155,8 +159,9 @@ lisp_binary(
   main = "myapp:main",
   deps = [
     "@lisp__alexandria//:alexandria"])
+
 }|
-@; Insert a line above.
+
 This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
 At startup, Lisp function @cl{myapp:main} will be called with no arguments.
@@ -182,22 +187,22 @@ However, this is for a large project, using a computing cloud for compilation.
 The open source version of Bazel currently lacks the ability to distribute builds,
 though it can already take advantage of multiple cores on a single machine.
 The typical Lisp user will therefore not experience a similar speedup
-when using the Bazel lisp rules;
-but he may enjoy the incremental reproducibility.
+when using the Bazel lisp rules.
 
 @section{Inside the Lisp rules}
 
-Lisp support was implemented using Bazel's extension language @italic{Skylark}.
-@(lisp_binary), @(lisp_library), and @(lisp_test) are implemented as Skylark @italic{macros}
-invoking several Skylark @italic{rules}.
+Lisp support was implemented using Bazel's @italic{Skylark} extension language.
+The @(lisp_binary), @(lisp_library), and @(lisp_test) functions are implemented
+as Skylark @italic{macros} calling internal implementation @italic{rules}.
+A Skylark @italic{macro} is basically a Ptyhon function that
+is executed by Bazel at the time the @(BUILD) file is loaded and it expands
+into a set of the actual Skylark rules.
 A Skylark @italic{rule} consists of an implementation function
 and a list of attribute specifications that notably define
 type-checked inputs and outputs for the rule's target.
-A Skylark @italic{macro} is a function that
-can create a (directed acyclic) graph involving multiple rules.
-The Lisp support uses macros to establish a separate graph
+The Lisp support uses macros to establish two separate graphs
 for each of the Lisp and C parts of the build,
-then connecting these two graphs at the final binary targets.
+that are connected at the final binary targets.
 Thus, the @(lisp_library) macro calls the @(_lisp_library) rule to create
 Lisp related actions, and also calls the @(make_cdeps_library) macro
 to create the C related targets using Skylark's @(native.cc_library).
@@ -208,8 +213,8 @@ This improves the build parallelism and reduces the latency.
 In order to facilitate linking, all C symbols referred to at Lisp-compilation time
 are dumped into a linker script file.
 The final linking step uses that @file{.lds} file to
-include from C libraries only those object files containing referred symbols,
-and to statically detect any missing or misspelled C symbol.
+include from C libraries only the referenced objects,
+and to statically detect any missing or misspelled C symbols.
 The @(lisp_binary) and the @(lisp_test) macros then create the executable
 by combining the linked SBCL/C runtime with
 a core image dumped after loading all FASLs.
@@ -250,17 +255,18 @@ Bazel itself is an application written in Java.
 It takes seconds to start for the first time;
 then it becomes a server that can start an incremental build instantly
 but consumes gigabytes of memory.
-It isn't a lightweight solution for programming Lisp
-@hyperlink["https://en.wikipedia.org/wiki/Programming_in_the_large_and_programming_in_the_small"]{@italic{in the small}};
-but it is a robust solution for building software
-@hyperlink["https://en.wikipedia.org/wiki/Programming_in_the_large_and_programming_in_the_small"]{@italic{in the large}}@;
-@~cite[in-the-large-small].
 
 @section{Conclusion and Future Work}
 
 We have demonstrated simultaneously
 how Common Lisp applications can be built in a fast and robust way,
 and how Bazel can be extended to reasonably support a new language unforeseen by its authors.
+Bazel may not be a lightweight solution for programming Lisp
+in an isolated setting of a short lived project.
+On the other hand, it has proved to be a robust solution for building software in an
+industrial setting with a large project tended by several groups of developers and implemented
+in multiple programming languages.
+
 Our code can be found at:
 
 @hyperlink["http://github.com/qitab/bazelisp"]{@tt{http://github.com/qitab/bazelisp}}
