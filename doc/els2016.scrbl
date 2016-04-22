@@ -27,7 +27,7 @@
   Google's hermetic and reproducible build system.
   Unlike the state of the art so far for building Lisp programs,
   Bazel ensures that incremental builds are always both fast and correct.
-  With Bazel, one can statically link C libraries with the SBCL runtime,
+  With Bazel, one can statically link C libraries into the SBCL runtime,
   making the executable file self-contained.
 }
 
@@ -79,7 +79,7 @@ incremental builds may therefore be affected
 by all kinds of potential side-effects in the current image;
 and to guarantee a deterministic build one has to build from scratch.
 ASDF also lacks good support for multi-language software.
-Another attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
+An attempt to build Lisp code deterministically, XCVB @~cite[XCVB-2009],
 failed for social and technical reasons, though it had a working prototype.
 
 Meanwhile, QPX was built using an ad-hoc script loading hundreds of source files
@@ -117,18 +117,29 @@ The @tt{"multipass"} order first loads all source files,
 then compiles each one separately in parallel,
 which is useful to compile a "hairball" aggregate.
 
-@verbatim[#:indent 3]|{
+For each file it compiles, Bazel will start a new Lisp process that will @cl{load}
+all the Lisp source files from all the transitive dependencies of the file as well as
+relevant files from the local rule (as per the @(order) attribute).
+Note that it does not load the compiled FASLs but the actual source files:
+not only is loading source files faster thanks
+to SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL]
+that Doug Katzman wrote specifically to speed up building with Bazel;
+loading source files also means that all compile actions can be run in parallel,
+whereas loading FASLs would introduce long chains of dependencies between compile actions,
+with fewer opportunities for parallelism and much higher latency.
+On the downside, this strategy means that some source files have to be fixed
+to add missing @cl{:execute} situations in their @cl{eval-when} forms,
+and optionally to explicitly @cl{compile} any computation-intensive function used at compile-time.
 
+@verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 lisp_library(
     name = "alexandria",
-    srcs = [
-	"package.lisp",
+    srcs = ["package.lisp",
 	# ...
         "io.lisp"],
     visibility = ["//visibility:public"])
-
 }|
 
 The above example is from the @(BUILD) file for the "alexandria" general utility library.
@@ -150,7 +161,6 @@ Our third Lisp support function, @(lisp_test),
 is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
-
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_binary")
 lisp_binary(
@@ -159,13 +169,12 @@ lisp_binary(
   main = "myapp:main",
   deps = [
     "@lisp__alexandria//:alexandria"])
-
 }|
 
 This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
 At startup, Lisp function @cl{myapp:main} will be called with no arguments.
-The program is compiled and executed using:
+The program may be compiled and executed using:
 @verbatim[#:indent 5]{bazel run :myapp}
 
 @; ------------- C++ dependencies ---------------------
@@ -186,7 +195,7 @@ went from about 15 minutes to about 90 seconds, with qualitative effects on deve
 However, this is for a large project, using a computing cloud for compilation.
 The open source version of Bazel currently lacks the ability to distribute builds,
 though it can already take advantage of multiple cores on a single machine.
-The typical Lisp user will therefore not experience a similar speedup
+The typical Lisp user will therefore not experience as large a speedup
 when using the Bazel lisp rules.
 
 @section{Inside the Lisp rules}
@@ -194,13 +203,13 @@ when using the Bazel lisp rules.
 Lisp support was implemented using Bazel's @italic{Skylark} extension language.
 The @(lisp_binary), @(lisp_library), and @(lisp_test) functions are implemented
 as Skylark @italic{macros} calling internal implementation @italic{rules}.
-A Skylark @italic{macro} is basically a Ptyhon function that
-is executed by Bazel at the time the @(BUILD) file is loaded and it expands
-into a set of the actual Skylark rules.
+A Skylark @italic{macro} is basically a Python function that
+is executed by Bazel at the time the @(BUILD) file is loaded
+and invokes the actual Skylark rules as side-effects.
 A Skylark @italic{rule} consists of an implementation function
 and a list of attribute specifications that notably define
 type-checked inputs and outputs for the rule's target.
-The Lisp support uses macros to establish two separate graphs
+The Lisp support macros establish two separate graphs
 for each of the Lisp and C parts of the build,
 that are connected at the final binary targets.
 Thus, the @(lisp_library) macro calls the @(_lisp_library) rule to create
@@ -214,7 +223,7 @@ In order to facilitate linking, all C symbols referred to at Lisp-compilation ti
 are dumped into a linker script file.
 The final linking step uses that @file{.lds} file to
 include from C libraries only the referenced objects,
-and to statically detect any missing or misspelled C symbols.
+and to statically detect any missing or misspelled C symbol.
 The @(lisp_binary) and the @(lisp_test) macros then create the executable
 by combining the linked SBCL/C runtime with
 a core image dumped after loading all FASLs.
@@ -231,15 +240,15 @@ before its compilation output is loaded.
 The compilation effects of one source are not seen when compiling other Lisp sources.
 
 The Lisp provider structure contains transitive information about:
-FASL files from each @(lisp_library) target;
+FASLs from each @(lisp_library) target;
 all Lisp sources and reader features declared;
 deferred warnings from each compilation;
 the runtime and compilation data for each library.
 The Lisp text @emph{sources} of the dependencies
 are loaded before compiling an intermediate target.
-The FASL files are only used when linking the final binary target.
+The FASLs are only used when linking the final binary target.
 The deferred compilation warnings --- mostly for undefined functions ---
-are checked only after all FASL files have been loaded into the final target.
+are checked only after all FASLs have been loaded into the final target.
 
 @section{Requirements}
 
@@ -261,11 +270,11 @@ but consumes gigabytes of memory.
 We have demonstrated simultaneously
 how Common Lisp applications can be built in a fast and robust way,
 and how Bazel can be extended to reasonably support a new language unforeseen by its authors.
-Bazel may not be a lightweight solution for programming Lisp
-in an isolated setting of a short lived project.
-On the other hand, it has proved to be a robust solution for building software in an
-industrial setting with a large project tended by several groups of developers and implemented
-in multiple programming languages.
+Bazel may not be a lightweight solution for writing small programs in Lisp.
+On the other hand, it has proven to be a robust solution
+for building a large industrial software projects
+tended by several groups of developers and implemented in multiple programming languages
+including Lisp.
 
 Our code can be found at:
 
@@ -273,6 +282,6 @@ Our code can be found at:
 
 In the future, we may want to add Lisp-side support for interactively controlling Bazel:
 we would like to be able to build code, and load the result code into the current image,
-without reloading unmodified fasls and object files.
+without reloading unmodified FASLs and object files.
 
 @(generate-bib)
