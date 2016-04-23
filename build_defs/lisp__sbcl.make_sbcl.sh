@@ -49,11 +49,11 @@ src=$(dirname $src_file)
 export TMPDIR=/tmp
 
 mkdir -p $TMPDIR
-tempdir=`mktemp -d sbclXXXXXXXXXX --tmpdir`
+tempdir=`mktemp -d -t sbclXXXXXXXXXX`
 trap "rm -rf $tempdir" EXIT
 mkdir -p $tempdir/src/
 
-cp -rL $src/* $tempdir/src/
+cp -RL $src/* $tempdir/src/
 ln -s $PWD/$sbcl $tempdir/sbcl
 
 # Make all file names absolute before we change directories to compile SBCL.
@@ -92,8 +92,8 @@ EOF
 # TODO: upstream that patch or something equivalent to SBCL.
 # See https://bugs.launchpad.net/sbcl/+bug/1500628
 ( sed -e \
-  's,\$(TARGET): \$(OBJS),\$(TARGET): sbcl.o, ;
-   s/LINKFLAGS = -g/LINKFLAGS = -g -Wl,-z,relro,-z,now -no-canonical-prefixes -pass-exit-codes -Wl,--build-id=md5 -Wl,--hash-style=gnu -Wl,-S/' < src/runtime/GNUmakefile
+  's/FLAGS\s*=/FLAGS +=/g ;
+   s/NM\s*=/NM +=/g' < src/runtime/GNUmakefile
   echo 'sbcl.o: $(OBJS)' ;
   echo '	ld -r -o $@ $^'
   echo 'libsbcl.a: sbcl.o' ;
