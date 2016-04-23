@@ -12,7 +12,13 @@ output_dir=$7
 version=$8
 debug_build=$9
 
-if [ -z "$debug_build" ] ; then exec >/dev/null 2>&1 ; else set -x ; exec 1>&2 ; fi
+if [ -z "$debug_build" ] ; then
+  exec >/dev/null 2>&1 ;
+else
+  set -x ;
+  set
+  exec 1>&2 ;
+fi
 
 zlib_headers=$(echo $zlib_headers_all | sed -e 's,^\([^ ]\+\)/[^/]\+ .*$,\1,')
 sbcl=$(dirname $(dirname $sbcl_bin_sbcl))  # cross compiler directory
@@ -37,6 +43,10 @@ src=$(dirname $src_file)
 # library based on the truename of its binary.
 
 # So make a copy in our tmpdir with all the symlinks dereferenced.
+
+# Argh... everything here expects TMPDIR to be /tmp,
+# while sandbox does not provide one - assuming nobody needs a tmpdir.
+export TMPDIR=/tmp
 
 mkdir -p $TMPDIR
 tempdir=`mktemp -d sbclXXXXXXXXXX --tmpdir`
