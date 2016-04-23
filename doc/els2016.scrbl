@@ -1,4 +1,4 @@
-#lang scribble/sigplan @nocopyright
+#lang scribble/sigplan
 @; @nocopyright @preprint
 @;-*- Scheme -*-
 @; To be built with:
@@ -91,8 +91,7 @@ which any replacement build solution had to handle.
 @section{Building Lisp Software with Bazel}
 
 The input to Bazel is a set of @(BUILD) files with Python-like syntax,
-wherein users declaratively specify their software @emph{targets}
-using @emph{rules}, and @emph{macros} that expand into one or more rules.
+that declaratively specify software @emph{targets} using @emph{rules}.
 
 @; ------------- lisp_library ---------------------
 
@@ -116,28 +115,12 @@ The @tt{"parallel"} order compiles all files in parallel without loading other o
 The @tt{"multipass"} order first loads all source files,
 then compiles each one separately in parallel,
 which is useful to compile a "hairball" aggregate.
-
-For each file it compiles, Bazel will start a new Lisp process that will @cl{load}
-all the Lisp source files from all the transitive dependencies of the file as well as
-relevant files from the local rule (as per the @(order) attribute).
-Note that it does not load the compiled FASLs but the actual source files:
-not only is loading source files faster thanks
-to SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL]
-that Doug Katzman wrote specifically to speed up building with Bazel;
-loading source files also means that all compile actions can be run in parallel,
-whereas loading FASLs would introduce long chains of dependencies between compile actions,
-with fewer opportunities for parallelism and much higher latency.
-On the downside, this strategy means that some source files have to be fixed
-to add missing @cl{:execute} situations in their @cl{eval-when} forms,
-and optionally to explicitly @cl{compile} any computation-intensive function used at compile-time.
-
 @verbatim[#:indent 3]|{
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 lisp_library(
     name = "alexandria",
-    srcs = ["package.lisp",
-	# ...
+    srcs = ["package.lisp", # ...
         "io.lisp"],
     visibility = ["//visibility:public"])
 }|
@@ -244,9 +227,23 @@ FASLs from each @(lisp_library) target;
 all Lisp sources and reader features declared;
 deferred warnings from each compilation;
 the runtime and compilation data for each library.
-The Lisp text @emph{sources} of the dependencies
-are loaded before compiling an intermediate target.
-The FASLs are only used when linking the final binary target.
+Lisp @emph{sources} of dependencies
+are loaded before compile actions.@note{
+@;
+Bazel compiles each file in a new Lisp process that will @cl{load}
+all the Lisp @emph{source} files from all the transitive dependencies as well as
+relevant files from the current rule (depending on @(order)).
+This is faster than loading FASLs,
+thanks to SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL],
+written specifically to speed up building with Bazel;
+this also enables all compile actions to run in parallel,
+whereas loading FASLs would introduce long chains of dependencies between actions
+and cause high latency.
+On the downside, some source files must be fixed
+to add missing @cl{:execute} situations in @cl{eval-when} forms,
+and optionally to explicitly @cl{compile} computation-intensive functions used at compile-time.
+}.
+FASLs are only used when linking the final binary target.
 The deferred compilation warnings --- mostly for undefined functions ---
 are checked only after all FASLs have been loaded into the final target.
 
@@ -256,9 +253,9 @@ The current version of the Lisp support for Bazel
 has only been made to work with SBCL on Linux on the x86-64 architecture.
 It should be relatively easy to get it working
 on any platform that is supported by both SBCL and Bazel.
-However, porting to a different Lisp implementation, while possible,
-will require non-trivial work, especially with respect to linking C libraries into an executable,
-or reproducing the low latency achieved with SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL].
+However, porting to a different Lisp implementation will require non-trivial work,
+especially with respect to static linking of C libraries
+or to reproducing the low latency achieved with the @tt{fasteval} interpreter@~cite[FASTEVAL].
 
 Bazel itself is an application written in Java.
 It takes seconds to start for the first time;
@@ -270,18 +267,16 @@ but consumes gigabytes of memory.
 We have demonstrated simultaneously
 how Common Lisp applications can be built in a fast and robust way,
 and how Bazel can be extended to reasonably support a new language unforeseen by its authors.
-Bazel may not be a lightweight solution for writing small programs in Lisp.
-On the other hand, it has proven to be a robust solution
-for building a large industrial software projects
-tended by several groups of developers and implemented in multiple programming languages
+Bazel may not be a lightweight solution for writing small programs in Lisp;
+but it is a proven solution for building large industrial software projects
+tended by several groups of developers using multiple programming languages,
 including Lisp.
-
-Our code can be found at:
-
-@hyperlink["http://github.com/qitab/bazelisp"]{@tt{http://github.com/qitab/bazelisp}}
 
 In the future, we may want to add Lisp-side support for interactively controlling Bazel:
 we would like to be able to build code, and load the result code into the current image,
 without reloading unmodified FASLs and object files.
+
+Our code is at:
+@hyperlink["http://github.com/qitab/bazelisp"]{@tt{http://github.com/qitab/bazelisp}}
 
 @(generate-bib)
