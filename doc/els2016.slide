@@ -1,0 +1,110 @@
+;; -*- mode: Lisp -*-
+
+(module lisp-bazel-els2016 (lib "run.ss" "slideshow")
+  (slide
+   (titlet "Building Lisp using Google's Bazel")
+   (blank)
+   (t ".. or how we managed to build Lisp on 1000 machines")
+   (t "and still got consistent and deterministic results?"))
+
+  (define (i . l)
+    (apply page-item l))
+
+  (define (si . l)
+    (apply page-subitem l))
+
+  (slide/title
+   "What is Bazel and why it is interesting?"
+   (i "Google's answer to Make files that scales...")
+   (i "Declarative BUILD language.")
+   (i "Supports many platforms and programming languages.")
+   (i "Correct even if distributed.")
+   ;; File hash instead of time-stamps.
+   (i "Sand-boxed unit actions.")
+   (i "Cached artifacts.")
+   (i "Extensible using Skylark."))
+
+  (slide/title
+   "Why Bazel ... and not something else?"
+   (i "Make was unreliable, slow, and could not use build clusters.")
+   (i "Ant and Maven primary geared towards Java and monolithic projects.")
+   (i "ASDF")
+   (si "limited to Common Lisp - single sessions.")
+   (si "Bazel BUILD files easier to write and maintain.")
+   ;; Flattening considerably the learning curve.
+   (si "difficult for re-factoring of large Lisp projects.")
+   (si "no sand-boxing and no cross-company caching."))
+
+  (slide/title
+   "Why not Bazel? The limitations."
+   (i "Difficult to maintain by individuals.")
+   (i "Requires considerable resources.")
+   (i "Not a Software Configuration Management system.")
+   (si "best with a single repository.")
+   (si "best when every module has one version.")
+   (i "No support for pulling remote repositories.")
+   (si "Falls short to QuickLisp in this respect.")
+   (i "Open-Source version has no support for build clusters, yet.")
+   (i "Java."))
+
+  (slide/title/center
+   "Lisp BUILD rules: lisp_library"
+   (vl-append
+   (colorize (tt "# Access the Lisp BUILD rules.") "brown")
+   (tt "load(\"@lisp__bazel//:bazel/rules.bzl\",")
+   (tt "     \"lisp_library\")")
+   (colorize (tt "# Define the build rule.") "brown")
+   (tt "lisp_library(")
+   (tt "   name = \"alexandria\",")
+   (tt "   srcs = [")
+   (tt "     \"package.lisp\",")
+   (tt "     # ...")
+   (tt "     \"io.lisp\"],")
+   (tt "   visibility = [\"//visibility:public\"])")))
+
+  (slide/title/center
+   "Lisp BUILD rules: lisp_binary"
+   (vl-append
+   (tt "load(\"@lisp__bazel//:bazel/rules.bzl\",")
+   (tt "     \"lisp_binary\")")
+   (colorize (tt "# The canonical example.") "brown")
+   (tt "lisp_binary(")
+   (tt "   name = \"hello\",")
+   (tt "   srcs = [\"hello.lisp\"],")
+   (tt "   main = \"hello:main\",")
+   (tt "   deps = [\"@lisp__alexandria//:alexandria\"]")))
+
+  (slide/title/center
+    "Installation"
+    (vl-append
+    (* 4 line-sep)
+    (tt "> chmod +x ~/tmp/bazel-0.2.2-installer-linux-x86_64.sh")
+    (tt "> ~/tmp/bazel-0.2.2-installer-linux-x86_64.sh --user")
+    (tt "> export PATH=$PATH:~/bin")
+    (tt "> mkdir foo; cd foo; git init;")
+    (tt "> cd; mkdir bazelisp; cd bazelisp")
+    (tt "> git pull https://github.com/qitab/bazelisp.git")
+    (tt "> bazel info")))
+
+ (slide/title/center
+  "Setup and test"
+  (i "The WORKSPACE file...")
+
+  (colorize
+   (vl-append
+    (tt "workspace(name = \"lisp__bazel\")")
+    (tt "load(\"/lisp.WORKSPACE\", \"lisp_repositories\")")
+    (colorize (t "# Initialize Lisp repos.") "brown")
+    (tt "lisp_repositories(")
+    (colorize (t "    # Path to bazelisp installation.") "brown")
+    (tt "  \"/Users/andrzejwalczak/bazelisp\",")
+    (colorize (t "    # Root of SBCL binary installation.") "brown")
+    (tt "  \"/usr/local/\")"))
+   "darkblue")
+
+  (i "The first build.")
+  (vl-append
+   (tt "> bazel run hello")))
+
+;; Module end
+)
