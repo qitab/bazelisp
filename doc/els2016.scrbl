@@ -115,14 +115,18 @@ The @tt{"parallel"} order compiles all files in parallel without loading other o
 The @tt{"multipass"} order first loads all source files,
 then compiles each one separately in parallel,
 which is useful to compile a "hairball" aggregate.
+
 @verbatim[#:indent 3]|{
+
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 lisp_library(
     name = "alexandria",
-    srcs = ["package.lisp", # ...
+    srcs = ["package.lisp",
+        # ...
         "io.lisp"],
     visibility = ["//visibility:public"])
+
 }|
 
 The above example is from the @(BUILD) file for the "alexandria" general utility library.
@@ -144,6 +148,7 @@ Our third Lisp support function, @(lisp_test),
 is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
+
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_binary")
 lisp_binary(
@@ -152,11 +157,13 @@ lisp_binary(
   main = "myapp:main",
   deps = [
     "@lisp__alexandria//:alexandria"])
+
 }|
 
 This @(BUILD) file contains a @(lisp_binary)
 target which references the "alexandria" @(BUILD) target seen before.
-At startup, Lisp function @cl{myapp:main} will be called with no arguments.
+When running the binary, the Lisp function @cl{myapp:main}
+will be called with no arguments at startup.
 The program may be compiled and executed using:
 @verbatim[#:indent 5]{bazel run :myapp}
 
@@ -165,7 +172,7 @@ The program may be compiled and executed using:
 A @(lisp_binary) can directly or transitively depend on C or C++ libraries.
 Static linking of the libraries makes it more reliable to deploy such a binary
 on multiple hosts in the cloud, without the opportunity to get library dependencies wrong;
-in particular, it helps to minimize discrepancies between test and production environments.
+in particular, it helps with minimizing discrepancies between test and production environments.
 C and C++ dependencies can be specified via the @(cdeps) rule attribute,
 which can refer to any @(cc_library) built with Bazel.
 The @(csrcs) and @(copts) rule attributes allow to directly specify C source files
@@ -208,31 +215,14 @@ The final linking step uses that @file{.lds} file to
 include from C libraries only the referenced objects,
 and to statically detect any missing or misspelled C symbol.
 The @(lisp_binary) and the @(lisp_test) macros then create the executable
-by combining the linked SBCL/C runtime with
-a core image dumped after loading all FASLs.
+by combining the runtime of SBCL linked with additional C libraries
+and a core image dumped after loading all FASLs.
 
-The @(_lisp_library) rule implementation
-computes the transitive dependencies from referenced targets,
-compiles the sources using Skylark's @(ctx.action),
-and returns a Lisp @italic{provider} structure to be used by other Lisp rules.
-Each of the Lisp sources are compiled in a separate process,
-possibly running on different machines.
-This increases build parallelism and reduces the latency
-when contrasted with waiting for each dependency to be compiled first
-before its compilation output is loaded.
-The compilation effects of one source are not seen when compiling other Lisp sources.
-
-The Lisp provider structure contains transitive information about:
-FASLs from each @(lisp_library) target;
-all Lisp sources and reader features declared;
-deferred warnings from each compilation;
-the runtime and compilation data for each library.
-Lisp @emph{sources} of dependencies
-are loaded before compile actions.@note{
-@;
-Bazel compiles each file in a new Lisp process that will @cl{load}
-all the Lisp @emph{source} files from all the transitive dependencies as well as
-relevant files from the current rule (depending on @(order)).
+The @(_lisp_library) rule implementation uses Skylark's @tt{ctx.action} to
+compile each file in a new Lisp process (possibly on remote worker machines)
+that will first @cl{load} all the Lisp @emph{source} files
+from all the transitive dependencies as well as
+relevant files from the current rule (depending on the @(order) attribute).
 This is faster than loading FASLs,
 thanks to SBCL's @tt{fasteval} interpreter@~cite[FASTEVAL],
 written specifically to speed up building with Bazel;
@@ -242,15 +232,21 @@ and cause high latency.
 On the downside, some source files must be fixed
 to add missing @cl{:execute} situations in @cl{eval-when} forms,
 and optionally to explicitly @cl{compile} computation-intensive functions used at compile-time.
-}.
-FASLs are only used when linking the final binary target.
-The deferred compilation warnings --- mostly for undefined functions ---
-are checked only after all FASLs have been loaded into the final target.
+
+The @(_lisp_library) implementation also returns a @italic{provider} structure
+containing transitive information about:
+all Lisp sources loaded;
+all reader features declared;
+runtime and compile-time data for each library;
+FASLs from each @(lisp_library) target,
+used when linking the final binary target;
+deferred warnings from each compilation --- mostly for undefined functions ---
+checked after all FASLs have been loaded into the final target.
 
 @section{Requirements}
 
-The current version of the Lisp support for Bazel
-has only been made to work with SBCL on Linux on the x86-64 architecture.
+The Lisp support for Bazel so far only works with
+SBCL on the x86-64 architecture, on Linux and MacOS X.
 It should be relatively easy to get it working
 on any platform that is supported by both SBCL and Bazel.
 However, porting to a different Lisp implementation will require non-trivial work,
