@@ -4,8 +4,8 @@
   (slide
    (titlet "Building Lisp using Google's Bazel")
    (blank)
-   (t ".. or how we managed to build Lisp on 1000 machines")
-   (t "and still got consistent and deterministic results?"))
+   (t "... or how we build Lisp on thousands of machines")
+   (t "and still get consistent and deterministic results."))
 
   (define (i . l)
     (apply page-item l))
@@ -15,37 +15,25 @@
 
   (slide/title
    "What is Bazel and why it is interesting?"
-   (i "Google's answer to Make files that scales...")
-   (i "Declarative BUILD language.")
-   (i "Supports many platforms and programming languages.")
-   (i "Correct even if distributed.")
-   ;; File hash instead of time-stamps.
-   (i "Sand-boxed unit actions.")
-   (i "Cached artifacts.")
-   (i "Extensible using Skylark."))
-
-  (slide/title
-   "Why Bazel ... and not something else?"
-   (i "Make was unreliable, slow, and could not use build clusters.")
-   (i "Ant and Maven primary geared towards Java and monolithic projects.")
-   (i "ASDF")
-   (si "limited to Common Lisp - single sessions.")
-   (si "Bazel BUILD files easier to write and maintain.")
-   ;; Flattening considerably the learning curve.
-   (si "difficult for re-factoring of large Lisp projects.")
-   (si "no sand-boxing and no cross-company caching."))
+   (i "Scales to large distributed builds.") ;; Unlike Make, ASDF. More general than distcc.
+   (i "Correct, using file hashes not timestamps.") ;; Unlike Make, unlike ASDF.
+   (i "Declarative BUILD language.") ;; Like ASDF, unlike Make.
+   (i "General purpose: extensible using Skylark.") ;; It sucks, so do Make and ASDF.
+   (i "Supports many platforms and programming languages.") ;; Like Make, unlike ASDF.
+   (i "Actions are sandboxed.") ;; Unlike Make, ASDF.
+   (i "Artifacts are cached.")) ;; ccache
 
   (slide/title
    "Why not Bazel? The limitations."
-   (i "Difficult to maintain by individuals.")
-   (i "Requires considerable resources.")
+   (i "Difficult to maintain by individuals.") ;; ??? More so than Make or ASDF?
+   (i "Requires considerable resources.") ;; ? Gigabytes at runtime?
    (i "Not a Software Configuration Management system.")
    (si "best with a single repository.")
    (si "best when every module has one version.")
-   (i "No support for pulling remote repositories.")
-   (si "Falls short to QuickLisp in this respect.")
-   (i "Open-Source version has no support for build clusters, yet.")
-   (i "Java."))
+   (i "No support for pulling remote repositories.") ;;; Uh? What about "external repositories"?
+   (si "Falls short to QuickLisp in this respect.")  ;;; What about the way we map lisp__foo ???
+   (i "Open-Source version has no support for build clusters, yet.") ;; Being worked on
+   (i "Java.")) ;; ??? Isn't that a subitem of to the Difficult to maintain thing?
 
   (slide/title/center
    "Lisp BUILD rules: lisp_library"
@@ -58,7 +46,7 @@
    (tt "   name = \"alexandria\",")
    (tt "   srcs = [")
    (tt "     \"package.lisp\",")
-   (tt "     # ...")
+   (colorize (tt "     # ...") "blue")
    (tt "     \"io.lisp\"],")
    (tt "   visibility = [\"//visibility:public\"])")))
 
@@ -78,13 +66,10 @@
     "Installation"
     (vl-append
     (* 4 line-sep)
-    (tt "> chmod +x ~/tmp/bazel-0.2.2-installer-linux-x86_64.sh")
-    (tt "> ~/tmp/bazel-0.2.2-installer-linux-x86_64.sh --user")
-    (tt "> export PATH=$PATH:~/bin")
-    (tt "> mkdir foo; cd foo; git init;")
-    (tt "> cd; mkdir bazelisp; cd bazelisp")
-    (tt "> git pull https://github.com/qitab/bazelisp.git")
-    (tt "> bazel info")))
+    (tt "> sh bazel-0.2.2-installer-linux-x86_64.sh --user")
+    (tt "> export PATH=~/bin:$PATH")
+    (tt "> git clone https://github.com/qitab/bazelisp.git")
+    (tt "> cd bazelisp ; bazel info")))
 
  (slide/title/center
   "Setup and test"
