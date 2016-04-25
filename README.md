@@ -5,12 +5,12 @@ This repository provides support for compiling Common Lisp code using
 [bazel](http://bazel.io).
 
 Bazel provides safe and fast, hermetic and deterministic, incremental
-build for software written in a mix of language notably including C++,
+build for software written in a mix of languages notably including C++,
 Java, Go, Python, Javascript --- and now Common Lisp.
 
 Our Lisp support will use SBCL to build standalone Common Lisp
 executables that statically link all C/C++ libraries except the most
-basic ones: libc, libm, etc. This makes it easier to deploy or debug
+basic ones: `libc`, `libm`, etc. This makes it easier to deploy or debug
 production binaries without having to worry about subtle installation
 issues or discrepancies between installations.
 
@@ -34,8 +34,8 @@ current equivalent for Bazel, for which you may have to write
 corresponding Bazel extensions or source code tweaks.
 
 Currently, only SBCL is supported, and only on x86-64 for now. The
-only operating system tested was Linux, though with minimal
-modifications it might work on MacOS X and possibly on Windows.
+only operating systems tested were Linux and MacOS X, though with
+minimal modifications it might work other systems including Windows.
 Supporting other implementations and/or other architectures is not
 conceptually difficult, but will require work. Making it as fast as
 SBCL will be hard, for SBCL now has a "fasteval" interpreter that was
@@ -45,32 +45,32 @@ especially optimized to accelerate building with Bazel.
 Setting up your WORKSPACE
 -------------------------
 
-Copy or symlink [lisp.WORKSPACE.bzl](lisp.WORKSPACE.bzl) into the top
-of your `bazel` installation, and then edit the `WORKSPACE` of this
-installation to include the following:
+Copy or symlink [lisp.WORKSPACE.bzl](lisp.WORKSPACE.bzl) into the
+toplevel directory of your Bazel workspace, and edit your toplevel
+`WORKSPACE` file to include the following:
 
     load("/lisp.WORKSPACE", "lisp_repositories")
     lisp_repositories(bazelisp="/path/to/bazelisp", sbcl="/path/to/base/of/sbcl")
 
-The path to bazelisp is the full Unix path to the directory of this
-`README.md` file.
+The path to `bazelisp` is the full Unix path to the directory
+containing this `README.md` file.
 
-The path to the base of sbcl is the `--prefix` argument used when
-building sbcl. This would be `/usr` when using sbcl from a debian or
-RPM package for sbcl, or `/usr/local` by default when building sbcl
-from source. The sbcl executable is `bin/sbcl` under this base
-directory whereas the sbcl support files are in `lib/sbcl/` under that
-base directory. (NB: I (Faré) personally use `stow` to manage local
-software under either `/usr/local` or `~/local`, and my sbcl path is
-`/home/fare/local/stow/sbcl`. YMMV.)
+The path to the base of `sbcl` is the `--prefix` argument used when
+building SBCL. This would be `/usr` when using sbcl from a debian or
+RPM package for SBCL, or `/usr/local` by default when building SBCL
+from source. The SBCL executable is `bin/sbcl` under this base
+directory whereas the SBCL support files are in `lib/sbcl/` under that
+base directory. For instance, I (Faré) personally use `stow` to manage
+local software under either `/usr/local` or `~/local`, and my SBCL
+path is `/home/fare/local/stow/sbcl`. YMMV.
 
-By default, this sbcl installation is used only to bootstrap the
-hermetic version of sbcl from the `@lisp__sbcl//` external repository.
-But if you used the `@lisp__sbcl//...` targets to precompile a
-sbcl installation that has all the patches expected by blaze, and you
+By default, this SBCL installation is used only to bootstrap the
+hermetic version of SBCL from the `@lisp__sbcl//` external repository.
+But if you used the `@lisp__sbcl//...` targets to precompile a SBCL
+installation that has all the patches expected by Bazel, and you
 checked it into your source control with enough hermeticity, then you
 can shorten your Common Lisp builds by using that directly rather than
-rebuilding sbcl in every new checkout (assuming you don't have a
+rebuilding SBCL in every new checkout (assuming you don't have a
 shared distributed cache). To that effect, edit `bazel/rules.bzl` and
 change the value of the variable `SBCL_PACKAGE` to be
 `"@lisp__sbcl_binary_distribution//:"` instead of `"@lisp__sbcl//:"`.
@@ -85,7 +85,8 @@ like:
     ( cd /path/to/bazel ; JAVA_HOME=/path/to/jdk8 ./output/bazel build @lisp__hello//:hello )
 
 Of course, you can and probably should create a small shell script or
-shell function that will properly invoke `bazel` for you.
+shell function that will properly invoke `bazel` for you from the
+proper workspace.
 
 
 Building additional or updated Lisp systems
