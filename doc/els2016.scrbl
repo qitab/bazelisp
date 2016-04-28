@@ -1,8 +1,8 @@
-#lang scribble/sigplan
+#lang sigalternate @nocopyright
 @; @nocopyright @preprint
 @;-*- Scheme -*-
 @; To be built with:
-@;   scribble --pdf els2016.scrbl
+@;   PLTCOLLECTS="${PWD}:${PLTCOLLECTS}" scribble --pdf els2016.scrbl
 
 @(require scribble/base
           scriblib/autobib scriblib/footnote
@@ -19,8 +19,10 @@
 @conferenceinfo["ELS 2016" "May 9--10, Kraków, Poland"]
 @;copyrightyear{2016}
 
+@(define (sf . str) (make-element 'sf (decode-content str)))
+
 @title{Building Common Lisp programs using Bazel
-              @(linebreak) @smaller{or Correct, Fast, Deterministic Builds for Lisp}}
+              @(linebreak) @bold{@sf{or Correct, Fast, Deterministic Builds for Lisp}}}
 
 @abstract{
   We will demonstrate how to build Common Lisp programs using Bazel,
@@ -34,12 +36,12 @@
 @category["D.2.3" "Software Engineering"]{Coding Tools and Techniques}
 
 @keywords{
+Bazel,
 Build System,
 Common Lisp,
-Bazel,
 Determinism,
-Reproducibility,
-Hermeticity
+Hermeticity,
+Reproducibility
 }
 
 @section{Introduction}
@@ -88,7 +90,7 @@ The multi-stage build was necessary because of circular dependencies between the
 the dependencies formed a big "hairball"
 which any replacement build solution had to handle.
 
-@section{Building Lisp Software with Bazel}
+@section{Building Lisp Code with Bazel}
 
 The input to Bazel is a set of @(BUILD) files with Python-like syntax,
 that declaratively specify software @emph{targets} using @emph{rules}.
@@ -114,10 +116,9 @@ before compiling the next file.
 The @tt{"parallel"} order compiles all files in parallel without loading other ones.
 The @tt{"multipass"} order first loads all source files,
 then compiles each one separately in parallel,
-which is useful to compile a "hairball" aggregate.
+which is useful to handle a "hairball" aggregate.
 
 @verbatim[#:indent 3]|{
-
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_library")
 lisp_library(
@@ -126,29 +127,27 @@ lisp_library(
         # ...
         "io.lisp"],
     visibility = ["//visibility:public"])
-
 }|
 
 The above example is from the @(BUILD) file for the "alexandria" general utility library.
-First, Bazel loads the definition of @(lisp_library)
-from its conventional @italic{build label} using the @tt{lisp__bazel} "external repository".
-The @(visibility) attribute indicates which @(BUILD) packages
-are allowed to reference the rule's target --- in this case, it is visible to all packages.
+Bazel first loads @(lisp_library) from its conventional @italic{build label}
+under the @tt{lisp__bazel} "external repository".
+The @(visibility) attribute indicates which Bazel packages
+are allowed to reference the rule's target --- in this case, all packages.
 
 The following command builds @file{alexandria.fasl} and makes it available at a well defined path:
 @verbatim[#:indent 5]{bazel build :alexandria}
 
 @; ------------- lisp_binary ---------------------
 
-Our second Lisp support function, @(lisp_binary),
-statically links an executable including both Lisp runtime and Lisp core image.
+Our second function, @(lisp_binary),
+creates an executable including both Lisp runtime and Lisp core image.
 If Lisp or C sources are specified, they will be compiled into corresponding
 Lisp and C components before being statically linked into the final binary.
-Our third Lisp support function, @(lisp_test),
+Our third function, @(lisp_test),
 is a variation on the @(lisp_binary) rule meant to be invoked with the @tt{bazel test} command.
 
 @verbatim[#:indent 3]|{
-
 load("@lisp__bazel//:bazel/rules.bzl",
      "lisp_binary")
 lisp_binary(
@@ -157,7 +156,6 @@ lisp_binary(
   main = "myapp:main",
   deps = [
     "@lisp__alexandria//:alexandria"])
-
 }|
 
 This @(BUILD) file contains a @(lisp_binary)
@@ -184,15 +182,15 @@ Thanks to these build rules, the duration of the incremental QPX build
 went from about 15 minutes to about 90 seconds, with qualitative effects on developer experience.
 However, this is for a large project, using a computing cloud for compilation.
 The open source version of Bazel currently lacks the ability to distribute builds,
-though it can already take advantage of multiple cores on a single machine.
+but it can already take advantage of multiple cores on a single machine.
 The typical Lisp user will therefore not experience as large a speedup
 when using the Bazel lisp rules.
 
 @section{Inside the Lisp rules}
 
 Lisp support was implemented using Bazel's @italic{Skylark} extension language.
-The @(lisp_binary), @(lisp_library), and @(lisp_test) functions are implemented
-as Skylark @italic{macros} calling internal implementation @italic{rules}.
+The functions @(lisp_library), @(lisp_binary) and @(lisp_test) are
+Skylark @italic{macros} calling internal implementation @italic{rules}.
 A Skylark @italic{macro} is basically a Python function that
 is executed by Bazel at the time the @(BUILD) file is loaded
 and invokes the actual Skylark rules as side-effects.
@@ -218,8 +216,8 @@ The @(lisp_binary) and the @(lisp_test) macros then create the executable
 by combining the runtime of SBCL linked with additional C libraries
 and a core image dumped after loading all FASLs.
 
-The @(_lisp_library) rule implementation uses Skylark's @tt{ctx.action} to
-compile each file in a new Lisp process (possibly on remote worker machines)
+The @(_lisp_library) rule implementation compiles each file
+in a new Lisp process (possibly on remote worker machines)
 that will first @cl{load} all the Lisp @emph{source} files
 from all the transitive dependencies as well as
 relevant files from the current rule (depending on the @(order) attribute).
@@ -245,13 +243,13 @@ checked after all FASLs have been loaded into the final target.
 
 @section{Requirements}
 
-The Lisp support for Bazel so far only works with
-SBCL on the x86-64 architecture, on Linux and MacOS X.
-It should be relatively easy to get it working
-on any platform that is supported by both SBCL and Bazel.
-However, porting to a different Lisp implementation will require non-trivial work,
-especially with respect to static linking of C libraries
-or to reproducing the low latency achieved with the @tt{fasteval} interpreter@~cite[FASTEVAL].
+The Lisp support for Bazel so far only works on SBCL,
+on the x86-64 architecture, on Linux and MacOS X.
+It shouldn't be hard to make it work
+on a platform supported by both SBCL and Bazel.
+However, porting to another Lisp implementation will be non-trivial,
+notably with respect to linking C libraries statically
+or to achieving latency as low as with the @tt{fasteval} interpreter.
 
 Bazel itself is an application written in Java.
 It takes seconds to start for the first time;
