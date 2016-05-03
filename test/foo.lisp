@@ -1,5 +1,5 @@
 ;; TODO(czak): This requires proper path.
-(defconstant +data+ "external/lisp__bazel/test/foo.data")
+(defconstant +data+ "test/foo.data")
 
 (eval-when (:compile-toplevel)
   #+sbcl (format t "Compile CWD: ~A~%" (sb-posix:getcwd))

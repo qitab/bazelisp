@@ -15,6 +15,7 @@
            #:read-stringz
            #:read-u64
            #:write-u64
+           #:with-continue-on-error
            #:funcall-named
            #:funcall-named*))
 
@@ -114,3 +115,18 @@
            (function (and package (find-symbol (second split) package))))
       (when (and function (fboundp function))
         (apply function args)))))
+
+(defun %with-continue-on-error (function test)
+  "Call FUNCTION while wrapping it conditionally (TEST) into a HANDLER-BIND that
+ continues from the error if the continue restart is found."
+  (if test
+      (handler-bind ((error
+                      (lambda (c) (declare (ignore c))
+                        (let ((continue (find-restart 'continue)))
+                          (when continue (invoke-restart continue))))))
+        (funcall function))
+      (funcall function)))
+
+(defmacro with-continue-on-error ((&key (when t)) &body body)
+  "Call CONTINUE for all errors. WHEN is an optional condition form."
+  `(%with-continue-on-error (lambda () ,@body) ,when))

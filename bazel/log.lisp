@@ -56,4 +56,5 @@
   "Format an print a fail message then exit.
  CONTROL is the format control string that operates on ARGS."
   (apply #'message :fatal 0 control args)
-  (error 'fatal-error :message (apply #'format nil control args)))
+  (with-simple-restart (continue "Continue from the fatal Blaze error.")
+    (error 'fatal-error :message (apply #'format nil control args))))
