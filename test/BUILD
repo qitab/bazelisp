@@ -88,17 +88,17 @@ lisp_binary(
     ],
 )
 
-sh_test(
-    name = "check_symbols",
-    srcs = ["check_symbols.sh"],
-    data = ["test"],
-)
-
 # The SRCS files need .sh or .bash extension.
 #sh_test(
 #    name = "run-test",
 #    srcs = ["test"],
 #)
+
+sh_test(
+    name = "check_symbols",
+    srcs = ["check_symbols.sh"],
+    data = ["test"],
+)
 
 cc_library(
     name = "empty",

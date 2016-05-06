@@ -64,8 +64,7 @@
   (slide/title ; 4
    "Why not Bazel? The limitations."
    (i "Open-Source version has no support for build clusters, yet.")
-   ;; When running bazel on a single machine should be slower than
-   ;; using ASDF.
+   ;; When running bazel on a single machine should be slower than using ASDF.
    (i "Mostly geared towards 'standard' languages: Java, C++, Go, ...")
    ;; Bazel (Blaze) team would most the time only support
    ;; the languages they liked.
@@ -80,7 +79,7 @@
    ;; The bazel architecture has advantage when using it on
    ;; a build cluster - which we call Forge in Google.
    ;; The build machines need to be maintained and the build servers running.
-   ;; Updates to the beta software can throw a wrench into owns build
+   ;; Updates to the beta software can throw a wrench into one's build
    ;; setup as the details are still being worked on.
    ;; Bazelisp comes with a set of BUILD files in the build_defs folder
    ;; that are not maintained at the same place as the original library.
@@ -95,8 +94,15 @@
    (i "Not a Software Configuration Management system.")
    (si "best with a single repository.")
    ;; At Google all the sources are maintained under one tree.
-   ;; There is no need to write the
-   (si "best when every module has one version."))
+   ;; There is no need to write the WORKSPACE file for every
+   ;; single module that is maintained in a separate repository.
+   (si "best when every module has one version.")
+   ;; In order to avoid the "dll/version" hell all there is
+   ;; only one version of every source checked in.
+   ;; Thus there was no need to develop a solution for handling
+   ;; multiple version requirements.
+
+   )
 
   (slide/title/center ; 5
    "Lisp BUILD rules: lisp_library"

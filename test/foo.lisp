@@ -18,4 +18,5 @@
 
 (defun foo-data-test ()
   (with-open-file (in +data+)
+    (assert (equal 4 (file-length in)))
     (assert (equal 1234 (read in))))) ; NOLINT

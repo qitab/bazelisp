@@ -654,8 +654,7 @@ This allows for the user to specify their own handlers as a string."
   (verbose "Processing ~D dependencie~:P..." (length deps))
   (with-all-warnings-muffled
     (with-compilation-unit ()
-      (mapc #'process-file* deps)))
-  (values))
+      (map () #'process-file* deps))))
 
 ;;;
 ;;; Command handlers
@@ -847,7 +846,7 @@ This allows for the user to specify their own handlers as a string."
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 
-    ;; Feature not available only in open source bazel.
+    ;; Feature not available in open source bazel.
     (when coverage
       (funcall-named "BAZEL.COVERAGE:TURN-ON-DATA-COLLECTION"))
 
@@ -910,7 +909,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defun main ()
   "Main entry point."
-  (let* ((command-args (parse-command-args (command-line-arguments))))
+  (let ((command-args (parse-command-args (command-line-arguments))))
     (destructuring-bind (&key force verbose interactive &allow-other-keys) command-args
       (when verbose
         (setf *verbose* (read-from-string verbose)))

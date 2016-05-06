@@ -5,8 +5,6 @@
 
 (in-package :hello)
 
-; #.(error "FOORHTBAR")
-
 (defun main ()
   "Trivial Hello World function"
   ;; exercise alexandria
