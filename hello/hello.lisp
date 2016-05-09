@@ -9,5 +9,4 @@
   "Trivial Hello World function"
   ;; exercise alexandria
   (assert (= 720 (factorial 6)))
-  ;; exercise uiop
   (format t "Hello, World!~%"))

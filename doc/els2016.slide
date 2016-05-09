@@ -1,11 +1,6 @@
 ;; -*- mode: Lisp -*-
 
 (module lisp-bazel-els2016 (lib "run.ss" "slideshow")
-  (slide ; 1
-   (titlet "Building Lisp using Google's Bazel")
-   (blank)
-   (t "... or how we build Lisp on thousands of machines")
-   (t "and still get consistent and deterministic results."))
 
   (define (i . l)
     (apply page-item l))
@@ -13,10 +8,47 @@
   (define (si . l)
     (apply page-subitem l))
 
+  (define (c text color)
+    (colorize (t text) color))
+
+  (require racket/draw)
+  (define GGreen
+    (make-color 60 186 84))
+  (define GYellow
+    (make-color 244 194 13))
+  (define GRed
+    (make-color 219 50 54))
+  (define GBlue
+    (make-color 72 133 237))
+  
+  (define (google)
+    (hc-append
+    (c "G" GBlue)
+    (c "o" GRed)
+    (c "o" GYellow)
+    (c "g" GBlue)
+    (c "l" GGreen)
+    (c "e" GRed)))
+  
+  (slide ; 1
+   (titlet "Building Lisp using Google's Bazel")
+   (blank)
+   (vl-append
+    (t "... or how we build Lisp on thousands of machines")
+    (t "and still get consistent and deterministic results."))
+   (blank)
+   (vl-append
+    (t " ")
+    (t "James Y. Knight,")
+    (t "   François-René Rideau,")
+    (t "      Andrzej Walczak,")
+    (hc-append
+     (t "         @") (google))))
+    
   (slide/title ; 2
    "What is Bazel and why it is interesting?"
    (i "Google's answer to Make files that scales...")
-   (i "Correct, using file hashes not timestamps.")
+   ;; Correct, using file hashes not timestamps.
    (i "Declarative BUILD language.")
    ;; BUILD rules describe the compilation in a declarative way.
    ;; Bazel will match all the production rules at load time, and
@@ -37,7 +69,7 @@
    (i "General purpose:")
    (si "extensible using Skylark,")
    (si "multiple configurations, cross-compilation")
-   (si "multiple architectures in one pass - not yet")
+   ;; * ultiple architectures in one pass - not yet.
    ;; Skylark is the Python-like script language that has been
    ;; heavily limited. E.g. there is no recursion and all the
    ;; objects a copy on write.
@@ -47,7 +79,7 @@
 
   (slide/title ; 3
    "Why Bazel ... and not something else?"
-   (i "Make was unreliable, slow, and could not easy use build clusters.")
+   (i "Make - unreliable, slow, and not easily distributed.")
    ;; Make is unreliable because it uses timestamps for synchronization
    ;; making it necessary to maintain a coherent global time across
    ;; a global computing cloud.
@@ -56,9 +88,8 @@
    (si "distcc / ccache - C/C++.")
    (i "ASDF")
    (si "limited to Common Lisp - single sessions.")
-   (si "bazel BUILD files easier to write and maintain.")
    ;; Flattening considerably the learning curve.
-   (si "difficult for re-factoring of large Lisp projects.")
+   (si "not easy, e.g. for re-factoring of large Lisp projects.")
    (si "no sand-boxing and no across the company caching."))
 
   (slide/title ; 4
@@ -73,7 +104,7 @@
    ;; Before Skylark the support for other language compilation
    ;; was mostly implemented in Java and the Bazel team was unwilling
    ;; to accept many of the modifications necessary to support Lisp.
-   (si "Why do we need Java to build Lisp?")
+   ;; "Why do we need Java to build Lisp?"
    ;; We would previously require Python, too.
    (si "Difficult to maintain by individuals.")
    ;; The bazel architecture has advantage when using it on
@@ -91,7 +122,7 @@
    ;; Bazel does not run twice in the same client.
    ;; If I run 2 builds, I have to kill a few of my Chrome tabs
    ;; otherwise my machine get a bit slower.
-   (i "Not a Software Configuration Management system.")
+   (i "Not a Software Configuration Management System.")
    (si "best with a single repository.")
    ;; At Google all the sources are maintained under one tree.
    ;; There is no need to write the WORKSPACE file for every
@@ -101,13 +132,58 @@
    ;; only one version of every source checked in.
    ;; Thus there was no need to develop a solution for handling
    ;; multiple version requirements.
-
    )
+  
+  (slide/title/center
+    "Installation"
+    (vl-append
+    (* 4 line-sep)
+    (tt "> sh bazel-0.2.2-installer-linux-x86_64.sh --user")
+    (tt "> export PATH=~/bin:$PATH")
+    (tt "> git clone https://github.com/qitab/bazelisp.git")
+    (tt "> cd bazelisp ; bazel info")))
 
-  (slide/title/center ; 5
+ (slide/title/center 
+  "The WORKSPACE file"
+
+  (colorize
+   (vl-append
+    (tt "workspace(name = \"lisp__bazel\")")
+    (tt "load(\"/lisp.WORKSPACE\", \"lisp_repositories\")")
+    (colorize (t "# Initialize Lisp repos.") "brown")
+    (tt "lisp_repositories(")
+    (colorize (t "    # Path to bazelisp installation.") "brown")
+    (tt "  \"/Users/andrzejwalczak/bazelisp\",")
+    (colorize (t "    # Root of SBCL binary installation.") "brown")
+    (tt "  \"/usr/local/\")"))
+   "darkblue"))
+
+ (slide/title/center 
+  "The First Build"
+  
+  'alts
+  (list (list
+          (tt "> bazel run hello"))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --verbose_failures") "darkgreen")
+           (tt " hello")))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --sandbox_debug") "darkgreen")
+           (tt " hello")))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --define=VERBOSE_LISP_BUILD=2") "darkgreen")
+           (tt " hello")))))
+
+  (slide/title/center 
    "Lisp BUILD rules: lisp_library"
    (vl-append
-   (colorize (tt "# Access the Lisp BUILD rules.") "brown")
+   (colorize (tt "# Access the Lisp BUILD rules' definitions.") "brown")
    (tt "load(\"@lisp__bazel//:bazel/rules.bzl\",")
    (tt "     \"lisp_library\")")
    (colorize (tt "# Define the build rule.") "brown")
@@ -129,50 +205,34 @@
    (tt "   name = \"hello\",")
    (tt "   srcs = [\"hello.lisp\"],")
    (tt "   main = \"hello:main\",")
-   (tt "   deps = [\"@lisp__alexandria//:alexandria\"]")))
+   (tt "   deps = [\"@lisp__alexandria//:alexandria\"])")))
 
-  (slide/title/center ; 7
-    "Installation"
-    (vl-append
-    (* 4 line-sep)
-    (tt "> sh bazel-0.2.2-installer-linux-x86_64.sh --user")
-    (tt "> export PATH=~/bin:$PATH")
-    (tt "> git clone https://github.com/qitab/bazelisp.git")
-    (tt "> cd bazelisp ; bazel info")))
+  (slide/title/center
+   "Compile Action"
+   (size-in-pixels (bitmap "doc/CompileAction.png")))
 
- (slide/title/center ; 8
-  "Setup and test"
-  (i "The WORKSPACE file...")
+  (slide/title/center
+   "Linking Action"
+   (size-in-pixels (bitmap "doc/LinkAction.png")))
 
-  (colorize
-   (vl-append
-    (tt "workspace(name = \"lisp__bazel\")")
-    (tt "load(\"/lisp.WORKSPACE\", \"lisp_repositories\")")
-    (colorize (t "# Initialize Lisp repos.") "brown")
-    (tt "lisp_repositories(")
-    (colorize (t "    # Path to bazelisp installation.") "brown")
-    (tt "  \"/Users/andrzejwalczak/bazelisp\",")
-    (colorize (t "    # Root of SBCL binary installation.") "brown")
-    (tt "  \"/usr/local/\")"))
-   "darkblue")
+ (slide/title/center 
+  "Profiling the build"
+  (tt "> bazel build --profile hello.prof hello")
+  (blank)
+  (hc-append
+   (tt "> bazel analyze-profile")
+   (colorize (tt " --html ") "darkgreen")
+   (tt "hello.prof")))
 
-
-  'alts
-  (list (list
-          (i "The first build.")
-          (tt "> bazel run hello"))
-        (list
-          (i "The first build.")
-          (hc-append
-           (tt "> bazel run")
-           (colorize (tt " --verbose_failures --sandbox_debug") "darkgreen")
-           (tt " hello")))
-        (list
-          (i "The first build.")
-          (hc-append
-           (tt "> bazel run")
-           (colorize (tt " --define=VERBOSE_LISP_BUILD=2") "darkgreen")
-           (tt " hello")))))
-
+ ;; Future work.
+ ;; REPL - Accessing Bazel, loading libraries, reloading.
+ ;; Stelian Ionescu - SBCL to save core as a linkable ELF object.
+ ;;
+ 
+ (require slideshow/text)
+ (slide/title/center 
+  "Thank You"
+  (with-scale 2 (t "Questions?")))
+ 
 ;; Module end
 )
