@@ -1,5 +1,4 @@
 ;; -*- mode: Lisp -*-
-
 (module lisp-bazel-els2016 (lib "run.ss" "slideshow")
 
   (define (i . l)
@@ -93,8 +92,8 @@
    (si "no sand-boxing and no across the company caching."))
 
   (slide/title ; 4
-   "Why not Bazel? The limitations."
-   (i "Open-Source version has no support for build clusters, yet.")
+   "Limitations. Why not Bazel?"
+   (i "Open-Source version 0.2 has no support for build clusters, yet.")
    ;; When running bazel on a single machine should be slower than using ASDF.
    (i "Mostly geared towards 'standard' languages: Java, C++, Go, ...")
    ;; Bazel (Blaze) team would most the time only support
@@ -106,7 +105,7 @@
    ;; to accept many of the modifications necessary to support Lisp.
    ;; "Why do we need Java to build Lisp?"
    ;; We would previously require Python, too.
-   (si "Difficult to maintain by individuals.")
+   (si "IMHO: Difficult to maintain by individuals.")
    ;; The bazel architecture has advantage when using it on
    ;; a build cluster - which we call Forge in Google.
    ;; The build machines need to be maintained and the build servers running.
@@ -122,7 +121,7 @@
    ;; Bazel does not run twice in the same client.
    ;; If I run 2 builds, I have to kill a few of my Chrome tabs
    ;; otherwise my machine get a bit slower.
-   (i "Not a Software Configuration Management System.")
+   (i "Not a Package-/Software-Config- Manager.")
    (si "best with a single repository.")
    ;; At Google all the sources are maintained under one tree.
    ;; There is no need to write the WORKSPACE file for every
@@ -132,16 +131,20 @@
    ;; only one version of every source checked in.
    ;; Thus there was no need to develop a solution for handling
    ;; multiple version requirements.
+   ;; So, if you need multiple versions of the MD5 library, ...
+   ;; you have to call it MD5-v2, MD5-v3, ...
+   (i "One Bazel build per client.")
    )
   
   (slide/title/center
     "Installation"
     (vl-append
-    (* 4 line-sep)
-    (tt "> sh bazel-0.2.2-installer-linux-x86_64.sh --user")
-    (tt "> export PATH=~/bin:$PATH")
-    (tt "> git clone https://github.com/qitab/bazelisp.git")
-    (tt "> cd bazelisp ; bazel info")))
+     (* 4 line-sep)
+     (tt "> # install java-8, SBCL, download bazel-installer") 
+     (tt "> bash bazel-0.2.2-installer-linux-x86_64.sh --user")
+     (tt "> export PATH=~/bin:$PATH")
+     (tt "> git clone https://github.com/qitab/bazelisp.git")
+     (tt "> cd bazelisp ; bazel info")))
 
  (slide/title/center 
   "The WORKSPACE file"
@@ -153,35 +156,18 @@
     (colorize (t "# Initialize Lisp repos.") "brown")
     (tt "lisp_repositories(")
     (colorize (t "    # Path to bazelisp installation.") "brown")
-    (tt "  \"/Users/andrzejwalczak/bazelisp\",")
+    (tt "  \"./\",")
     (colorize (t "    # Root of SBCL binary installation.") "brown")
-    (tt "  \"/usr/local/\")"))
+    (tt "  \"/usr/\")"))
    "darkblue"))
 
  (slide/title/center 
   "The First Build"
   
-  'alts
-  (list (list
-          (tt "> bazel run hello"))
-        (list
-          (hc-append
-           (tt "> bazel run")
-           (colorize (tt " --verbose_failures") "darkgreen")
-           (tt " hello")))
-        (list
-          (hc-append
-           (tt "> bazel run")
-           (colorize (tt " --sandbox_debug") "darkgreen")
-           (tt " hello")))
-        (list
-          (hc-append
-           (tt "> bazel run")
-           (colorize (tt " --define=VERBOSE_LISP_BUILD=2") "darkgreen")
-           (tt " hello")))))
+  (tt "> bazel run hello"))
 
-  (slide/title/center 
-   "Lisp BUILD rules: lisp_library"
+ (slide/title/center 
+   "Lisp BUILD Rules: lisp_library"
    (vl-append
    (colorize (tt "# Access the Lisp BUILD rules' definitions.") "brown")
    (tt "load(\"@lisp__bazel//:bazel/rules.bzl\",")
@@ -195,8 +181,8 @@
    (tt "     \"io.lisp\"],")
    (tt "   visibility = [\"//visibility:public\"])")))
 
-  (slide/title/center ; 6
-   "Lisp BUILD rules: lisp_binary"
+  (slide/title/center
+   "Lisp BUILD Rules: lisp_binary"
    (vl-append
    (tt "load(\"@lisp__bazel//:bazel/rules.bzl\",")
    (tt "     \"lisp_binary\")")
@@ -216,7 +202,7 @@
    (size-in-pixels (bitmap "doc/LinkAction.png")))
 
  (slide/title/center 
-  "Profiling the build"
+  "Profiling the Build"
   (tt "> bazel build --profile hello.prof hello")
   (blank)
   (hc-append
@@ -224,15 +210,41 @@
    (colorize (tt " --html ") "darkgreen")
    (tt "hello.prof")))
 
- ;; Future work.
- ;; REPL - Accessing Bazel, loading libraries, reloading.
- ;; Stelian Ionescu - SBCL to save core as a linkable ELF object.
- ;;
- 
+ (slide/title/center 
+  "The Failing Build"
+
+  'alts
+  (list (list
+          (tt "> bazel run hello"))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --verbose_failures") "darkgreen")
+           (tt " hello")))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --sandbox_debug") "darkgreen")
+           (tt " hello")))
+        (list
+          (hc-append
+           (tt "> bazel run")
+           (colorize (tt " --define=VERBOSE_LISP_BUILD=2") "darkgreen")
+           (tt " hello")))))
+
+ (slide/title/center 
+  "Future Work"
+  (i "REPL - accessing Bazel, loading libraries, reloading.")
+  (i "SBCL core as a linkable ELF object (by Stelian).")
+  (i "Upstream SBCL patches:")
+  (si "precompile generics.")
+  (si "libsbcl.a - use of binary SBCL distribution.")
+  (i "More Lisp implementations / platforms."))
+  
  (require slideshow/text)
  (slide/title/center 
-  "Thank You"
-  (with-scale 2 (t "Questions?")))
+  "Thank You for Attention"
+  (with-scale 1.2 (t "Questions?")))
  
 ;; Module end
 )
