@@ -612,7 +612,9 @@ def lisp_binary(name,
       deps = deps,
       lisp_features = features,
       image = image,
-      visibility = ["//visibility:private"])
+      visibility = ["//visibility:private"],
+      tags = ["manual"],
+      testonly = testonly)
 
   # Precompile all C sources in advance, before core symbols are present.
   cdeps_library = make_cdeps_library(
@@ -896,4 +898,6 @@ def lisp_library(name,
       deps = deps,
       lisp_features = features,
       image = image,
-      visibility = ["//visibility:private"])
+      visibility = ["//visibility:private"],
+      tags = ["manual"],
+      testonly = testonly)
