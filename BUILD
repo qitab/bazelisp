@@ -12,6 +12,12 @@ exports_files(["LICENSE"])
 
 exports_files(["dump-symtable.lisp"])
 
+filegroup(
+    name = "build_rules",
+    srcs = glob(["*.bzl"]),
+    visibility = ["//visibility:public"],
+)
+
 # TODO(czak): This needs to be set to some path reachable from Bazel.
 SBCL = "//third_party/lisp/sbcl/k8:sbcl"
 

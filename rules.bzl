@@ -374,7 +374,10 @@ def _lisp_binary_implementation(ctx):
           trans,
           srcs = ctx.files.srcs,
           hashes = compile.hashes,
-          warnings = compile.warnings))
+          warnings = compile.warnings),
+      instrumented_files = struct(
+          source_attributes = ["srcs"],
+          dependency_attributes = ["deps", "image"]))
 
 # Internal rule used to generate action that creates a Lisp binary core.
 # Keep the name to be _lisp_binary - Grok depends on this name to find targets.
@@ -410,7 +413,13 @@ _combine_lisp_binary_attrs = {
         allow_files=True,
         single_file=True,
         # TODO(czak): Need to provide a proper path.
-        default = Label("//:bazel"))}
+        default = Label("//:bazel")),
+    # TODO(sfreilich): After there's some API for accessing native rule
+    # internals in Skylark rules, rewrite lisp_* macros to be rule functions
+    # instead and remove these additional attributes used in instrumented_files.
+    # (Same for lisp_library below.)
+    "instrumented_srcs": attr.label_list(allow_files=True),
+    "instrumented_deps": attr.label_list()}
 
 def _combine_core_and_runtime(ctx):
   """An action that combines a Lisp core and C++ runtime."""
@@ -429,13 +438,19 @@ def _combine_core_and_runtime(ctx):
   runfiles = ctx.runfiles(
       files = sorted(set(ctx.files.data) + ctx.attr.core.runtime_data))
 
+  instrumented_files = struct(
+      source_attributes = ["instrumented_srcs"],
+      dependency_attributes = ["instrumented_deps"])
   if hasattr(ctx.attr.core, "lisp"):
     trans = ctx.attr.core.lisp
     return struct(
         lisp = trans,
-        runfiles = runfiles)
+        runfiles = runfiles,
+        instrumented_files = instrumented_files)
   else:
-    return struct(runfiles = runfiles)
+    return struct(
+        runfiles = runfiles,
+        instrumented_files = instrumented_files)
 
 # Internal rule used to combine a Lisp core and C++ binary to a Lisp binary.
 _combine_lisp_binary = rule(
@@ -654,9 +669,19 @@ def lisp_binary(name,
       malloc = malloc,
       testonly = testonly)
 
+  # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
+  # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
+  # cdeps and _make_cdeps_dependencies(deps) to instrumented_deps instead of
+  # cdeps_library doesn't work, it doesn't include the right metadata files
+  # included by the InstrumentedFilesProvider of the native cc_library rule).
+  instrumented_srcs = srcs
+  instrumented_deps = deps + [cdeps_library]
+
   if test:
     _combine_lisp_test(
         name = name,
+        instrumented_srcs = instrumented_srcs,
+        instrumented_deps = instrumented_deps,
         runtime = runtime,
         core = core,
         data = data,
@@ -670,6 +695,8 @@ def lisp_binary(name,
   else:
     _combine_lisp_binary(
         name = name,
+        instrumented_srcs = instrumented_srcs,
+        instrumented_deps = instrumented_deps,
         runtime = runtime,
         core = core,
         data = data,
@@ -734,7 +761,9 @@ def lisp_library_implementation(ctx,
     # Need to create the declared output.
     # But it will not be recorded in the provider.
     _concat_files(ctx, [], output_fasl)
-    return struct(lisp = trans)
+    return struct(
+        lisp = trans,
+        instrumented_files = struct(dependency_attributes = ["deps"]))
 
   nowarn = nowarn or getattr(ctx.attr, "nowarn", [])
   compile = _compile_srcs(
@@ -757,14 +786,23 @@ def lisp_library_implementation(ctx,
           deps = [output_fasl],
           srcs = srcs,
           hashes = compile.hashes,
-          warnings = compile.warnings))
+          warnings = compile.warnings),
+      instrumented_files = struct(
+          source_attributes = ["srcs"],
+          dependency_attributes = ["instrumented_deps"]))
 
 
 # Internal rule that creates a Lisp library FASL file.
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
     implementation = lisp_library_implementation,
-    attrs = _lisp_common_attrs,
+    attrs = _lisp_common_attrs + {
+        # After there's some API for accessing native rule internals, we can get
+        # rid of this, but while we're implementing this as a macro that
+        # generates native and Skylark rules, this rule needs some additional
+        # attributes in order to get coverage instrumentation correct.
+        "instrumented_deps": attr.label_list()
+    },
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
@@ -869,6 +907,11 @@ def lisp_library(name,
   """
   # This macro calls _make_cdeps_library, _lisp_library.
 
+  cdeps_library = make_cdeps_library(
+      name = name, deps = [image] + deps,
+      csrcs = csrcs, cdeps = cdeps, copts = copts,
+      visibility = visibility, testonly = testonly)
+
   _lisp_library(
       # Common lisp attributes.
       name = name,
@@ -880,16 +923,15 @@ def lisp_library(name,
       lisp_features = features,
       nowarn = nowarn,
       image = image,
+      # lisp_library attributes (for coverage instrumentation). Note that this
+      # treats csrcs the same as the srcs of targets in cdeps. See longer note
+      # about instrumented_deps in definition of lisp_binary above.
+      instrumented_deps = deps + [cdeps_library],
       # Common rule attributes.
       visibility = visibility,
       testonly = testonly,
       verbose = verbose,
       **kwargs)
-
-  make_cdeps_library(
-      name = name, deps = [image] + deps,
-      csrcs = csrcs, cdeps = cdeps, copts = copts,
-      visibility = visibility, testonly = testonly)
 
   _dump_lisp_deps(
       name = "~" + name + ".deps",
