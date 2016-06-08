@@ -419,7 +419,7 @@ _combine_lisp_binary_attrs = {
     # instead and remove these additional attributes used in instrumented_files.
     # (Same for lisp_library below.)
     "instrumented_srcs": attr.label_list(allow_files=True),
-    "instrumented_deps": attr.label_list()}
+    "instrumented_deps": attr.label_list(allow_files=True)}
 
 def _combine_core_and_runtime(ctx):
   """An action that combines a Lisp core and C++ runtime."""
@@ -675,7 +675,7 @@ def lisp_binary(name,
   # cdeps_library doesn't work, it doesn't include the right metadata files
   # included by the InstrumentedFilesProvider of the native cc_library rule).
   instrumented_srcs = srcs
-  instrumented_deps = deps + [cdeps_library]
+  instrumented_deps = deps + [image, cdeps_library]
 
   if test:
     _combine_lisp_test(
@@ -801,7 +801,7 @@ _lisp_library = rule(
         # rid of this, but while we're implementing this as a macro that
         # generates native and Skylark rules, this rule needs some additional
         # attributes in order to get coverage instrumentation correct.
-        "instrumented_deps": attr.label_list()
+        "instrumented_deps": attr.label_list(allow_files=True)
     },
     # Access to the cpp compiler options.
     fragments = ["cpp"],
@@ -926,7 +926,7 @@ def lisp_library(name,
       # lisp_library attributes (for coverage instrumentation). Note that this
       # treats csrcs the same as the srcs of targets in cdeps. See longer note
       # about instrumented_deps in definition of lisp_binary above.
-      instrumented_deps = deps + [cdeps_library],
+      instrumented_deps = deps + [image, cdeps_library],
       # Common rule attributes.
       visibility = visibility,
       testonly = testonly,
