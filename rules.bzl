@@ -77,6 +77,24 @@ def _paths(files):
   """
   return " ".join([f.path for f in files])
 
+def _spec(spec, files):
+  """Return the compilation/linking specification as parsed by bazel driver.
+
+  The specification will have the following form:
+    "(:<spec> \"<path>\" .... \"<path>\")"
+  for each spec and path of the files.
+
+  Args:
+    spec: the specification name corresponding to the command line argument.
+    files: a list of build file objects to be included in the specification.
+
+  Returns:
+    A list of parenthesized paths prefixed with specs name as keyword.
+  """
+  return ("(:" + spec + "\n \"" +
+          "\"\n \"".join([f.path for f in files]) +
+          "\")")
+
 def _short_paths(files):
   """Return the short file paths for all the 'files'.
 
@@ -329,7 +347,16 @@ def _lisp_binary_implementation(ctx):
   if verbosep:
     print("Build image: %s" % build_image.short_path)
 
-  inputs = sorted(set([build_image, dump_symtable])
+  specs = ctx.new_file(ctx.label.name + ".specs")
+  ctx.file_action(
+      output = specs,
+      content = (
+          "\n".join([_spec("srcs", compile.fasls),
+                     _spec("deps", deps),
+                     _spec("warnings", warnings),
+                     _spec("hashes", hashes)])))
+
+  inputs = sorted(set([build_image, dump_symtable, specs])
                   + deps + compile.fasls + trans.compile_data
                   + hashes + warnings)
 
@@ -339,10 +366,7 @@ def _lisp_binary_implementation(ctx):
   lisp_symbols = ctx.outputs.lisp_symbols
   outs = [core, dynamic_list_lds, extern_symbols, lisp_symbols]
 
-  flags += ["--deps", _paths(deps)]
-  flags += ["--srcs", _paths(compile.fasls)]
-  flags += ["--warnings", _paths(warnings)]
-  flags += ["--hashes", _paths(hashes)]
+  flags += ["--specs", specs.path]
   flags += ["--outs", _paths(outs)]
   flags += ["--dump-extern-symbols", extern_symbols.path]
   flags += ["--dump-dynamic-list-lds", dynamic_list_lds.path]

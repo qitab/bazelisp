@@ -707,6 +707,21 @@ This allows for the user to specify their own handlers as a string."
      (action-find-output-file action "warnings")
      (action-deferred-warnings action))))
 
+(defun parse-specs (specs)
+  "Parse the SPECS file and return values for SRCS, DEPS, LOAD, WARNINGS, and HASHES."
+  (let (srcs deps load warnings hashes)
+    (with-open-file (in specs :direction :input :element-type 'character)
+      (loop for spec = (read in nil in)
+            until (eq spec in)
+            do
+         (ecase (first spec)
+           (:srcs (setf srcs (rest spec)))
+           (:deps (setf deps (rest spec)))
+           (:load (setf load (rest spec)))
+           (:warnings (setf warnings (rest spec)))
+           (:hashes (setf hashes (rest spec))))))
+    (values srcs deps load warnings hashes)))
+
 ;;;
 ;;; Main Processing Loop
 ;;;
@@ -714,6 +729,7 @@ This allows for the user to specify their own handlers as a string."
 (defun process (&rest args
                    &key command deps load srcs outs gendir
                    warnings hashes
+                   specs
                    (compilation-mode :fastbuild)
                    safety force
                    main features nowarn
@@ -752,12 +768,17 @@ This allows for the user to specify their own handlers as a string."
         dumps the C symbols that the Lisp sources depend on.
   EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
   DEPS-ALREADY-LOADED - true when files in DEPS are already loaded in the image."
+
+  (multiple-value-setq (srcs deps load warnings hashes)
+    (if specs
+        (parse-specs specs)
+        (values (split srcs)
+                (unless deps-already-loaded (split deps))
+                (split load)
+                (split warnings)
+                (split hashes))))
+
   (let* ((command (to-keyword command))
-         (deps (unless deps-already-loaded (split deps)))
-         (load (split load))
-         (srcs (split srcs))
-         (hashes (split hashes))
-         (warnings (split warnings))
          (outs (split outs))
          (safety (if (stringp safety) (parse-integer safety) safety))
          (compilation-mode (to-keyword compilation-mode))
@@ -855,7 +876,8 @@ This allows for the user to specify their own handlers as a string."
 
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
-    (verbose "Loading ~D source file~:P..." (length load))
+      (verbose "Loading ~D source file~:P..." (length load))
+
       (mapc #'process-file* load)
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
