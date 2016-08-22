@@ -63,7 +63,7 @@ _lisp_common_attrs = {
         executable=True,
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
-    # Internal, for testing coverage.
+    # For testing coverage.
     "enable_coverage" : attr.bool()
 }
 

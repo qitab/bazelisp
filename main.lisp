@@ -866,9 +866,10 @@ This allows for the user to specify their own handlers as a string."
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 
-    ;; Feature available only in google3 depot.
+    #+sbcl
     (when coverage
-      (funcall-named "BAZEL.COVERAGE:TURN-ON-DATA-COLLECTION"))
+      (bazel.log:verbose "Turning on coverage-instrumented code generation.")
+      (proclaim '(optimize (sb-c:store-coverage-data 3))))
 
     (process-dependencies deps)
     ;; Load in any source hash information files.
