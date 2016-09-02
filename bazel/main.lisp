@@ -842,7 +842,7 @@ This allows for the user to specify their own handlers as a string."
     (add-features features)
     (add-default-features compilation-mode safety)
 
-    (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
+    (map () (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 
@@ -852,18 +852,18 @@ This allows for the user to specify their own handlers as a string."
 
     (process-dependencies deps)
     ;; Load in any source hash information files.
-    (mapc #'process-file* hashes)
+    (map () #'process-file* hashes)
 
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
     (verbose "Loading ~D source file~:P..." (length load))
-      (mapc #'process-file* load)
+      (map () #'process-file* load)
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
-      (mapc #'process-file* srcs)
+      (map () #'process-file* srcs)
       (verbose "Processing ~D deferred warning file~:P..." (length warnings))
-      (mapc #'process-file* warnings)
+      (map () #'process-file* warnings)
       (verbose "Finalizing the ~A action..." command)
       (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
       (finish-action action command))
