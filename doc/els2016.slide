@@ -19,7 +19,7 @@
     (make-color 219 50 54))
   (define GBlue
     (make-color 72 133 237))
-  
+
   (define (google)
     (hc-append
     (c "G" GBlue)
@@ -28,7 +28,7 @@
     (c "g" GBlue)
     (c "l" GGreen)
     (c "e" GRed)))
-  
+
   (slide ; 1
    (titlet "Building Lisp using Google's Bazel")
    (blank)
@@ -43,7 +43,7 @@
     (t "      Andrzej Walczak,")
     (hc-append
      (t "         @") (google))))
-    
+
   (slide/title ; 2
    "What is Bazel and why it is interesting?"
    (i "Google's answer to Make files that scales...")
@@ -135,18 +135,18 @@
    ;; you have to call it MD5-v2, MD5-v3, ...
    (i "One Bazel build per client.")
    )
-  
+
   (slide/title/center
     "Installation"
     (vl-append
      (* 4 line-sep)
-     (tt "> # install java-8, SBCL, download bazel-installer") 
+     (tt "> # install java-8, SBCL, download bazel-installer")
      (tt "> bash bazel-0.2.2-installer-linux-x86_64.sh --user")
      (tt "> export PATH=~/bin:$PATH")
      (tt "> git clone https://github.com/qitab/bazelisp.git")
      (tt "> cd bazelisp ; bazel info")))
 
- (slide/title/center 
+ (slide/title/center
   "The WORKSPACE file"
 
   (colorize
@@ -161,12 +161,12 @@
     (tt "  \"/usr/\")"))
    "darkblue"))
 
- (slide/title/center 
+ (slide/title/center
   "The First Build"
-  
+
   (tt "> bazel run hello"))
 
- (slide/title/center 
+ (slide/title/center
    "Lisp BUILD Rules: lisp_library"
    (vl-append
    (colorize (tt "# Access the Lisp BUILD rules' definitions.") "brown")
@@ -201,7 +201,7 @@
    "Linking Action"
    (size-in-pixels (bitmap "doc/LinkAction.png")))
 
- (slide/title/center 
+ (slide/title/center
   "Profiling the Build"
   (tt "> bazel build --profile hello.prof hello")
   (blank)
@@ -210,7 +210,7 @@
    (colorize (tt " --html ") "darkgreen")
    (tt "hello.prof")))
 
- (slide/title/center 
+ (slide/title/center
   "The Failing Build"
 
   'alts
@@ -232,7 +232,7 @@
            (colorize (tt " --define=VERBOSE_LISP_BUILD=2") "darkgreen")
            (tt " hello")))))
 
- (slide/title/center 
+ (slide/title/center
   "Future Work"
   (i "REPL - accessing Bazel, loading libraries, reloading.")
   (i "SBCL core as a linkable ELF object (by Stelian).")
@@ -240,11 +240,11 @@
   (si "precompile generics.")
   (si "libsbcl.a - use of binary SBCL distribution.")
   (i "More Lisp implementations / platforms."))
-  
+
  (require slideshow/text)
- (slide/title/center 
+ (slide/title/center
   "Thank You for Attention"
   (with-scale 1.2 (t "Questions?")))
- 
+
 ;; Module end
 )
