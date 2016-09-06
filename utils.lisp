@@ -5,6 +5,7 @@
   (:use #:cl)
   (:export #:octet
            #:octets
+           #:simple-octets
            #:nconcf
            #:prefixp
            #:strip-prefix
@@ -24,6 +25,7 @@
 
 (deftype octet () '(unsigned-byte 8))
 (deftype octets () '(vector octet))
+(deftype simple-octets () '(and octets simple-array))
 
 (define-modify-macro nconcf (&rest lists) nconc
   "Helper macro doing an nconc and setf to the first argument.")
