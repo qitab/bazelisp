@@ -61,6 +61,7 @@ _lisp_common_attrs = {
         allow_files=True,
         single_file=True,
         executable=True,
+        cfg = "data",
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
     # For testing coverage.
@@ -434,6 +435,7 @@ _combine_lisp_binary_attrs = {
     "core": attr.label(providers=["image", "runtime_data"]),
     "_combine": attr.label(
         executable=True,
+        cfg = "data",
         allow_files=True,
         single_file=True,
         # TODO(czak): Need to provide a proper path.
@@ -520,6 +522,7 @@ _dump_lisp_deps = rule(
             allow_files=True,
             single_file=True,
             executable=True,
+            cfg = "data",
             default=Label(BAZEL_LISP)),
         },
     outputs = {"deps": "%{library_name}.deps"},
