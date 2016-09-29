@@ -521,12 +521,28 @@ This allows for the user to specify their own handlers as a string."
                  (*current-source-file* name)
                  (*readtable* readtable)
                  (*print-readably* nil)
-                 (*print-circle* t))
+                 (*print-circle* t)
+                 (*action* action))
             (set-compilation-mode load-mode)
-            (if muffle-warnings
-                (with-all-warnings-muffled
-                  (load (or fasl name) :external-format :utf-8))
-                (load (or fasl name) :external-format :utf-8))))))))
+            (cond (muffle-warnings
+                   (with-all-warnings-muffled
+                     ;; TODO(czak): use bazel.warning:redefine-warning.
+                     ;;   For this we need to know the NOWARN info
+                     ;;   for each package.
+                     (handler-bind (((or bazel.warning:redefined-function
+                                         bazel.warning:redefined-macro
+                                         ;; bazel.warning:changed-ftype-proclamation
+                                         bazel.warning:conflicting-ftype-declaration
+                                         ;; TODO(czak): someone fix cl-pb.
+                                         ;; bazel.warning:redefined-generic
+                                         ;; bazel.warning:redefined-method
+                                         bazel.warning:redefined-package
+                                         bazel.warning:inline-used-before-definition
+                                         bazel.warning:compiler-macro-after-function-use)
+                                     #'handle-warning))
+                       (load (or fasl name) :external-format :utf-8))))
+                  (t
+                   (load (or fasl name) :external-format :utf-8)))))))))
 
 ;;;
 ;;; Main compile/build loop
@@ -619,7 +635,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defmethod process-file ((action action) (file string) (type (eql :fasl)))
   "Loads a FASL file."
-  (load-file file :action action :load-mode (action-fasl-load-mode action)))
+  (load-file file :fasl file :action action :load-mode (action-fasl-load-mode action)))
 
 (defmethod process-file ((action action) (file string) (type (eql :cfasl)))
   "Loads a CFASL file. Those are dependencies only loaded when compiling or building a binary."
@@ -652,7 +668,7 @@ This allows for the user to specify their own handlers as a string."
   (verbose "Processing ~D dependencie~:P..." (length deps))
   (with-all-warnings-muffled
     (with-compilation-unit ()
-      (mapc #'process-file* deps)))
+      (map () #'process-file* deps)))
   (values))
 
 ;;;
