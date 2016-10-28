@@ -19,7 +19,7 @@ filegroup(
 )
 
 # TODO(czak): This needs to be set to some path reachable from Bazel.
-SBCL = "//third_party/lisp/sbcl/k8:sbcl"
+SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
 
 genrule(
     name = "make-bazel",

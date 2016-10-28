@@ -31,7 +31,7 @@ BAZEL_LISP = "//:bazel"
 BAZEL_LISP_MAIN = "bazel.main::main"
 
 # TODO(czak): Provide an appropriate path to k8 here.
-SBCL_DISTRIBUTION = "//third_party/lisp/sbcl/k8"
+SBCL_DISTRIBUTION = "//third_party/lisp/sbcl/binary-distribution/k8"
 
 lisp_files = [".lisp", ".lsp"]
 
