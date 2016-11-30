@@ -160,7 +160,7 @@ def _default_flags(ctx, trans, verbose_level):
   flags = [
       "--compilation-mode",
       ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
-      "--gendir", ctx.configuration.genfiles_dir.path,
+      "--gendir", ctx.genfiles_dir.path,
       "--features", " ".join(list(trans.features))]
 
   if (ctx.configuration.coverage_enabled or
