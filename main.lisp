@@ -879,6 +879,9 @@ This allows for the user to specify their own handlers as a string."
     (add-default-features compilation-mode safety)
 
     (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
+
+    ;; must precede uninteresting-condition
+    (action-add-nowarn #'bazel.warning:fail-inline-expansion-limit)
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 

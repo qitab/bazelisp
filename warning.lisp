@@ -28,7 +28,8 @@
            #:implicit-generic
            #:uninteresting-condition
            #:show-notes
-           #:show-stack-allocate-notes))
+           #:show-stack-allocate-notes
+           #:fail-inline-expansion-limit))
 
 (cl:in-package #:bazel.warning)
 
@@ -255,3 +256,21 @@ The conditions muffled here are the minimal/uncontroversial set."
 (deftype uninteresting-condition ()
   "Type of the least interesting compiler warnings and notes."
   '(and condition (satisfies uninteresting-condition-p)))
+
+(defun inline-expansion-limit-p (note)
+  "True if NOTE is an inline expansion limit note."
+  #+sbcl
+  (and (typep note 'sb-int:simple-compiler-note)
+       (search "*INLINE-EXPANSION-LIMIT*"
+               (simple-condition-format-control note))))
+
+(deftype inline-expansion-limit ()
+  "A note of inline-expansion-limit reached."
+  `(and #+sbcl sb-int:simple-compiler-note
+        #-sbcl condition
+        (satisfies inline-expansion-limit-p)))
+
+(defun fail-inline-expansion-limit (note)
+  "Fail if the inline expansion limit is exceeded."
+  (when (typep note 'inline-expansion-limit)
+    :fail))
