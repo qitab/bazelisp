@@ -1,6 +1,6 @@
 # Description: SBCL 1.x binary + source
 
-VERSION="1.3.4" # Be sure to match your source code repository.
+VERSION="1.3.12.98.linkable.1-49392c0" # Be sure to match your source code repository.
 DEBUG_BUILD_SBCL=""
 
 # Returns a list of sbcl contrib files, all under lib/sbcl/contrib.
@@ -56,6 +56,9 @@ genrule(
         "@lisp__sbcl_binary_distribution//:sbcl",
         "@lisp__sbcl_binary_distribution//:sbcl-lib",
     ] + glob(["**"]),
+    tools = [
+        "@local_config_cc//:toolchain",
+    ],
     outs = contribs_targets + [
         "lib/sbcl/libsbcl.a",
         "bin/sbcl",

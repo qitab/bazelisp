@@ -9,6 +9,68 @@
 #     such that bin/sbcl and lib/sbcl/ are under that base directory.
 #
 
+def auto_configure_fail(msg):
+  """Output failure message when auto configuration fails."""
+  red = "\033[0;31m"
+  no_color = "\033[0m"
+  fail("\n%sAuto-Configuration Error:%s %s\n" % (red, no_color, msg))
+
+
+def _execute(repository_ctx, command, environment = None):
+  """Execute a command, return stdout if succeed and throw an error if it fails."""
+  if environment:
+    result = repository_ctx.execute(command, environment = environment)
+  else:
+    result = repository_ctx.execute(command)
+  if result.stderr:
+    auto_configure_fail(result.stderr)
+  else:
+    return result.stdout.strip()
+
+
+def _get_os(repository_ctx):
+  """Compute the architecture based on the OS name."""
+  return _execute(repository_ctx, ["uname", "-s"]).lower()
+
+
+def _get_cpu(repository_ctx):
+  """Compute the CPU architecture based on the uname results."""
+  # Use uname to figure out whether we are on x86_32 or x86_64
+  m = _execute(repository_ctx, ["uname", "-m"])
+  if m in ["amd64", "x86_64", "x64"]:
+    return "x86-64"
+  if m in ["x86", "i386", "i686"]:
+    return "x86"
+  if m in ["power", "ppc64le", "ppc"]:
+    return "ppc"
+  return "unknown"
+
+
+def _get_params(repository_ctx):
+  """Return the content for the CROSSTOOL file, in a dictionary."""
+  return {
+      "%{cpu}": _get_cpu(repository_ctx),
+      "%{os}": _get_os(repository_ctx)
+  }
+
+
+def _impl(repository_ctx):
+  params = _get_params(repository_ctx)
+  repository_ctx.file("BUILD")
+  repository_ctx.template(
+    "config.bzl",
+    Label("@lisp__bazel//:build_defs/local_config_lisp.config.bzl.tpl"),
+    params)
+
+
+lisp_autoconf = repository_rule(implementation=_impl, local=True)
+
+
+def lisp_configure():
+  """configuration rules that generate the local_config_lisp external repo."""
+  lisp_autoconf(name="local_config_lisp")
+
+
 def lisp_repositories (base_dir, sbcl_binary_distribution):
   native.local_repository(
       name = "lisp__bazel",
@@ -390,3 +452,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
       remote = "https://gitlab.common-lisp.net/frideau/workout-timer.git",
       build_file = base_dir + "/build_defs/lisp__workout_timer.BUILD"
   )
+
+  lisp_configure()
+
+

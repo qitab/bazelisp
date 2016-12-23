@@ -50,6 +50,10 @@ overridden for any target by defining LISP_COMPILATION_MODE.  E.g.
 bazel (build|run|test) -c opt --define LISP_COMPILATION_MODE=dbg //target
 """
 
+load("@local_config_lisp//:config.bzl",
+     "config_cpu",
+     "config_os")
+
 load("@lisp__bazel//:bazel/provider.bzl",
      "transitive_deps",
      "extend_lisp_provider")
