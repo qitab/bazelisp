@@ -328,11 +328,9 @@
 (defun set-interpret-mode (compile-mode)
   "Set the mode of eval to :interpret if COMPILE-MODE is :LOAD. Otherwise, set it to :COMPILE."
   (declare (optimize (speed 1) (safety 3) (compilation-speed 1) (debug 1)))
-  (if (eq compile-mode :load)
-      (handler-case (set 'sb-ext:*evaluator-mode* :fast-interpret)
-        (type-error () (setq sb-ext:*evaluator-mode* :interpret)))
-      (setf sb-ext:*evaluator-mode* :compile))
-  (bazel.log:vv "Set interpret mode to: ~A"  sb-ext:*evaluator-mode*)
+  (setf sb-ext:*evaluator-mode*
+        (if (eq compile-mode :load) :interpret :compile))
+  (bazel.log:vv "Set interpret mode to: ~A" sb-ext:*evaluator-mode*)
   sb-ext:*evaluator-mode*)
 
 (defun set-interactive-mode (&optional (interactive-p t))

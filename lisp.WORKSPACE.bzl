@@ -31,8 +31,10 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__sbcl",
-      commit = "b911cdc2080a7a16d5537d959728f0c250fa3f4e",
-      remote = "git://git.code.sourceforge.net/p/sbcl/sbcl",
+      # Until this patch makes it to official SBCL, if it does...
+      commit = "49392c050b5684e4e37d940bfe9124e5beb9c5a3",
+      remote = "https://github.com/fare/sbcl.git",
+      #remote = "git://git.code.sourceforge.net/p/sbcl/sbcl",
       build_file = base_dir + "/build_defs/lisp__sbcl.BUILD"
   )
 
@@ -48,7 +50,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__asdf",
-      commit = "03df017f1cf4cb1737577d62d56e207fb77320a4",
+      commit = "26d8ee1d07d4fb4dce218909c3e36c4ea06b6d6b", # 3.1.7
       remote = "https://gitlab.common-lisp.net/asdf/asdf.git",
       build_file = base_dir + "/build_defs/lisp__asdf.BUILD"
   )
@@ -120,7 +122,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__cl_launch",
-      commit = "1698221a6ff49126d4f023d1d260f6f8c1cb41bf",
+      commit = "1698221a6ff49126d4f023d1d260f6f8c1cb41bf", # 4.1.5
       remote = "https://gitlab.common-lisp.net/xcvb/cl-launch.git",
       build_file = base_dir + "/build_defs/lisp__cl_launch.BUILD"
   )

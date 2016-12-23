@@ -82,7 +82,7 @@ _lisp_common_attrs = {
     # runtime data - is data available at runtime.
     "data": attr.label_list(
         allow_files=True,
-        cfg = DATA_CFG),
+        cfg = "data"),
     # compile data - is data available at compile and load time.
     "compile_data": attr.label_list(
         allow_files=True),
@@ -93,6 +93,7 @@ _lisp_common_attrs = {
         allow_files=True,
         single_file=True,
         executable=True,
+        cfg="host",
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
     # Internal, for testing coverage.
@@ -275,7 +276,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
   warnings = []
   hashes = []
   for src in srcs:
-    stem = _lisp_file_stem(src.short_path)
+    stem = _lisp_file_stem(src.path)
     file_flags = flags
     outs = [ctx.new_file(stem + e) for e in ["~.fasl", "~.hash", "~.warnings"]]
     fasls    += [outs[0]]
@@ -435,11 +436,12 @@ _lisp_binary = rule(
 
 # Attributes used by _combine_lisp_* rules.
 _combine_lisp_binary_attrs = {
-    "data": attr.label_list(cfg=DATA_CFG, allow_files=True),
+    "data": attr.label_list(cfg="data", allow_files=True),
     "runtime": attr.label(allow_files = True, single_file = True),
     "core": attr.label(providers=["image", "runtime_data"]),
     "_combine": attr.label(
         executable=True,
+        cfg="host",
         allow_files=True,
         single_file=True,
         # TODO(czak): Need to provide a proper path.
@@ -514,6 +516,7 @@ _dump_lisp_deps = rule(
             allow_files=True,
             single_file=True,
             executable=True,
+            cfg="host",
             default=Label(BAZEL_LISP)),
         },
     outputs = {"deps": "%{library_name}.deps"},

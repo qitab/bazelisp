@@ -2,6 +2,9 @@
 
 # Builds SBCL when called from a genrule.
 
+# TODO: Make sure that the branch this uses gets merged upstream.
+# See https://bugs.launchpad.net/sbcl/+bug/1500628
+
 cc=$1
 cflags=$2
 libz=$3
@@ -83,24 +86,13 @@ cat <<EOF > customize-target-features.lisp
     (disable :sb-eval)
     (enable :sb-thread)
     (enable :sb-core-compression)
-    ;; Make core file not depend on exact runtime addresses
-    ;; -- allows relinking runtime.
+    ;; Make core file not depend on exact runtime addresses,
+    ;; and allow relinking runtime.
     (enable :sb-dynamic-core)
+    (enable :sb-linkable-runtime)
     features))
 EOF
 
-# TODO: upstream that patch or something equivalent to SBCL.
-# See https://bugs.launchpad.net/sbcl/+bug/1500628
-( sed -e \
-  's/FLAGS\s*=/FLAGS +=/g ;
-   s/NM\s*=/NM +=/g' < src/runtime/GNUmakefile
-  echo 'sbcl.o: $(OBJS)' ;
-  echo '	ld -r -o $@ $^'
-  echo 'libsbcl.a: sbcl.o' ;
-  echo '	rm -f $@ ; ar rcs $@ $^'
-) >> src/runtime/Makefile
-rm -f src/runtime/GNUmakefile
-mv src/runtime/Makefile src/runtime/GNUmakefile
 
 CC=$cc \
 CFLAGS=$cflags \
@@ -118,8 +110,7 @@ echo "Calling install.sh"
 # But we don't care.
 sh ./install.sh
 
-# Also make a static library, and copy it over.
+# Also make a static library, and copy it over, in case sbcl prefered a sbcl.o
 echo "Calling make -C src/runtime libsbcl.a"
-make -C src/runtime libsbcl.a sbcl.o
+make -C src/runtime libsbcl.a
 cp src/runtime/libsbcl.a $prefix/lib/sbcl/
-cp src/runtime/sbcl.o $prefix/lib/sbcl/

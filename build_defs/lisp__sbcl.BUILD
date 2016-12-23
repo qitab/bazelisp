@@ -58,7 +58,6 @@ genrule(
     ] + glob(["**"]),
     outs = contribs_targets + [
         "lib/sbcl/libsbcl.a",
-        "lib/sbcl/sbcl.o",
         "bin/sbcl",
         "lib/sbcl/sbcl.core",
     ],
@@ -87,8 +86,8 @@ filegroup(
 )
 
 filegroup(
-     name = "sbcl.o",
-     srcs = [":lib/sbcl/sbcl.o"],
+     name = "libsbcl.a",
+     srcs = [":lib/sbcl/libsbcl.a"],
      visibility = ["//visibility:public"],
 )
 
@@ -97,7 +96,7 @@ filegroup(
 # not everything.
 genrule(
     name = "libsbcl-exported-symbols",
-    srcs = ["lib/sbcl/sbcl.o"],
+    srcs = ["lib/sbcl/libsbcl.a"],
     outs = ["libsbcl-exported-symbols.lds"],
     cmd = "nm -gp $< | " +
           "awk 'BEGIN {print \"{\"; } " +
@@ -109,16 +108,16 @@ genrule(
 
 cc_library(
     name = "libsbcl",
-    srcs = ["lib/sbcl/sbcl.o"],
+    srcs = ["lib/sbcl/libsbcl.a"],
     linkopts = [
         # As it's difficult/impossible to tell blaze to include the
         # whole of a pre-built .a archive, I'll just mention some
         # symbols, as necessary, to ensure all necessary "unused" .o
         # files from the libsbcl.a archive actually do get included:
-        "-Wl,-u", "-Wl,uid_username",  # wrap.o
-        "-Wl,-u", "-Wl,lseek_largefile",  # largefile.o
-        "-Wl,-u", "-Wl,get_timezone",  # time.o
-        "-Wl,-u", "-Wl,spawn",  # run-program.o
+        "-Wl,-u,uid_username",  # wrap.o
+        "-Wl,-u,lseek_largefile",  # largefile.o
+        "-Wl,-u,get_timezone",  # time.o
+        "-Wl,-u,spawn",  # run-program.o
         "-ldl",
         "-lpthread",
         "-lm",
