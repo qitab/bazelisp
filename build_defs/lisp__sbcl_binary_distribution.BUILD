@@ -14,10 +14,25 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+load("@lisp__bazel//:bazel/rules.bzl", "ld_use_symbol")
+
 cc_library(
     name = "libsbcl",
     srcs = ["lib/sbcl/libsbcl.a"],
     visibility = ["//visibility:public"],
+    linkopts = [
+        ld_use_symbol("uid_username"), # wrap.o
+        ld_use_symbol("lseek_largefile"),  # largefile.o
+        ld_use_symbol("get_timezone"),  # time.o
+        ld_use_symbol("spawn"),  # run-program.o
+        "-ldl",
+        "-lpthread",
+        "-lm",
+    ],
+    linkstatic = 1,
+    deps = [
+        "@c__zlib//:zlib",
+    ],
 )
 
 genrule(

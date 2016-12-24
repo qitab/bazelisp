@@ -101,7 +101,7 @@ EXTRA_CFLAGS=$cflags \
 LINKFLAGS=$cflags \
 PATH=$tempdir/sbcl/bin:$PATH \
 SBCL_HOME=$tempdir/sbcl/lib/sbcl \
-./make.sh --prefix=$prefix --dynamic-space-size=16Gb
+./make.sh --prefix=$prefix --dynamic-space-size=1GB
 
 echo "Calling install.sh"
 # BIG FAT WARNING: There are spurious "No such file or directory" messages

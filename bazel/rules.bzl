@@ -505,6 +505,16 @@ def _dump_lisp_deps_impl(ctx):
           "\n".join(["feature: " + f for f in trans.features] +
                     ["src: " + f.path for f in trans.srcs])))
 
+
+# linkopts entry to force use of a symbol, so the .o that has the symbol
+# won't be omitted when linking the containing .a into a cc_binary
+# This function is used by lisp__sbcl.BUILD
+def ld_use_symbol(sym):
+  return "-Wl,-u,%s%s" % (
+    "_" if config_os == "darwin" else "",
+    sym)
+
+
 # Internal rule that creates a Lisp library DEPS file.
 # DEPS file is used to list all the Lisp sources for a target.
 # It is a quick hack to make (bazel:load ...) work.
@@ -683,10 +693,14 @@ def lisp_binary(name,
           # Ensure that symbols needed by lisp code (which grabs them
           # via dlsym at runtime) are exported in the dynamic symbol
           # table.
-          "-Wl,--dynamic-list", core_dynamic_list_lds,
-          #"-lc", "-ldl", "-lpthread", "-lm"
-      ],
-      srcs = [core_extern_symbols, core_lisp_symbols],
+      ] + (
+        ["-Wl,-pagezero_size,0x100000",
+         "-dynamic", "-twolevel_namespace", "-bind_at_load"
+        ] if config_os == "darwin" else
+        ["-Wl,--dynamic-list", core_dynamic_list_lds
+        ] if config_os == "linux" else
+        []),
+      srcs = [core_extern_symbols, core_lisp_symbols] if config_os == "linux" else [],
       deps = deps_rt,
       visibility = ["//visibility:private"],
       stamp = stamp,
@@ -938,3 +952,4 @@ def lisp_library(name,
       lisp_features = features,
       image = image,
       visibility = ["//visibility:private"])
+

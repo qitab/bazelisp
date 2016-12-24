@@ -11,7 +11,7 @@
 #
 licenses(["unencumbered"])  # MIT
 
-exports_files(glob(["**"], [".git/**"]))
+exports_files(glob(["**"], exclude=[".git/**"]))
 
 load("@lisp__bazel//:bazel/rules.bzl", "lisp_binary", "lisp_library", "lisp_test")
 
@@ -81,6 +81,6 @@ genrule(
 
 filegroup(
     name = "all-files",
-    srcs = glob(["**"], [".git/**"]),
+    srcs = glob(["**"], exclude=[".git/**"]),
     visibility = ["//visibility:public"],
 )

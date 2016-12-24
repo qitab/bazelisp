@@ -215,6 +215,7 @@
                (dump-code-component-symbols obj))))
       (sb-vm::map-allocated-objects #'dump-code-component :dynamic))))
 
+;; TODO: make it work with clang as well as GNU binutils.
 (dump-symtable)
 ;; Magic declaration to tell the assembler we don't need an executable stack.
 (format t ".section .note.GNU-stack,\"\",@progbits~%")

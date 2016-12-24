@@ -40,10 +40,10 @@ Many systems use ASDF extensions or wrappers
 with no current equivalent for Bazel, for which you may have to write
 corresponding Bazel extensions or source code tweaks.
 
-Currently, Bazel only supports SBCL, only on x86-64, only using Linux.
+Currently, Bazel only supports SBCL, only on x86-64, only using Linux or macOS.
 Supporting other operating systems is not conceptually difficult,
 but will require work.
-Bazel and SBCL both notably already run on macOS and Windows,
+Bazel and SBCL both notably already run on Windows,
 and both provide infrastructure for conditional compilation,
 so it's "just" a matter of gluing things together.
 Supporting other implementations and/or other architectures

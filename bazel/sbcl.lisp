@@ -314,6 +314,7 @@
 
 (defun dump-extern-symbols (output-file)
   "Dumps alien symbols as extern symbols to the OUTPUT-FILE in assembler code."
+  ;; TODO: make it work with clang as well as GNU binutils.
   (with-open-file (out output-file :direction :output :if-exists :supersede)
     (format out ".section .note.GNU-stack,\"\",@progbits~%~
                  .section rodata~%~

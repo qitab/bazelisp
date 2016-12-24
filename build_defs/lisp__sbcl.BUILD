@@ -109,6 +109,8 @@ genrule(
     visibility = ["//visibility:public"],
 )
 
+load("@lisp__bazel//:bazel/rules.bzl", "ld_use_symbol")
+
 cc_library(
     name = "libsbcl",
     srcs = ["lib/sbcl/libsbcl.a"],
@@ -117,10 +119,10 @@ cc_library(
         # whole of a pre-built .a archive, I'll just mention some
         # symbols, as necessary, to ensure all necessary "unused" .o
         # files from the libsbcl.a archive actually do get included:
-        "-Wl,-u,uid_username",  # wrap.o
-        "-Wl,-u,lseek_largefile",  # largefile.o
-        "-Wl,-u,get_timezone",  # time.o
-        "-Wl,-u,spawn",  # run-program.o
+        ld_use_symbol("uid_username"), # wrap.o
+        ld_use_symbol("lseek_largefile"),  # largefile.o
+        ld_use_symbol("get_timezone"),  # time.o
+        ld_use_symbol("spawn"),  # run-program.o
         "-ldl",
         "-lpthread",
         "-lm",
