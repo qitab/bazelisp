@@ -697,7 +697,8 @@ def lisp_binary(name,
         ["-Wl,-pagezero_size,0x100000",
          "-dynamic", "-twolevel_namespace", "-bind_at_load"
         ] if config_os == "darwin" else
-        ["-Wl,--dynamic-list", core_dynamic_list_lds
+        ["-Wl,--export-dynamic",
+         "-Wl,--dynamic-list", core_dynamic_list_lds
         ] if config_os == "linux" else
         []),
       srcs = [core_extern_symbols, core_lisp_symbols] if config_os == "linux" else [],

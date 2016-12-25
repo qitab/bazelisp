@@ -21,7 +21,7 @@ cc_library(
     # This is ugly, but we need it, for now :-/
     linkopts = [ld_use_symbol("hello_string")],
     srcs = [
-        "chello.c",
+        "chello_lib.c",
     ],
 )
 
