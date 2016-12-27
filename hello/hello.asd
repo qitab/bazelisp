@@ -12,7 +12,7 @@
   :class program-system
   :entry-point "chello:main"
   :defsystem-depends-on (:cffi-toolchain)
-  :depends-on (:cffi)
+  :depends-on (:cffi-toolchain)
   :serial t
   :components
   ((:c-file "chello_lib")
