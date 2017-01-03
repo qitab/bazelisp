@@ -163,7 +163,7 @@ def _default_flags(ctx, trans, verbose_level):
       "--gendir", ctx.genfiles_dir.path,
       "--features", " ".join(list(trans.features))]
 
-  if (ctx.configuration.coverage_enabled or
+  if (ctx.coverage_instrumented() or
       (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
     flags += ["--coverage"]
 
