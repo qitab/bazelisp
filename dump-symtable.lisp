@@ -209,10 +209,12 @@
   "Dump all code-components found by walking the image-backed part of the dynamic space."
   (let ((*used-names* (make-hash-table :test #'equal)))
     (flet ((dump-code-component (obj type size) (declare (ignore size))
-             (when (and (< (sb-kernel:get-lisp-obj-address obj) *dynamic-space-image-end*)
+             (when (and #-immobile-code (< (sb-kernel:get-lisp-obj-address obj)
+                                           *dynamic-space-image-end*)
                         (eql type sb-vm:code-header-widetag))
                (dump-code-component-symbols obj))))
-      (sb-vm::map-allocated-objects #'dump-code-component :dynamic))))
+      (sb-vm::map-allocated-objects #'dump-code-component
+                                    (or #+immobile-code :immobile :dynamic)))))
 
 (dump-symtable)
 ;; Magic declaration to tell the assembler we don't need an executable stack.
