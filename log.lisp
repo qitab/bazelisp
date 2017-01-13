@@ -53,7 +53,7 @@
                      *standard-output*
                      *error-output*)))
         (if (ttyp out)
-            (format out "~&~c[~Dm~W~c[0m: ~?~%"
+            (format out "~&~c[~Dm~A~c[0m: ~?~%"
                     #\ESC (ansi-code severity) severity #\ESC control args)
             (format out "~&~A: ~?~%" severity control args))))))
 
