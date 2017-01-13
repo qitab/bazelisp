@@ -8,7 +8,11 @@
 #-dbg (declaim (optimize (speed 3) (safety 1)))
 
 (defpackage #:bazel.main
-  (:use #:common-lisp #+sbcl #:bazel.sbcl #:bazel.log #:bazel.utils)
+  (:use #:common-lisp #+sbcl #:bazel.sbcl #:bazel.utils)
+  (:import-from #:bazel.log
+                #:verbose #:vv #:vvv #:*verbose*
+                #:info #:message #:fatal
+                #:fatal-error #:non-fatal-error)
   (:export #:save-binary
            ;; Main entry point for blaze-lisp
            #:main
