@@ -334,7 +334,7 @@ This allows for the user to specify their own handlers as a string."
 
 (defun handle-error (error)
   "Print an info about the ERROR context."
-  (info "Error while processing: ~S '~A'" *current-source-file* error))
+  (bazel.log:error "~S while processing: ~S '~A'" (type-of error) *current-source-file* error))
 
 (defun muffle-all-warnings (condition &optional (action *action*))
   "Muffle all warnings for the CONDITION. The ACTION muffled counters are incremented."
