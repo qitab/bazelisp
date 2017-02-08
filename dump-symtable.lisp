@@ -166,7 +166,8 @@
   it. A code component is, roughly, one toplevel defun, and it can have multiple functions
   if there are local functions within."
   (let ((info (sb-kernel:%code-debug-info code)))
-    (unless info (return-from dump-code-component-symbols nil))
+    (unless (typep info 'sb-c::compiled-debug-info)
+      (return-from dump-code-component-symbols nil))
 
     (let* ((code-header-len (* (sb-kernel:get-header-data code) sb-vm:n-word-bytes))
            (pc-offset (+ (- (sb-kernel:get-lisp-obj-address code)
