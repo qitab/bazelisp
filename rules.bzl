@@ -461,8 +461,9 @@ def _combine_core_and_runtime(ctx):
                    "--verbose", ctx.var.get("VERBOSE_LISP_BUILD", "0")],
       executable = ctx.executable._combine)
 
+  # TODO: use a uniq() function instead of set(...).to_list() when it's available
   runfiles = ctx.runfiles(
-      files = sorted(set(ctx.files.data) + ctx.attr.core.runtime_data))
+      files = (set(ctx.files.data) + ctx.attr.core.runtime_data).to_list())
 
   instrumented_files = struct(
       source_attributes = ["instrumented_srcs"],
