@@ -27,6 +27,7 @@
            #:complex-lexical-environment
            #:implicit-generic
            #:uninteresting-condition
+           #:deprecation
            #:show-notes
            #:show-stack-allocate-notes
            #:fail-inline-expansion-limit))
@@ -274,3 +275,12 @@ The conditions muffled here are the minimal/uncontroversial set."
   "Fail if the inline expansion limit is exceeded."
   (when (typep note 'inline-expansion-limit)
     :fail))
+
+(defun deprecation-condition-p (c)
+  "True if C is a condition informing about deprecated features."
+  #-sbcl nil
+  #+sbcl (typep c 'sb-ext:deprecation-condition))
+
+(deftype deprecation ()
+  "Type of warning about deprecated code."
+  '(and warning (satisfies deprecation-condition-p)))

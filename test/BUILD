@@ -66,6 +66,7 @@ lisp_library(
     name = "lib2",
     srcs = ["test.lisp"],
     nowarn = [
+        "deprecation",
         "optional-and-key",
         "implicit-generic",
     ],
