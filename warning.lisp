@@ -10,6 +10,7 @@
            #:undefined-function-p
            #:undefined-function-warning
            #:inline-used-before-definition
+           #:inlining-notinline
            #:compiler-macro-after-function-use
            #:redefined-macro
            #:redefined-function
@@ -73,6 +74,7 @@ This returns two values: a boolean and a name symbol of the function."
 
 (defun inline-used-before-definition-p (warning)
   "True if WARNING is a warning about an early use of function declared inline later."
+  #-sbcl nil
   #+sbcl
   (when (typep warning '(and warning simple-condition))
     (let ((control (simple-condition-format-control warning)))
@@ -82,8 +84,19 @@ This returns two values: a boolean and a name symbol of the function."
   "Type of warning for early use of functions with inline or compiler-macro optimizations."
   '(and warning (satisfies inline-used-before-definition-p)))
 
+(defun inlining-notinline-p (warning)
+  "True if WARNING is about an attempt to inline a notinline function."
+  #-sbcl nil
+  #+sbcl
+  (typep warning 'sb-c:inlining-dependency-failure))
+
+(deftype inlining-notinline ()
+  "Type of warning when trying to inline a notinline function."
+  '(and warning (satisfies inlining-notinline-p)))
+
 (defun compiler-macro-after-function-use-p (warning)
   "True for a WARNING about a function used before the compiler-macro was defined."
+  #-sbcl nil
   #+sbcl
   (when (typep warning '(and warning simple-condition))
     (let ((control (simple-condition-format-control warning)))
