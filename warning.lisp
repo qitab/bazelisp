@@ -291,8 +291,12 @@ The conditions muffled here are the minimal/uncontroversial set."
 
 (defun deprecation-condition-p (c)
   "True if C is a condition informing about deprecated features."
-  #-sbcl nil
-  #+sbcl (typep c 'sb-ext:deprecation-condition))
+  (typecase c
+    #+sbcl
+    (sb-ext:deprecation-condition t)
+    (simple-warning
+     (search "deprecated" (simple-condition-format-control c)
+             :test #'char-equal))))
 
 (deftype deprecation ()
   "Type of warning about deprecated code."
