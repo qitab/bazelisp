@@ -31,8 +31,8 @@ src=$(dirname $src_file)
 # We build inside a temporary dir because otherwise, if you run this genrule
 # locally, you'll get junk left behind in your g4 client.
 
-# When running a genrule in a container, you may wind up inside a symlink tree that
-# looks like your original input tree, with the links pointing inside
+# When running a genrule in a container, you may wind up inside a symlink tree
+# that looks like your original input tree, with the links pointing inside
 # content-addressed storage (e.g. @lisp__sbcl//:make.sh may be a
 # symlink pointing to /build/cas/c89/c895571cd4c419db000bc0fe101662ac).  This
 # is all fine and good -- except that both SBCL itself as well as ASDF expect

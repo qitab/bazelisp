@@ -1,6 +1,6 @@
 # Description: SBCL 1.x binary + source
 
-VERSION="1.3.12.98.linkable.1-49392c0" # Be sure to match your source code repository.
+VERSION="sbcl-1.3.15" # Be sure to match `git describe --tags` in your source code repository.
 DEBUG_BUILD_SBCL=""
 
 # Returns a list of sbcl contrib files, all under lib/sbcl/contrib.
@@ -16,6 +16,7 @@ CONTRIBS = [
     "sb-grovel",
     "sb-introspect",
     "sb-md5",
+    # "sb-mpfr", # this would require linking in one more library.
     "sb-posix",
     "sb-queue",
     "sb-rotate-byte",

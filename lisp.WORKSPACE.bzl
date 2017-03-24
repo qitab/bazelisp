@@ -85,18 +85,16 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_http_archive(
       name = "c__zlib",
-      url = "http://zlib.net/zlib-1.2.8.tar.gz",
-      sha256 = "36658cb768a54c1d4dec43c3116c27ed893e88b02ecfcb44f2166f9c0b7f2a0d",
-      strip_prefix = "zlib-1.2.8",
+      url = "http://zlib.net/zlib-1.2.11.tar.gz",
+      sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
+      strip_prefix = "zlib-1.2.11",
       build_file = base_dir + "/build_defs/c__zlib.BUILD",
   )
 
   native.new_git_repository(
       name = "lisp__sbcl",
-      # Until this patch makes it to official SBCL, if it does...
-      commit = "49392c050b5684e4e37d940bfe9124e5beb9c5a3",
-      remote = "https://github.com/fare/sbcl.git",
-      #remote = "git://git.code.sourceforge.net/p/sbcl/sbcl",
+      commit = "00b6786847b4407214a0dc8d55d12ed8b61bf074", # sbcl-1.3.15
+      remote = "git://git.code.sourceforge.net/p/sbcl/sbcl",
       build_file = base_dir + "/build_defs/lisp__sbcl.BUILD"
   )
 
@@ -105,14 +103,14 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__alexandria",
-      commit = "5a17c072970cf50213f7f896c40e6e640638391f",
+      commit = "85f82ed88d5fa6e63026038dbb1dad0d6cd5dafe",
       remote = "https://gitlab.common-lisp.net/alexandria/alexandria.git",
       build_file = base_dir + "/build_defs/lisp__alexandria.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__asdf",
-      commit = "26d8ee1d07d4fb4dce218909c3e36c4ea06b6d6b", # 3.1.7
+      commit = "d0eef0700d9272b85475e6654c88e12a96953f08", # 3.2.0.1
       remote = "https://gitlab.common-lisp.net/asdf/asdf.git",
       build_file = base_dir + "/build_defs/lisp__asdf.BUILD"
   )
@@ -139,14 +137,14 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__bordeaux_threads",
-      commit = "9673c70d09f85c7a410a3dd6aad653c2b15219e4",
+      commit = "92e6a89486a9469a36b4c0f73f4efc38f4ddeecc",
       remote = "https://github.com/sionescu/bordeaux-threads.git",
       build_file = base_dir + "/build_defs/lisp__bordeaux_threads.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__cffi",
-      commit = "b26e5b0bd3063f1935294d3446f761c80ee97e1b",
+      commit = "3563ccc32caa356dab7d9e47086cda318b887625",
       remote = "https://github.com/cffi/cffi.git",
       build_file = base_dir + "/build_defs/lisp__cffi.BUILD"
   )
@@ -168,7 +166,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__cl_fad",
-      commit = "51ea56cde5c8d2dafd9a5173e2c0b81d98babc94",
+      commit = "56b0909150d54b2e3aaf2660735702b35558445d",
       remote = "https://github.com/edicl/cl-fad.git",
       build_file = base_dir + "/build_defs/lisp__cl_fad.BUILD"
   )
@@ -191,14 +189,14 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__cl_ppcre",
-      commit = "26aa9b68fb59cc18d216efe0f15d535eb11a2d5a",
+      commit = "0f295337d9dec1733cf0389a5a2827292d6a5b0d",
       remote = "https://github.com/edicl/cl-ppcre.git",
       build_file = base_dir + "/build_defs/lisp__cl_ppcre.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__cl_protobufs",
-      commit = "d008be53f8e3e2e3a51eb8a64419b3afc2eebc31",
+      commit = "bb5c018d389ea3b432b20dbeccfdef5beed52872",
       remote = "https://gitlab.common-lisp.net/qitab/cl-protobufs.git",
       build_file = base_dir + "/build_defs/lisp__cl_protobufs.BUILD"
   )
@@ -212,7 +210,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__cl_unicode",
-      commit = "ecacf5dece1f720aec3f90889e58496fc74e6ef1",
+      commit = "ba6f92f3a2b41c751ddfd9fad1c5a09496d58367",
       remote = "https://github.com/edicl/cl-unicode.git",
       build_file = base_dir + "/build_defs/lisp__cl_unicode.BUILD"
   )
@@ -226,7 +224,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__closer_mop",
-      commit = "da5462689966d14b281861e7449014f7ea1f51f6",
+      commit = "cca38c87c7605218ed1138938c3646be153bcd92",
       remote = "https://github.com/pcostanza/closer-mop.git",
       build_file = base_dir + "/build_defs/lisp__closer_mop.BUILD"
   )
@@ -268,21 +266,21 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__fare_quasiquote",
-      commit = "863ec450f9809171462b7c7ec85c778496a0f3ae",
+      commit = "c6ef2128a6ac44ba9e9cf0fb34c4ed429b988217",
       remote = "https://gitlab.common-lisp.net/frideau/fare-quasiquote.git",
       build_file = base_dir + "/build_defs/lisp__fare_quasiquote.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__fare_utils",
-      commit = "1a4f345d7911b403d07a5f300e6006ce3efa4047",
+      commit = "66e9c6f1499140bc00ccc22febf2aa528cbb5724",
       remote = "https://gitlab.common-lisp.net/frideau/fare-utils.git",
       build_file = base_dir + "/build_defs/lisp__fare_utils.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__flexi_streams",
-      commit = "688ad7dce44cc836f690056fcfa509ff4d947b3b",
+      commit = "3ce984cf46bac4bdf149a9ccfb6730a638fa11b5",
       remote = "https://github.com/edicl/flexi-streams.git",
       build_file = base_dir + "/build_defs/lisp__flexi_streams.BUILD"
   )
@@ -301,28 +299,28 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__inferior_shell",
-      commit = "25f0c1c15f38c54272f9f1c81f30797bb7be8d00",
+      commit = "e1f6378d75cea9eed243a793efa90cec55e401cb",
       remote = "https://gitlab.common-lisp.net/qitab/inferior-shell.git",
       build_file = base_dir + "/build_defs/lisp__inferior_shell.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__ironclad",
-      commit = "e9224500649ddaf17c414fd08fb7b99e906fc2a7",
+      commit = "20d28217e7a9762ca344d46f49cf6b2d99f23494",
       remote = "https://github.com/froydnj/ironclad.git",
       build_file = base_dir + "/build_defs/lisp__ironclad.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__lisp_invocation",
-      commit = "0a55ecc11cf564a13f443dd8916d00449b100636",
+      commit = "5134c7354e2c76241731a6c10cb925795ccf2608",
       remote = "https://gitlab.common-lisp.net/qitab/lisp-invocation.git",
       build_file = base_dir + "/build_defs/lisp__lisp_invocation.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__local_time",
-      commit = "fb28d70ba8eb800d5af30fcd33c9d36d6a03e899",
+      commit = "af99a125d826b6a71ff1f110d2bff6b682a4504b",
       remote = "https://github.com/dlowe-net/local-time.git",
       build_file = base_dir + "/build_defs/lisp__local_time.BUILD"
   )
@@ -350,7 +348,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__nibbles",
-      commit = "421c84fb704f3d5945f26ef6eaeb05fcfae41099",
+      commit = "84b86d8efb19d0b8814e353238a500097b526bc0",
       remote = "https://github.com/froydnj/nibbles.git",
       build_file = base_dir + "/build_defs/lisp__nibbles.BUILD"
   )
@@ -364,7 +362,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__parse_number",
-      commit = "094efb0f11f729bc684ef0b0f9a17a12569c5b32",
+      commit = "f139ae12ed555134b3fe9e2c5bed5836939202ce",
       remote = "https://github.com/sharplispers/parse-number.git",
       build_file = base_dir + "/build_defs/lisp__parse_number.BUILD"
   )
@@ -385,21 +383,21 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__ptester",
-      commit = "332ed2f9f41fbe329f500089fa1b593bdcfa2d93",
+      commit = "fe69fde54f4bce00ce577feb918796c293fc7253",
       remote = "http://git.kpe.io/ptester.git",
       build_file = base_dir + "/build_defs/lisp__ptester.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__puri",
-      commit = "e523dcc81fa3947bed9b6093641eed216fc0ec29",
+      commit = "b537e93ccfdcbefd8bab075809e4d41b2df779c7",
       remote = "http://git.kpe.io/puri.git",
       build_file = base_dir + "/build_defs/lisp__puri.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__slime",
-      commit = "85e2e614b3adf6e6295ee07f14ca44db4512a409",
+      commit = "38416762c68dfa793f8e4f7c686137ab99b0a18f",
       remote = "https://github.com/slime/slime",
       build_file = base_dir + "/build_defs/lisp__slime.BUILD"
   )
@@ -420,7 +418,7 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__trivial_features",
-      commit = "c6ebccf5539798ace8cbe277e8ae85c39742a19c",
+      commit = "29ab1daeb77deb881bf19341cf5f7e41fb246b43",
       remote = "https://github.com/trivial-features/trivial-features.git",
       build_file = base_dir + "/build_defs/lisp__trivial_features.BUILD"
   )
@@ -441,14 +439,14 @@ def lisp_repositories (base_dir, sbcl_binary_distribution):
 
   native.new_git_repository(
       name = "lisp__usocket",
-      commit = "c6f092c767cf89172e0b06a9014d2e4e855b3781",
+      commit = "2f30276009326a7d785c167ae05914df2cd9ef3e",
       remote = "https://github.com/usocket/usocket.git",
       build_file = base_dir + "/build_defs/lisp__usocket.BUILD"
   )
 
   native.new_git_repository(
       name = "lisp__workout_timer",
-      commit = "9ad2f8a0df074e5a1034fd54256cf0b8a9ee6f56",
+      commit = "bd1be633c70b706e92373cdb123b9ea8fbf13d77",
       remote = "https://gitlab.common-lisp.net/frideau/workout-timer.git",
       build_file = base_dir + "/build_defs/lisp__workout_timer.BUILD"
   )
