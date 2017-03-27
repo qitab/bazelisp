@@ -7,6 +7,7 @@
   (:export #:style
            #:undefined-variable-p
            #:undefined-variable-warning
+           #:unused-variable
            #:undefined-function-p
            #:undefined-function-warning
            #:inline-used-before-definition
@@ -62,6 +63,18 @@ This returns two values: a boolean and a name symbol of the variable."
 (deftype undefined-variable-warning ()
   "Generic type of undefined function variable."
   '(and warning (satisfies undefined-variable-p)))
+
+(defun unused-variable-p (warning)
+  "True if WARNING is about an unused variable."
+  #+sbcl
+  (when (typep warning '(and warning simple-condition))     ; not really a simple-warning
+    (let ((control (simple-condition-format-control warning)))
+      (and (search "variable" control :test #'char-equal)
+           (search "defined but never used" control :test #'char-equal)))))
+
+(deftype unused-variable ()
+  "Type of warning about an unused variable."
+  '(and style-warning (satisfies unused-variable-p)))
 
 (defun undefined-function-p (warning)
   "Is WARNING an undefined function warning?
