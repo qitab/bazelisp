@@ -169,42 +169,21 @@
     (unless (typep info 'sb-c::compiled-debug-info)
       (return-from dump-code-component-symbols nil))
 
-    (let* ((code-header-len (* (sb-kernel:get-header-data code) sb-vm:n-word-bytes))
-           (pc-offset (+ (- (sb-kernel:get-lisp-obj-address code)
-                            sb-vm:other-pointer-lowtag)
-                         code-header-len))
-           (fun-map (sb-c::compiled-debug-info-fun-map info))
-           (len (length fun-map))
-           (last-name nil)
-           (last-start 0)
-           (last-end 0)
-           (source (sb-c::compiled-debug-info-source info))
-           (file-name (and source (clean-file-name (sb-c::debug-source-namestring source)))))
-      (declare (type simple-vector fun-map))
-
-      (flet ((emit-dedup (name start end)
-               "Save up last name so that if the next contiguous area
-                has the same name, it turns into a single symbol"
-               (if (and (equal name last-name) (= start last-end))
-                   (setf last-end end)
-                   (progn
-                     (when last-name
-                       (emit file-name last-name last-start last-end))
-                     (setf last-name name
-                           last-start start
-                           last-end end)))))
-        ;;(format "START: ~D ~D~%" code-header-len pc-offset)
-        (loop for start = 0 then end
-              for i from 1 by 2 below (1+ len)
-              for end = (if (< i len)
-                            (svref fun-map i)
-                            (* (sb-vm::%code-code-size code) sb-vm:n-word-bytes))
-              for debug-fun = (svref fun-map (1- i))
-              for name = (sb-c::compiled-debug-fun-name debug-fun)
-              ;;do (format t "FOO: ~D ~D ~D~%" start i end)
-              when name do (emit-dedup name (+ pc-offset start) (+ pc-offset end)))
-        ;; emit final saved name
-        (emit-dedup nil 0 0)))))
+    (flet ((fun-start-pc (fun)
+             (+ (- (sb-kernel:get-lisp-obj-address fun) sb-vm:fun-pointer-lowtag)
+                (ash sb-vm:simple-fun-code-offset sb-vm:word-shift))))
+      (dotimes (i (sb-kernel:code-n-entries code))
+        (let* ((fun (sb-kernel:%code-entry-point code i))
+               (next-fun (sb-kernel:%code-entry-point code (1+ i)))
+               (start-pc (fun-start-pc fun))
+               (end-pc (if next-fun
+                           (fun-start-pc next-fun)
+                           (+ (- (sb-kernel:get-lisp-obj-address code) sb-vm:other-pointer-lowtag)
+                              (ash (sb-kernel:code-header-words code) sb-vm:word-shift)
+                              (sb-kernel:%code-code-size code))))
+               (source (sb-c::compiled-debug-info-source info))
+               (file-name (and source (clean-file-name (sb-c::debug-source-namestring source)))))
+          (emit file-name (sb-kernel:%simple-fun-name fun) start-pc end-pc))))))
 
 (defun dump-symtable ()
   "Dump all code-components found by walking the image-backed part of the dynamic space."
@@ -215,7 +194,7 @@
                         (eql type sb-vm:code-header-widetag))
                (dump-code-component-symbols obj))))
       (sb-vm::map-allocated-objects #'dump-code-component
-                                    (or #+immobile-code :immobile :dynamic)))))
+                                    (or #+immobile-code :all :dynamic)))))
 
 (dump-symtable)
 ;; Magic declaration to tell the assembler we don't need an executable stack.
