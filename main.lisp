@@ -388,6 +388,7 @@ This allows for the user to specify their own handlers as a string."
       (when (documentation var type)
         (setf (documentation var type) nil)))))
 
+(declaim (type (or symbol function) *entry-point*))
 (defvar *entry-point* nil)
 
 (defun restart-image ()
@@ -411,6 +412,33 @@ This allows for the user to specify their own handlers as a string."
 
     (funcall-named* "BAZEL.COVERAGE:SAVE")))
 
+(defun derive-entry-point (main)
+  "Returns NIL, SYMBOL, or FUNCTION based on the MAIN function specification."
+  (let* ((main-exp
+          (if (stringp main)
+              (with-standard-io-syntax
+                (read-from-string main))
+              main)))
+    (typecase main-exp
+      (null nil)
+      (function main-exp)
+      (symbol
+       (unless (fboundp main-exp)
+         (fatal "~S is not a known function name." main-exp))
+       main-exp)
+      (cons
+       (let ((fname (first main-exp)))
+         (cond ((or (not (symbolp fname))
+                    (macro-function fname)
+                    (special-operator-p fname))
+                (lambda () (eval main-exp)))
+               ((fboundp fname)
+                (lambda () (apply fname (rest main-exp))))
+               (t
+                (fatal "~S is not a known function name." fname)))))
+      (t
+       (fatal "Cannot use ~S as an entry point." main-exp)))))
+
 (defun save-binary (name main &key compression save-runtime-options precompile-generics)
   "Saves the image to a binary image named 'name'. Exits.
  Arguments:
@@ -421,25 +449,15 @@ This allows for the user to specify their own handlers as a string."
   SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
       This is usually permanent.
   PRECOMPILE-GENERICS - will precompile the generic functions before saving."
-
-  (when (stringp main)
-    (with-standard-io-syntax
-      (setf main (read-from-string main))))
-
-  (when (and main (not (fboundp main)))
-    (fatal "The main entry point ~S has not been defined" main))
-
-  (verbose "Saving binary to: ~S~@[ (old-main: ~S)~]~@[ (main: ~S)~]"
-        name (unless (eq main *entry-point*) *entry-point*) main)
-
+  (let ((main-fn (derive-entry-point main)))
+    (verbose "Saving binary to: ~S~@[ (old-main: ~S)~]~@[ (main: ~S)~]"
+             name (unless (eq main-fn *entry-point*) *entry-point*) main-fn)
+    (setf *entry-point* main-fn))
   ;; Provided UIOP is loaded, apply its image dump protocol.
   (funcall-named "UIOP:CALL-IMAGE-DUMP-HOOK")
-
-  ;; Set to a sane value
+  ;; Set to a sane value.
   (in-package "COMMON-LISP-USER")
-
-  (setf *entry-point* main)
-
+  ;; Finally call the Lisp implementation function.
   (save-lisp-and-die
    name
    :toplevel #'restart-image

@@ -187,3 +187,22 @@ lisp_test(
     name = "compilation-mode",
     srcs = ["compilation-mode.lisp"],
 )
+
+# Test eval main.
+lisp_test(
+    name = "eval-main",
+    srcs = ["eval-main.lisp"],
+    main = "(foo :x 1 :y 2)",
+)
+
+lisp_test(
+    name = "eval-main-2",
+    srcs = ["eval-main.lisp"],
+    main = "(progn (foo :x 1 :y 2))",
+)
+
+lisp_test(
+    name = "eval-main-3",
+    srcs = ["eval-main.lisp"],
+    main = "(if nil (break) (foo :x 1 :y 2))",
+)
