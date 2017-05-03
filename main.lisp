@@ -33,6 +33,8 @@
            #:load-file
            ;; blaze-lisp warning handler.
            #:handle-warning
+           ;; Post entry generic handler for each command.
+           #:execute-command
            ;; Action model accessors
            #:*action*
            #:action
@@ -697,6 +699,9 @@ This allows for the user to specify their own handlers as a string."
 ;;; Command handlers
 ;;;
 
+(defgeneric execute-command (command &rest arguments &key &allow-other-keys)
+  (:documentation "Executes a COMMAND with the command line ARGUMENTS."))
+
 (defgeneric init-action (action command)
   (:documentation "Initializes the action based on the command")
   (:method ((action action) command) #| noop |#))
@@ -764,8 +769,8 @@ This allows for the user to specify their own handlers as a string."
 ;;; Main Processing Loop
 ;;;
 
-(defun process (&rest args
-                   &key command deps load srcs outs gendir
+(defun process (command &rest args
+                   &key deps load srcs outs gendir
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
@@ -929,17 +934,21 @@ This allows for the user to specify their own handlers as a string."
       (mapc #'process-file* warnings)
       (verbose "Finalizing the ~A action..." command)
       (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
-      (finish-action action command))
+      (finish-action action command))))
 
-    (verbose "BAZEL ~A finished" command)))
+(defmethod execute-command ((command (eql :compile)) &rest args)
+  (apply #'process command args))
+(defmethod execute-command ((command (eql :binary)) &rest args)
+  (apply #'process command args))
+
 
 ;;;
 ;;; Used to combine images
 ;;;
 
-(defun combine (&key command run-time core output &allow-other-keys)
+(defmethod execute-command ((command (eql :combine))
+                            &key run-time core output &allow-other-keys)
   "Combines the RUN-TIME with the CORE and saves it to OUTPUT."
-  (assert (eq :combine command)) ; NOLINT
   (combine-run-time-and-core run-time core output))
 
 ;;;
@@ -967,22 +976,26 @@ This allows for the user to specify their own handlers as a string."
 
 (defun parse-command-args (args)
   "Parses the command-line and returns ARGS as list of keyword value pairs."
-  (list* :command (to-keyword (first args))
-         (parse-rest-command-args (rest args))))
+  (list* (to-keyword (first args)) (parse-rest-command-args (rest args))))
+
+(defmethod execute-command :around (command
+                                    &key force verbose interactive
+                                    &allow-other-keys)
+  ;; Process some meta-level options.
+  (when verbose (setf *verbose* (read-from-string verbose)))
+  (set-interactive-mode interactive)
+
+  (verbose "Program name: ~A" (program-name))
+  (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
+  (verbose "Current dir: ~A" *default-pathname-defaults*)
+
+  (with-continue-on-error (:when force)
+    (call-next-method)))
+
+(defmethod execute-command :after (command &rest ignore)
+  (declare (ignore ignore))
+  (verbose "BAZEL ~A finished" command))
 
 (defun main ()
   "Main entry point."
-  (let* ((command-args (parse-command-args (command-line-arguments))))
-    (destructuring-bind (&key force verbose interactive &allow-other-keys) command-args
-      (when verbose
-        (setf *verbose* (read-from-string verbose)))
-      (set-interactive-mode interactive)
-
-      (verbose "Program name: ~A" (program-name))
-      (verbose "Current dir: ~A" *default-pathname-defaults*)
-      (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
-
-      (with-continue-on-error (:when force)
-        (case (getf command-args :command)
-          (:combine (apply 'combine command-args))
-          (t        (apply 'process command-args)))))))
+  (apply #'execute-command (parse-command-args (command-line-arguments))))
