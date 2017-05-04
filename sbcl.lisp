@@ -121,16 +121,10 @@
   (sb-impl::toplevel-init))
 
 (defun mute-output-streams ()
-  "Mute SBCL image write messages and redirect all file handles to /dev/null."
-  #+unix
-  ;; SBCL core dumping code is in C. There is no way to suppress the info message
-  ;; written by SBCL at image dump time from Lisp. The only way to suppress the info is by using
-  ;; dup2 to /dev/null on the open file descriptor handles. The handles enumerate from 0 up to
-  ;; the latest open file handle which is (not by accident) the handle of the open /dev/null below.
-  (with-open-file (null-fd "/dev/null" :direction :io :if-exists :append)
-    (loop with null-fd = (sb-sys:fd-stream-fd null-fd)
-          for fd fixnum from 0 below null-fd do
-            (alien-funcall (extern-alien "dup2" (function int int int)) null-fd fd))))
+  "Mute SBCL image write messages."
+  ;; Set runtime --noinform option to 1, which also hides the "[writing...]" noise
+  (setf (extern-alien "lisp_startup_options" int) 1)
+  nil)
 
 (defun terminate-other-threads ()
   "Terminates all threads but the current one."
