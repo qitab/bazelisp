@@ -585,10 +585,10 @@ def lisp_binary(name,
     features: a list of Common Lisp features applied while building target.
     order: takes values:
         "serial" - each source is compiled in an image with
-          previous dependencies loaded (default).
+          previous sources loaded (default).
         "multipass" - each source is compiled in an image with
-          all dependencies loaded.
-        "parallel" - each source is compiled independent from others
+          all sources loaded.
+        "parallel" - each source is compiled independently from others.
     nowarn: a list of suppressed Lisp warning types or warning handlers.
     args: default arguments passed to the binary or test on execution.
     main: specifies the entry point function (default: main).
@@ -916,10 +916,10 @@ def lisp_library(name,
     features: a list of Common Lisp features applied while building target.
     order: takes values:
         "serial" - each source is compiled in an image with
-          previousdependencies loaded (default).
+          previous sources loaded (default).
         "multipass" - each source is compiled in an image with
-          all dependencies loaded.
-        "parallel" - each source is compiled independent from others
+          all sources loaded.
+        "parallel" - each source is compiled independently from others.
     nowarn: a list of suppressed Lisp warning types or warning handlers.
     image: the base image used to compile the target (default BAZEL_LISP).
     visibility: list of labels controlling which other rules can use this one.
