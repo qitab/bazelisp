@@ -31,6 +31,7 @@
            #:set-interpret-mode
            #:set-interactive-mode
            #:setup-readtable
+           #:name-closure
            #:with-creating-find-package
            #:with-default-package
            ;; threading
@@ -132,6 +133,11 @@
   (let ((threads (remove *current-thread* (list-all-threads))))
     (mapc #'terminate-thread threads)
     (mapc (lambda (thread) (join-thread thread :default nil)) threads)))
+
+(defun name-closure (closure name)
+  "Return CLOSURE with the NAME changed, so it prints nicely."
+  ;; This is not necessary, except for debugging and aesthetics.
+  (sb-impl::set-closure-name closure name))
 
 ;;;
 ;;; Precompile generic functions.

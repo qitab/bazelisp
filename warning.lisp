@@ -307,7 +307,7 @@ The conditions muffled here are the minimal/uncontroversial set."
   (typecase c
     #+sbcl
     (sb-ext:deprecation-condition t)
-    (simple-warning
+    ((and warning simple-condition)
      (search "deprecated" (simple-condition-format-control c)
              :test #'char-equal))))
 

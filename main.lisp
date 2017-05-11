@@ -211,18 +211,22 @@
 ;;; TODO(czak): Add support for those into UIOP.
 ;;;
 
-(defun resolve-warning-handler (handler)
+(defun resolve-warning-handler (handler &key (fail-on-error t))
   "Tries to resolve the warning HANDLER in the bazel.warning package.
- Returns a function or string if not resolved."
+Signals a fatal error if FAIL-ON-ERROR is true and HANDLER is not resolved.
+Returns a function or string if not resolved."
   (etypecase handler
     (function handler)
     (symbol
-     (cond ((handler-case (subtypep handler 'condition) (t nil))
-            ;; Return a predicate.
-            #+sbcl
-            (eval `(sb-int:named-lambda ',handler (condition) (typep condition ',handler)))
-            #-sbcl
-            (lambda (condition) (typep condition handler)))
+     (cond ((null handler)
+            (when fail-on-error
+              (fatal "Cannot resolve NIL warning handler.")))
+           ((handler-case (subtypep handler 'condition) (t nil))
+            (let ((closure (lambda (condition) (typep condition handler))))
+              ;; Name it so it prints nicely.
+              (setf closure (name-closure closure handler))
+              (vv "Resolving handler ~S to ~S." handler closure)
+              closure))
            ((fboundp handler)
             ;; Return the handler function.
             (symbol-function handler))
@@ -231,39 +235,51 @@
             handler)))
     (string
      (or (with-standard-io-syntax
-           (let* ((*package* (find-package "BAZEL.WARNING"))
-                  (handler (ignore-errors (read-from-string handler))))
-             (unless (stringp handler)
-               (resolve-warning-handler handler))))
+           (let ((*package* (find-package "BAZEL.WARNING")))
+             (multiple-value-bind (%handler %error)
+                 (ignore-errors (read-from-string handler))
+               (vv "Read ~S from ~S" %handler handler)
+               (etypecase %handler
+                 (null
+                  (when fail-on-error
+                    (fatal
+                     "The warning handler ~S resolved to NIL~@[ [~S:~]~@[~A]~]."
+                     handler (and %error (type-of %error)) %error))
+                  handler)
+                 (symbol (resolve-warning-handler %handler))
+                 (function %handler)))))
          handler))))
 
 (defun action-add-nowarn (nowarn &optional (action *action*))
   "Add a NOWARN condition/handler at the end of the nowarn list of the ACTION."
   (declare (type action action) (type (or string symbol function) nowarn))
   (nconcf (action-warning-handlers action)
-          (list (resolve-warning-handler nowarn))))
+          ;; Since this is done initially, we may not have all handlers loaded.
+          (list (resolve-warning-handler nowarn :fail-on-error nil))))
 
 (defun invoke-warning-handlers (handlers condition)
   "The function invokes all the HANDLERS on the CONDITION until first returns true.
-If a handler is specified as a string, it will be resolved in the bazel.warning package context.
-This allows for the user to specify their own handlers as a string."
+If a handler is specified as a string, it will be resolved in the bazel.warning
+package context. This allows for the user to specify their own handlers as a string."
   (declare (list handlers) (condition condition))
   (message :info (if (typep condition 'warning) 2 3)
            "Invoking ~D handler~:P on: ~S (~A)"
            (length handlers) (type-of condition) condition)
   (loop with restart = (find-restart 'muffle-warning)
         with result = (if restart :fail :ignore)
-        for %handlers on handlers
-        for handler-designator = (car %handlers)
+        for handler.rest on handlers
+        for handler-designator = (car handler.rest)
         for handler = (if (functionp handler-designator)
                           handler-designator
-                          (setf (car %handlers) (resolve-warning-handler handler-designator)))
+                          (setf (car handler.rest)
+                                (resolve-warning-handler handler-designator)))
         for unresolved-p = (not (functionp handler))
         when (and unresolved-p restart)
           do (fatal "Given condition: ~S (~A)~%; Cannot resolve handler: ~S"
                     (type-of condition) condition handler-designator)
         thereis
-        (let ((value (unless unresolved-p (funcall (the function handler) condition))))
+        (let ((value (unless unresolved-p
+                       (funcall (the function handler) condition))))
           (vvv "Handler ~A => ~A" handler value)
           (case value
             ((nil) nil)
