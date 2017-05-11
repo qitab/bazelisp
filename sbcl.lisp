@@ -427,7 +427,6 @@
   rt)
 
 (defvar *in-find-package* nil "Prevents cycles in make-package")
-(defconstant +find-package-function+ (symbol-function 'find-package))
 (defvar *with-creating-find-package-mutex* (make-mutex :name "with-creating-find-package-mutex"))
 
 (defun call-with-augmented-find-package (body &key (use '("COMMON-LISP")) (default nil))
@@ -435,23 +434,19 @@
  will not error on unknown packages or not exported symbols.
  USE is the set of packages to use by the new package."
   (declare (function body))
-  (flet ((creating-find-package (name)
-           (or (funcall +find-package-function+ name)
+  (flet ((creating-find-package (f name)
+           (or (funcall f name)
                default
                (unless *in-find-package*
                  (let ((*in-find-package* t))
                    (make-package name :use use))))))
     (declare (dynamic-extent #'creating-find-package))
     (with-recursive-lock (*with-creating-find-package-mutex*)
-      #+sbcl
-      (sb-ext:with-unlocked-packages ("COMMON-LISP")
-        (setf (symbol-function 'find-package) #'creating-find-package))
+      (sb-int:encapsulate 'find-package 'create #'creating-find-package)
       (unwind-protect
            (handler-bind ((package-error #'continue))
              (funcall body))
-        #+sbcl
-        (sb-ext:with-unlocked-packages ("COMMON-LISP")
-          (setf (symbol-function 'find-package) +find-package-function+))))))
+        (sb-int:unencapsulate 'find-package 'create)))))
 
 (defmacro with-creating-find-package ((&key (use '("COMMON-LISP"))) &body body)
   "Executes body in an environment where FIND-PACKAGE will not signal an unknown package error.
