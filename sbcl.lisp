@@ -30,6 +30,7 @@
            #:md5sum-file
            #:set-interpret-mode
            #:set-interactive-mode
+           #:setup-readtable
            #:with-creating-find-package
            #:with-default-package
            ;; threading
@@ -414,6 +415,10 @@
 ;;;
 ;;; Reading lisp files.
 ;;;
+
+(defun setup-readtable (rt)
+  (setf (sb-ext:readtable-base-char-preference rt) :both)
+  rt)
 
 (defvar *in-find-package* nil "Prevents cycles in make-package")
 (defconstant +find-package-function+ (symbol-function 'find-package))

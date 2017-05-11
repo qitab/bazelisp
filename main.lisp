@@ -543,7 +543,7 @@ This allows for the user to specify their own handlers as a string."
           (let* ((name (namestring name))
                  (*default-pathname-defaults* *default-pathname-defaults*)
                  (*current-source-file* name)
-                 (*readtable* readtable)
+                 (*readtable* (setup-readtable readtable))
                  (*print-readably* nil)
                  (*print-circle* t)
                  (*action* action))
@@ -596,7 +596,7 @@ This allows for the user to specify their own handlers as a string."
         (with-compilation-unit (:source-namestring src)
           (let ((output-file (merge-pathnames output-file))
                 (*default-pathname-defaults* *default-pathname-defaults*)
-                (*readtable* readtable)
+                (*readtable* (setup-readtable readtable))
                 (*print-readably* nil)
                 (*print-circle* t))
             (compile-file src :output-file output-file
