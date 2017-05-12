@@ -728,7 +728,8 @@ package context. This allows for the user to specify their own handlers as a str
 (defmethod finish-action ((action action) (command (eql :binary)))
   "Save the binary from this image."
   (nconcf (action-failures action)
-          (resolve-deferred-warnings (action-deferred-warnings action)))
+          (resolve-deferred-warnings
+            (shiftf (action-deferred-warnings action) nil)))
   (check-failures action)
   (check-features)
 
