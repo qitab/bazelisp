@@ -692,7 +692,9 @@ package context. This allows for the user to specify their own handlers as a str
 (defmethod process-file ((action action) (file string) (type (eql :hash)))
   "Loads an MD5 hash file."
   (with-open-file (in file :element-type 'octet)
-    (let ((src (read-stringz in))
+    ;; NAMESTRING canonicalizes to base-char (in SBCL at least), and furthermore
+    ;; returns a shareable string memoized on the corresponding pathname object.
+    (let ((src (namestring (read-stringz in)))
           (md5 (make-array 16 :element-type 'octet)))
       (assert (= 16 (read-sequence md5 in))) ; NOLINT
       (setf (gethash src *compiled-sources*) md5))))
