@@ -553,6 +553,7 @@ def lisp_binary(name,
                 flaky = False,
                 size = "medium",
                 timeout = None,
+                shard_count = None,
                 tags = [],
                 stamp = -1,
                 # TODO(czak): Need to provide proper path here.
@@ -609,6 +610,7 @@ def lisp_binary(name,
     size: the size of a test: small, medium (default), large, enormous.
     timeout: test timeout: None (default), short, moderate, long, eternal.
         None indicates that the timeout should be chosen based on test size.
+    shard_count: number of shards used for the test.
     tags: list of arbitrary text tags mostly useful for tests. E.g.: "local".
     stamp: C++ build stamp info (0 = no, 1 = yes, default -1 = bazel option).
     malloc: malloc implementation to be used for linking of cc code.
@@ -716,6 +718,7 @@ def lisp_binary(name,
         size = size,
         timeout = timeout,
         flaky = flaky,
+        shard_count = shard_count,
         args = args,
         visibility = visibility,
         testonly = testonly,
