@@ -174,13 +174,68 @@
             (action-muffled-warnings-count action)
             (action-muffled-infos-count action))))
 
-(declaim (type action *action*))
+(declaim (type (or null action) *action*))
 ;; All of the state of the current blaze-lisp BUILD action.
 ;; The action is shared among threads.
-(defvar *action*)
+(defvar *action* nil)
 (declaim (type mutex *action-mutex*))
 (defvar *action-mutex* (make-mutex :name "blaze-lisp-action-mutex")
   "Action mutex guards *action* global variable.")
+
+(defun print-action-full (&key
+                          args
+                          (action *action*)
+                          (verbose *verbose*)
+                          (stream *standard-output*))
+  "Print the ACTION using VERBOSE mode to the output STREAM."
+  (declare (optimize (debug 3) (speed 0)))
+  (let* ((*verbose* verbose)
+         (args (copy-list (if action (action-args action) args)))
+         (deps (split (getf args :deps)))
+         (srcs (split (getf args :srcs)))
+         (specs (getf args :specs))
+         (load (split (getf args :load)))
+         (outs (split (getf args :outs)))
+         (warnings (split (getf args :warning)))
+         (hashes (split (getf args :hashes)))
+         (gendir (getf args :gendir)))
+    (when (< verbose 2)
+      (when (> (length deps) 1) (remf args :deps))
+      (when (> (length srcs) 1) (remf args :srcs))
+      (when (> (length load) 1) (remf args :load)))
+    (when (< verbose 3)
+      (when (> (length warnings) 1) (remf args :warnings))
+      (when (> (length hashes) 1) (remf args :hashes)))
+
+    (verbose "Program name: ~A" (program-name))
+    (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
+    (verbose "Current dir: ~A" *default-pathname-defaults*)
+    (verbose "Params:~{~&~3T~A: ~A~%~}" args)
+    #+sbcl
+    (vv "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
+    (verbose "Action: ~A~%" action)
+    (flet ((strip-gendir (name) (if gendir (strip-prefix gendir name) name)))
+      (cond ((< verbose 2)
+             (verbose "Deps: ~A" (length deps))
+             (verbose "Srcs: ~A" (length srcs))
+             (verbose "Load: ~A" (length load)))
+            (t
+             (vv "Deps:~{~%~3T~A~}" (mapcar #'strip-gendir deps))
+             (vv "Srcs:~{~%~3T~A~}" (mapcar #'strip-gendir srcs))
+             (vv "Load:~{~%~3T~A~}" (mapcar #'strip-gendir load))))
+      (verbose "Outs:~{~%~3T~A~}" (mapcar #'strip-gendir outs))
+      (when (< verbose 3)
+        (verbose "Hashes: ~A" (length hashes))
+        (verbose "Warnings: ~A" (length warnings))))
+    (when (and (>= verbose 3) specs (probe-file specs))
+      (verbose "Specs file: ~S contents" specs)
+      (with-open-file (in specs
+                          :element-type 'character
+                          :external-format :utf-8)
+        (loop :for line = (read-line in nil)
+              :while line
+              :do (write-string line stream)
+                  (terpri stream))))))
 
 ;; The current file being processed.
 (declaim (type (or null string) *current-source-file*))
@@ -552,37 +607,42 @@ package context. This allows for the user to specify their own handlers as a str
   MUFFLE-WARNINGS - if true, as in the case of deps, no warnings will be printed.
   READTABLE - is the readtable to be used while loading."
   (declare (type (or string pathname) name) (type action action))
-  (when load-mode
-    (with-standard-io-syntax
-      (handler-bind ((non-fatal-error #'handle-error))
-        (with-compilation-unit (:source-namestring name)
-          (let* ((name (namestring name))
-                 (*default-pathname-defaults* *default-pathname-defaults*)
-                 (*current-source-file* name)
-                 (*readtable* (setup-readtable readtable))
-                 (*print-readably* nil)
-                 (*print-circle* t)
-                 (*action* action))
-            (set-compilation-mode load-mode)
-            (cond (muffle-warnings
-                   (with-all-warnings-muffled
-                     ;; TODO(czak): use bazel.warning:redefine-warning.
-                     ;;   For this we need to know the NOWARN info
-                     ;;   for each package.
-                     (handler-bind (((or bazel.warning:redefined-function
-                                         bazel.warning:redefined-macro
-                                         ;; bazel.warning:changed-ftype-proclamation
-                                         bazel.warning:conflicting-ftype-declaration
-                                         ;; TODO(czak): someone fix cl-pb.
-                                         ;; bazel.warning:redefined-generic
-                                         ;; bazel.warning:redefined-method
-                                         bazel.warning:redefined-package
-                                         bazel.warning:inline-used-before-definition
-                                         bazel.warning:compiler-macro-after-function-use)
-                                     #'handle-warning))
-                       (load (or fasl name) :external-format :utf-8))))
-                  (t
-                   (load (or fasl name) :external-format :utf-8)))))))))
+  (unless load-mode
+    (return-from load-file))
+  (with-open-file (in (or fasl name))
+    (unless (plusp (file-length in))
+      (bazel.log:warning "Not loading an empty file: ~S." name)
+      (return-from load-file)))
+  (with-standard-io-syntax
+    (handler-bind ((non-fatal-error #'handle-error))
+      (with-compilation-unit (:source-namestring name)
+        (let* ((name (namestring name))
+               (*default-pathname-defaults* *default-pathname-defaults*)
+               (*current-source-file* name)
+               (*readtable* (setup-readtable readtable))
+               (*print-readably* nil)
+               (*print-circle* t)
+               (*action* action))
+          (set-compilation-mode load-mode)
+          (cond (muffle-warnings
+                 (with-all-warnings-muffled
+                   ;; TODO(czak): use bazel.warning:redefine-warning.
+                   ;;   For this we need to know the NOWARN info
+                   ;;   for each package.
+                   (handler-bind (((or bazel.warning:redefined-function
+                                       bazel.warning:redefined-macro
+                                       ;; bazel.warning:changed-ftype-proclamation
+                                       bazel.warning:conflicting-ftype-declaration
+                                       ;; TODO(czak): someone fix cl-pb.
+                                       ;; bazel.warning:redefined-generic
+                                       ;; bazel.warning:redefined-method
+                                       bazel.warning:redefined-package
+                                       bazel.warning:inline-used-before-definition
+                                       bazel.warning:compiler-macro-after-function-use)
+                                   #'handle-warning))
+                     (load (or fasl name) :external-format :utf-8))))
+                (t
+                 (load (or fasl name) :external-format :utf-8))))))))
 
 ;;;
 ;;; Main compile/build loop
@@ -873,43 +933,11 @@ package context. This allows for the user to specify their own handlers as a str
 
     (declare (list deps srcs outs))
 
-    (when (>= *verbose* 1)
-      (let ((args (copy-list args)))
-        (unless (or (>= *verbose* 2) (= (length deps) 1))
-          (remf args :deps)
-          (nconcf args (list :deps (length deps))))
-        (unless (or (>= *verbose* 2) (= (length srcs) 1))
-          (remf args :srcs)
-          (nconcf args (list :srcs (length srcs))))
-        (unless (or (>= *verbose* 2) (= (length load) 1))
-          (remf args :load)
-          (nconcf args (list :load (length load))))
-        (unless (or (>= *verbose* 3) (= (length warnings) 1))
-          (remf args :warnings)
-          (nconcf args (list :warnings (length warnings))))
-        (unless (or (>= *verbose* 3) (= (length hashes) 1))
-          (remf args :hashes)
-          (nconcf args (list :hashes (length hashes))))
-
-        (verbose "Params:~{~&~3T~A: ~A~%~}" args)
-
-        #+sbcl
-        (when (>= *verbose* 2)
-          (verbose "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
-          (verbose "Action: ~A~%" action))))
-
     ;; Rebind globally.
     (setf *action* action)
 
     (when (>= *verbose* 1)
-      (flet ((strip-gendir (name) (if gendir (strip-prefix gendir name) name)))
-        (cond ((>= *verbose* 2)
-               (vv "Deps:~{~%~3T~A~}" (mapcar #'strip-gendir deps))
-               (vv "Srcs:~{~%~3T~A~}" (mapcar #'strip-gendir srcs)))
-              (t
-               (verbose "Deps: ~A" (length deps))
-               (verbose "Srcs: ~A" (length srcs))))
-        (verbose "Outs:~{~%~3T~A~}" (mapcar #'strip-gendir outs))))
+      (print-action-full))
 
     (unless outs
       (fatal "Missing output file. Called with:~%~{~12T~A: ~A~%~}" args))
@@ -943,16 +971,19 @@ package context. This allows for the user to specify their own handlers as a str
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
       (verbose "Loading ~D source file~:P..." (length load))
-
       (mapc #'process-file* load)
+
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
       (mapc #'process-file* srcs)
+
       (verbose "Processing ~D deferred warning file~:P..." (length warnings))
       (mapc #'process-file* warnings)
+
       (verbose "Finalizing the ~A action..." command)
-      (set-compilation-mode (action-compilation-mode action) :safety (action-safety action))
+      (set-compilation-mode
+       (action-compilation-mode action) :safety (action-safety action))
       (finish-action action command))))
 
 (defmethod execute-command ((command (eql :compile)) &rest args)
@@ -998,6 +1029,7 @@ package context. This allows for the user to specify their own handlers as a str
   (list* (to-keyword (first args)) (parse-rest-command-args (rest args))))
 
 (defmethod execute-command :around (command
+                                    &rest args
                                     &key force verbose interactive
                                     &allow-other-keys)
   ;; Process some meta-level options.
@@ -1008,8 +1040,15 @@ package context. This allows for the user to specify their own handlers as a str
   (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
   (verbose "Current dir: ~A" *default-pathname-defaults*)
 
-  (with-continue-on-error (:when force)
-    (call-next-method)))
+  (handler-bind ((error (lambda (e)
+                          (format *error-output*
+                                  "~&~S: ~A while executing: ~A~%"
+                                  (type-of e) e command)
+                          (print-action-full
+                           :args args :stream *error-output*
+                           :verbose (max (or *verbose* 2) 2)))))
+    (with-continue-on-error (:when force)
+      (call-next-method))))
 
 (defmethod execute-command :after (command &rest ignore)
   (declare (ignore ignore))

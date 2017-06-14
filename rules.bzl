@@ -347,7 +347,6 @@ def _lisp_binary_implementation(ctx):
   build_image = ctx.file.image
   if verbosep:
     print("Build image: %s" % build_image.short_path)
-
   specs = ctx.new_file(ctx.label.name + ".specs")
   ctx.file_action(
       output = specs,
@@ -784,11 +783,10 @@ def lisp_library_implementation(ctx,
       features = ctx.attr.lisp_features,
       data = ctx.files.data,
       compile_data = ctx.files.compile_data)
-
   flags = _default_flags(ctx, trans, verbose_level)
   srcs = srcs or ctx.files.srcs
   output_fasl = output_fasl or ctx.outputs.fasl
-  if not srcs:
+  if not srcs or len(srcs) == 0:
     # Need to create the declared output.
     # But it will not be recorded in the provider.
     _concat_files(ctx, [], output_fasl)

@@ -46,7 +46,6 @@ def transitive_deps(deps=[], image=None):
   for dep in deps:
     if hasattr(dep, "lisp"):
       trans_deps += dep.lisp.deps
-      trans_deps += dep.files
       trans_srcs += dep.lisp.srcs
       trans_hashes += dep.lisp.hashes
       trans_warnings += dep.lisp.warnings
