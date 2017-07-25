@@ -512,7 +512,8 @@ package context. This allows for the user to specify their own handlers as a str
       (t
        (fatal "Cannot use ~S as an entry point." main-exp)))))
 
-(defun save-binary (name main &key compression save-runtime-options precompile-generics)
+(defun save-binary (name main &key compression save-runtime-options precompile-generics
+                                   remove-debug-info)
   "Saves the image to a binary image named 'name'. Exits.
  Arguments:
   NAME - the file name to save the image.
@@ -526,6 +527,8 @@ package context. This allows for the user to specify their own handlers as a str
     (verbose "Saving binary to: ~S~@[ (old-main: ~S)~]~@[ (main: ~S)~]"
              name (unless (eq main-fn *entry-point*) *entry-point*) main-fn)
     (setf *entry-point* main-fn))
+  (when remove-debug-info
+    (remove-extra-debug-info))
   ;; Provided UIOP is loaded, apply its image dump protocol.
   (funcall-named "UIOP:CALL-IMAGE-DUMP-HOOK")
   ;; Set to a sane value.
@@ -806,6 +809,7 @@ package context. This allows for the user to specify their own handlers as a str
   ;; Save as an executable image. Exit.
   (save-binary (first (action-output-files action))
                (action-main-function action)
+               :remove-debug-info (eq (action-compilation-mode action) :opt)
                :compression (action-compressed-p action)
                :save-runtime-options (action-save-runtime-options-p action)
                :precompile-generics (action-precompile-generics-p action)))

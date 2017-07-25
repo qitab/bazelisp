@@ -31,6 +31,7 @@
            #:set-interpret-mode
            #:set-interactive-mode
            #:setup-readtable
+           #:remove-extra-debug-info
            #:name-closure
            #:with-creating-find-package
            #:with-default-package
@@ -138,6 +139,17 @@
   "Return CLOSURE with the NAME changed, so it prints nicely."
   ;; This is not necessary, except for debugging and aesthetics.
   (sb-impl::set-closure-name closure name))
+
+(defun remove-extra-debug-info ()
+  "Removes debug info like docstrings and xrefs."
+  (sb-vm::map-allocated-objects
+   (lambda (obj type size)
+     (declare (ignore size))
+     (when (= type sb-vm:code-header-widetag)
+       (dotimes (i (sb-kernel:code-n-entries obj))
+         (let ((f (sb-kernel:%code-entry-point obj i)))
+           (setf (sb-kernel:%simple-fun-info f) nil)))))
+   :all))
 
 ;;;
 ;;; Precompile generic functions.
