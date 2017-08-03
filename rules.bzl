@@ -871,7 +871,7 @@ def make_cdeps_library(name,
   # Macro: calling cc_library (and cc_binary).
   # Called from lisp_library and lisp_binary.
   cdeps_library = "%s.cdeps" % name
-  cdeps += _make_cdeps_dependencies(deps)
+  cdeps = cdeps + _make_cdeps_dependencies(deps)
   native.cc_library(
       name = cdeps_library,
       srcs = csrcs,
