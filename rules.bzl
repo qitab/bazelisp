@@ -247,10 +247,10 @@ def _compile_srcs(ctx, srcs, deps, image, order,
         executable = build_image)
     # All deps included above
     # TODO(czak): Add dedup code and remove --deps-already-loaded.
-    flags += ["--deps-already-loaded"]
+    flags = flags + ["--deps-already-loaded"]
 
   if multipass:
-    nowarn += ["redefined-method", "redefined-function"]
+    nowarn = nowarn + ["redefined-method", "redefined-function"]
 
   if verbosep:
     print("Target: %s" % str(ctx.label.name))
