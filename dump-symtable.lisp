@@ -16,7 +16,7 @@
 ;; The allocation pointer is initially at the beginning of free space, right after the end
 ;; of the mmap'ed image file.  This is a hacky, but good enough, way of excluding the
 ;; runtime-compiled functions in the following script from the output.
-(defvar *dynamic-space-image-end* (sb-kernel:get-lisp-obj-address #.sb-vm::*allocation-pointer*))
+(defvar *dynamic-space-image-end* (sb-kernel:dynamic-space-free-pointer))
 
 (defun lambda-args (args)
   "Returns the parameter symbols of a lambda list ARGS."
