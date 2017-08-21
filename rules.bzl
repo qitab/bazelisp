@@ -225,7 +225,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
   if ((len(srcs) - 1) * len(deps) > 100):
     # Generate a SRCS image.
     compile_image = ctx.new_file(ctx.label.name + ".srcs.image")
-    srcs_flags = flags
+    srcs_flags = flags[:]
     srcs_flags += ["--outs", compile_image.path]
     if deps:   srcs_flags += ["--deps", _paths(deps)]
     if load_:  srcs_flags += ["--load", _paths(load_)]
@@ -262,7 +262,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
   hashes = []
   for src in srcs:
     stem = _lisp_file_stem(src.short_path)
-    file_flags = flags
+    file_flags = flags[:]
     outs = [ctx.new_file(stem + e) for e in ["~.fasl", "~.hash", "~.warnings"]]
     fasls    += [outs[0]]
     hashes   += [outs[1]]
