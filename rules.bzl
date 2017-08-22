@@ -170,7 +170,7 @@ def _default_flags(ctx, trans, verbose_level):
   if verbose_level > 0:
     flags += ["--verbose", str(verbose_level)]
 
-  cpp_options = set(ctx.fragments.cpp.compiler_options([]))
+  cpp_options = depset(ctx.fragments.cpp.compiler_options([]))
   if "-UNDEBUG" in cpp_options:
     flags += ["--safety", "3"]
   elif "-DNDEBUG" in cpp_options:
@@ -231,7 +231,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     if load_:  srcs_flags += ["--load", _paths(load_)]
     if nowarn: srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(set() + [build_image] + compile_data + deps + load_)
+    inputs = sorted(depset() + [build_image] + compile_data + deps + load_)
     msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps))
     if load_:
       msg += " and %d srcs)" % len(load_)
@@ -274,7 +274,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     if load_:  file_flags += ["--load", _paths(load_)]
     if nowarn: file_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(set([compile_image, src]) + compile_data + deps + load_)
+    inputs = sorted(depset([compile_image, src]) + compile_data + deps + load_)
     ctx.action(
         outputs = outs,
         inputs = inputs,
@@ -332,7 +332,7 @@ def _lisp_binary_implementation(ctx):
     compile = struct(fasls=[], hashes=[], warnings=[])
 
   # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
-  # TOOD(czak): Fix: set([1, 2, 3]) + set([2, 4])
+  # TOOD(czak): Fix: depset([1, 2, 3]) + depset([2, 4])
   deps = trans.deps
   hashes = trans.hashes + compile.hashes
   warnings = trans.warnings + compile.warnings
@@ -340,9 +340,9 @@ def _lisp_binary_implementation(ctx):
   if hasattr(ctx.attr.image, "lisp"):
     # The image already includes some deps.
     included = ctx.attr.image.lisp
-    deps = set([d for d in deps if not d in included.deps])
-    hashes = set([h for h in hashes if not h in included.hashes])
-    warnings = set([w for w in warnings if not w in included.warnings])
+    deps = depset([d for d in deps if not d in included.deps])
+    hashes = depset([h for h in hashes if not h in included.hashes])
+    warnings = depset([w for w in warnings if not w in included.warnings])
   dump_symtable = ctx.file._dump_symtable
   build_image = ctx.file.image
   if verbosep:
@@ -356,7 +356,7 @@ def _lisp_binary_implementation(ctx):
                      _spec("warnings", warnings),
                      _spec("hashes", hashes)])))
 
-  inputs = sorted(set([build_image, dump_symtable, specs])
+  inputs = sorted(depset([build_image, dump_symtable, specs])
                   + deps + compile.fasls + trans.compile_data
                   + hashes + warnings)
 
@@ -460,9 +460,9 @@ def _combine_core_and_runtime(ctx):
                    "--verbose", ctx.var.get("VERBOSE_LISP_BUILD", "0")],
       executable = ctx.executable._combine)
 
-  # TODO: use a uniq() function instead of set(...).to_list() when it's available
+  # TODO: use a uniq() function instead of depset(...).to_list() when it's available
   runfiles = ctx.runfiles(
-      files = (set(ctx.files.data) + ctx.attr.core.runtime_data).to_list())
+      files = (depset(ctx.files.data) + ctx.attr.core.runtime_data).to_list())
 
   instrumented_files = struct(
       source_attributes = ["instrumented_srcs"],

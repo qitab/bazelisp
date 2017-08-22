@@ -25,13 +25,13 @@ def transitive_deps(deps=[], image=None):
    image: the image which may contain dependencies as well.
 """
   # Figure out the transitive properties.
-  trans_deps = set()
-  trans_srcs = set()
-  trans_hashes = set()
-  trans_warnings = set()
-  trans_features  = set()
-  trans_runtime_data = set()
-  trans_compile_data = set()
+  trans_deps = depset()
+  trans_srcs = depset()
+  trans_hashes = depset()
+  trans_warnings = depset()
+  trans_features  = depset()
+  trans_runtime_data = depset()
+  trans_compile_data = depset()
   # Add the transitive dependencies from the image.
   # Image's DEPS and SRCS need to be removed before compilation.
   if image and hasattr(image, "lisp"):
@@ -77,13 +77,13 @@ def extend_lisp_provider (base, deps=[], srcs=[], hashes=[], warnings=[],
    compile_data: more compile_data
  """
  return struct(
-     deps = set(list(base.deps) + list(deps)),
-     srcs = set(list(base.srcs) + list(srcs)),
-     hashes = set(list(base.hashes) + list(hashes)),
-     warnings = set(list(base.warnings) + list(warnings)),
-     features = set(list(base.features) + list(features)),
-     runtime_data = set(list(base.runtime_data) + list(data)),
-     compile_data = set(list(base.compile_data) + list(compile_data)))
+     deps = depset(list(base.deps) + list(deps)),
+     srcs = depset(list(base.srcs) + list(srcs)),
+     hashes = depset(list(base.hashes) + list(hashes)),
+     warnings = depset(list(base.warnings) + list(warnings)),
+     features = depset(list(base.features) + list(features)),
+     runtime_data = depset(list(base.runtime_data) + list(data)),
+     compile_data = depset(list(base.compile_data) + list(compile_data)))
 
 def print_provider(p):
   "Prints the Lisp provider P."
