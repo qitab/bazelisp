@@ -232,10 +232,10 @@ def _compile_srcs(ctx, srcs, deps, image, order,
 
   serial = False
   multipass = False
-  # Name this variable loadx instead of load to avoid Bazel syntax errors.
-  loadx = []
+  # Name this variable load_ instead of load to avoid Bazel syntax errors.
+  load_ = []
   if order == "multipass":
-    loadx += srcs
+    load_ += srcs
     multipass = True
   elif order == "serial":
     serial = True
@@ -248,13 +248,13 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     srcs_flags = flags
     srcs_flags += ["--outs", compile_image.path]
     if deps:   srcs_flags += ["--deps", _paths(deps)]
-    if loadx:   srcs_flags += ["--load", _paths(loadx)]
+    if load_:   srcs_flags += ["--load", _paths(load_)]
     if nowarn: srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(set() + [build_image] + compile_data + deps + loadx)
+    inputs = sorted(set() + [build_image] + compile_data + deps + load_)
     msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps))
-    if loadx:
-      msg += " and %d srcs)" % len(loadx)
+    if load_:
+      msg += " and %d srcs)" % len(load_)
     else:
       msg += ")"
     ctx.action(
@@ -291,10 +291,10 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     file_flags += ["--srcs", src.path]
 
     if deps:   file_flags += ["--deps", _paths(deps)]
-    if loadx: file_flags += ["--load", _paths(loadx)]
+    if load_: file_flags += ["--load", _paths(load_)]
     if nowarn: file_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(set([compile_image, src]) + compile_data + deps + loadx)
+    inputs = sorted(set([compile_image, src]) + compile_data + deps + load_)
     ctx.action(
         outputs = outs,
         inputs = inputs,
@@ -304,7 +304,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
         arguments = ["compile"] + file_flags,
         executable = compile_image)
 
-    if serial: loadx += [src]
+    if serial: load_ += [src]
 
   return struct(
       fasls = fasls,
@@ -954,4 +954,3 @@ def lisp_library(name,
       lisp_features = features,
       image = image,
       visibility = ["//visibility:private"])
-
