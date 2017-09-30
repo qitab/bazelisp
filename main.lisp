@@ -481,9 +481,7 @@ package context. This allows for the user to specify their own handlers as a str
 
     (if entry-point
         (funcall entry-point)
-        (default-toplevel-loop))
-
-    (funcall-named* "BAZEL.COVERAGE:SAVE")))
+        (default-toplevel-loop))))
 
 (defun derive-entry-point (main)
   "Returns NIL, SYMBOL, or FUNCTION based on the MAIN function specification."
