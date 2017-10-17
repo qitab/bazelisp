@@ -138,7 +138,8 @@
 (defun name-closure (closure name)
   "Return CLOSURE with the NAME changed, so it prints nicely."
   ;; This is not necessary, except for debugging and aesthetics.
-  (sb-impl::set-closure-name closure name))
+  (setf (sb-kernel:%fun-name closure) name)
+  closure)
 
 (defun remove-extra-debug-info ()
   "Removes debug info like docstrings and xrefs."
