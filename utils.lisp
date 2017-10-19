@@ -9,6 +9,7 @@
            #:nconcf
            #:prefixp
            #:strip-prefix
+           #:delete-existing
            #:dohash
            #:split
            #:to-keyword
@@ -43,6 +44,11 @@
   (if (prefixp prefix string)
       (values (subseq string (length prefix)) t)
       (values string nil)))
+
+(defun delete-existing (filename)
+  "Remove FILENAME from disk if it exists and its directory is writable"
+  (when (probe-file filename)
+    (delete-file filename)))
 
 (defmacro dohash ((k v table) &body body)
   "Iterate through the hash TABLE binding the keys to K and values to V."

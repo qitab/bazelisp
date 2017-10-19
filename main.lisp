@@ -347,6 +347,7 @@ package context. This allows for the user to specify their own handlers as a str
   "Saves the WARNINGS to the WARNING-FILE."
   (declare (string warning-file) (list warnings))
   (verbose "Saving ~A warning~:P: ~S" (length warnings) warning-file)
+  (delete-existing warning-file)
   (with-open-file (out warning-file :direction :output :if-exists :supersede)
     (with-standard-io-syntax
       (format out "~@[(~{~S~^~%~})~]" warnings))))
@@ -676,6 +677,7 @@ package context. This allows for the user to specify their own handlers as a str
                 (*readtable* (setup-readtable readtable))
                 (*print-readably* nil)
                 (*print-circle* t))
+            (delete-existing output-file)
             (compile-file src :output-file output-file
                               :emit-cfasl emit-cfasl
                               :external-format :utf-8)))
@@ -694,6 +696,7 @@ package context. This allows for the user to specify their own handlers as a str
   "Compute the hash of the SRC file and write it to the HASH-FILE."
   (assert (equalp (pathname-type hash-file) "hash")) ; NOLINT
   (let ((md5sum (md5sum-file src)))
+    (delete-existing hash-file)
     (with-open-file (out hash-file :direction :output :if-exists :supersede :element-type 'octet)
       (write-stringz src out)
       (write-sequence md5sum out))
