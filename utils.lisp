@@ -10,6 +10,7 @@
            #:prefixp
            #:strip-prefix
            #:delete-existing
+           #:delete-read-only
            #:dohash
            #:split
            #:to-keyword
@@ -49,6 +50,14 @@
   "Remove FILENAME from disk if it exists and its directory is writable"
   (when (probe-file filename)
     (delete-file filename)))
+
+(defun delete-read-only (filename &optional (mode :supersede))
+  "Remove FILENAME from disk if it is readonly.
+MODE can be :APPEND or :SUPERSEDE. True if file was deleted."
+  (when (probe-file filename)
+    (handler-case
+        (with-open-file (f filename :direction :output :if-exists mode) nil)
+      (file-error () (delete-file filename)))))
 
 (defmacro dohash ((k v table) &body body)
   "Iterate through the hash TABLE binding the keys to K and values to V."
