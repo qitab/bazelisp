@@ -157,11 +157,13 @@ def _default_flags(ctx, trans, verbose_level):
   Returns:
     A list of flags
   """
+  c_options = ctx.fragments.cpp.compiler_options([])
+  sanitizer = ['msan'] if "-fsanitize=memory" in c_options else []
   flags = [
       "--compilation-mode",
       ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
       "--gendir", ctx.genfiles_dir.path,
-      "--features", " ".join(list(trans.features))]
+      "--features", " ".join(list(trans.features) + sanitizer)]
 
   if (ctx.coverage_instrumented() or
       (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
