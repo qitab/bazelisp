@@ -31,6 +31,9 @@ BAZEL_LISP = "//:bazel"
 BAZEL_LISP_MAIN = "bazel.main::main"
 
 # TODO(czak): Provide an appropriate path to k8 here.
+# A single choice of distribution per architecture is ok for now,
+# because libsbcl-exported-symbols.lds does not vary based on
+# which (if any) of clang's sanitizers is enabled.
 SBCL_DISTRIBUTION = "//third_party/lisp/sbcl/mixed-distribution/k8"
 
 lisp_files = [".lisp", ".lsp"]

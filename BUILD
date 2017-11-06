@@ -21,19 +21,31 @@ filegroup(
 # TODO(czak): This needs to be set to some path reachable from Bazel.
 SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
 
+SBCL_MSAN = "//third_party/lisp/sbcl/binary-distribution/k8-msan:sbcl"
+
+config_setting(
+    name = "msan",
+    values = {"compiler": "msan"},
+    visibility = ["//visibility:public"],
+)
+
 genrule(
     name = "make-bazel",
     srcs = [
-        SBCL,
         "utils.lisp",
         "warning.lisp",
         "log.lisp",
         "sbcl.lisp",
         "main.lisp",
-    ],
+    ] + select({
+        ":msan": [SBCL_MSAN],
+        "//conditions:default": [SBCL],
+    }),
     outs = ["bazel"],
-    cmd = (
-        "$(location %s)/bin/sbcl" % SBCL +
+    cmd = select({
+        ":msan": "$(location %s)/bin/sbcl" % SBCL_MSAN,
+        "//conditions:default": "$(location %s)/bin/sbcl" % SBCL,
+    }) + (
         " --noinform" +
         " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
         " --load '$(location utils.lisp)'" +
