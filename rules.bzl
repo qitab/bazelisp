@@ -415,7 +415,7 @@ _lisp_binary = rule(
     output_to_genfiles = True,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
-    attrs = _lisp_common_attrs + {
+    attrs = dict(_lisp_common_attrs.items() + {
         "main": attr.string(default="main"),
         "precompile_generics": attr.bool(),
         "compressed": attr.bool(),
@@ -425,7 +425,9 @@ _lisp_binary = rule(
             allow_files=True,
             single_file=True,
             # TODO(czak): Need to provide a proper path for this.
-            default=Label("//:dump-symtable.lisp"))},
+            default=Label("//:dump-symtable.lisp")
+        )
+    }.items()),
     outputs = {"core": "%{binary_name}.core",
                "dynamic_list_lds": "%{binary_name}.dynamic-list.lds",
                "extern_symbols": "%{binary_name}.extern.S",
@@ -830,13 +832,12 @@ def lisp_library_implementation(ctx,
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
     implementation = lisp_library_implementation,
-    attrs = _lisp_common_attrs + {
+    attrs = dict(_lisp_common_attrs.items() + [
         # After there's some API for accessing native rule internals, we can get
         # rid of this, but while we're implementing this as a macro that
         # generates native and Skylark rules, this rule needs some additional
         # attributes in order to get coverage instrumentation correct.
-        "instrumented_deps": attr.label_list(allow_files=True)
-    },
+        ("instrumented_deps", attr.label_list(allow_files=True))]),
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
