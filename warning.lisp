@@ -264,7 +264,7 @@ This returns two values: a boolean and a name symbol of the function."
 (defun show-stack-allocate-notes (note)
   "Shows compiler NOTE about stack allocation failures in opt mode."
   (declare (ignorable note))
-  #+(and sbcl copt)
+  #+sbcl
   (when (typep note 'sb-ext:compiler-note)
     (let ((control (simple-condition-format-control note)))
       (when (and (or (search "could" control) (search "can" control))
