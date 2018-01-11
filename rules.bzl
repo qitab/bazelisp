@@ -76,8 +76,9 @@ def _paths(files):
 
   Args:
    files: a list of build file objects.
+
   Returns:
-   A space-separated string of file paths.
+    A space-separated string of file paths.
   """
   return " ".join([f.path for f in files])
 
@@ -99,23 +100,14 @@ def _spec(spec, files):
           "\"\n \"".join([f.path for f in files]) +
           "\")")
 
-def _short_paths(files):
-  """Return the short file paths for all the 'files'.
-
-  Args:
-   files: a list of build file objects.
-  Returns:
-   A space-separated string of file short-paths.
-  """
-  return " ".join([f.short_path for f in files])
-
 def _lisp_file_stem(path):
   """Remove the .lisp or .lsp suffix from Lisp file 'path'.
 
   Args:
    path: a string representing a build file path and name.
+
   Returns:
-   The path with the file extension removed.
+    The path with the file extension removed.
   """
   if path.endswith(".lisp"):
     return path[:-5]
@@ -157,6 +149,7 @@ def _default_flags(ctx, trans, verbose_level):
    ctx: the context of the compile action.
    trans: the Lisp provider with transitive dependencies.
    verbose_level: if positive a --verbose flags is added.
+
   Returns:
     A list of flags
   """
@@ -200,8 +193,9 @@ def _compile_srcs(ctx, srcs, deps, image, order,
    flags: are the flags to be passed to Lisp compilation image.
    nowarn: is the list of suppressed Lisp warning types or warning handlers.
    verbosep: is a flag that if True, prints some verbose warnings.
+
   Returns:
-   A structure with FASLs, hash files, and warning files.
+    A structure with FASLs, hash files, and warning files.
   """
 
   if order not in ["multipass", "serial", "parallel"]:
@@ -213,7 +207,7 @@ def _compile_srcs(ctx, srcs, deps, image, order,
   if hasattr(image, "lisp"):
     # The image already includes some deps.
     included = image.lisp
-    deps = [d for d in deps if not d in included.srcs]
+    deps = depset([d for d in deps if not d in included.srcs])
   env = { "LISP_MAIN": BAZEL_LISP_MAIN }
 
   serial = False
@@ -236,7 +230,8 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     if load_:  srcs_flags += ["--load", _paths(load_)]
     if nowarn: srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(depset() + [build_image] + compile_data + deps + load_)
+    inputs = sorted(depset([build_image] + load_,
+                           transitive=[compile_data, deps]).to_list())
     msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps))
     if load_:
       msg += " and %d srcs)" % len(load_)
@@ -279,10 +274,11 @@ def _compile_srcs(ctx, srcs, deps, image, order,
     if load_:  file_flags += ["--load", _paths(load_)]
     if nowarn: file_flags += ["--nowarn", " ".join(nowarn)]
 
-    inputs = sorted(depset([compile_image, src]) + compile_data + deps + load_)
+    inputs = depset([compile_image, src] + load_,
+                    transitive=[compile_data, deps])
     ctx.action(
         outputs = outs,
-        inputs = inputs,
+        inputs = sorted(inputs.to_list()),
         progress_message = "Compiling %s" % src.short_path,
         mnemonic = "LispCompile",
         env = env,
@@ -361,9 +357,9 @@ def _lisp_binary_implementation(ctx):
                      _spec("warnings", warnings),
                      _spec("hashes", hashes)])))
 
-  inputs = sorted(depset([build_image, dump_symtable, specs])
-                  + deps + compile.fasls + trans.compile_data
-                  + hashes + warnings)
+  inputs = sorted(depset([build_image, dump_symtable, specs] + compile.fasls,
+                         transitive = [deps, trans.compile_data,
+                                       hashes, warnings]).to_list())
 
   core = ctx.outputs.core
   dynamic_list_lds = ctx.outputs.dynamic_list_lds
@@ -469,7 +465,8 @@ def _combine_core_and_runtime(ctx):
 
   # TODO: use a uniq() function instead of depset(...).to_list() when it's available
   runfiles = ctx.runfiles(
-      files = (depset(ctx.files.data) + ctx.attr.core.runtime_data).to_list())
+      files = depset(ctx.files.data,
+                     transitive=[ctx.attr.core.runtime_data]).to_list())
 
   instrumented_files = struct(
       source_attributes = ["instrumented_srcs"],
@@ -581,6 +578,9 @@ def lisp_binary(name,
   LISP_MAIN=T will cause a binary to invoke the interactive top-level REPL with
   an enabled Lisp debugger. Specifying main="nil" has the same effect.
 
+  For more information on the common rule attributes refer to:
+  http://bazel.io/docs/build-encyclopedia.html#common-attributes
+
   Outputs: <name>
 
   Args:
@@ -620,12 +620,8 @@ def lisp_binary(name,
     tags: list of arbitrary text tags mostly useful for tests. E.g.: "local".
     stamp: C++ build stamp info (0 = no, 1 = yes, default -1 = bazel option).
     malloc: malloc implementation to be used for linking of cc code.
-    include_build_test: flag indicating if build test should be produced.
     verbose: internal numeric level of verbosity for the build rule.
     **kwargs: other common attributes for binary targets.
-
-  For more information on the common rule attributes refer to:
-  http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
   # Macro: calling _lisp_binary, cc_binary, _combine_lisp_test/binary
   core = "%s.core.target" % name
@@ -751,14 +747,15 @@ def lisp_test(name, image=BAZEL_LISP, stamp=0, **kwargs):
   yet fixes 'testonly' to 1 and 'test' to True.
   The 'stamp' argument is set to 0 by default.
 
+  For more information on the rule attributes refer lisp_binary and
+  http://bazel.io/docs/build-encyclopedia.html#common-attributes
+
   Args:
     name: the rule name. Also name of the test executable to create.
     image: the base image used to compile the target.
     stamp: a flag indicating whether the binaries should be stamped.
     **kwargs: other keyword arguments that are passed to lisp_binary.
 
-  For more information on the rule attributes refer lisp_binary and
-  http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
   # Macro: an alias for lisp_binary.
   lisp_binary(name, image=image, stamp=stamp,
@@ -871,6 +868,7 @@ def make_cdeps_library(name,
     copts: options passed to the C++ compiler.
     visibility: the visibility of the C++ library.
     testonly: if 1, the targets are marked as needed for tests only.
+
   Returns:
     The name of the C++ library: <name>.cdeps
   """
@@ -912,6 +910,9 @@ def lisp_library(name,
                  **kwargs):
   """Bazel rule to create a library from Common Lisp source files.
 
+  For more information on the common rule attributes refer to:
+  http://bazel.io/docs/build-encyclopedia.html#common-attributes
+
   Outputs: <name>.fasl
 
   Args:
@@ -936,9 +937,6 @@ def lisp_library(name,
     copts: a list of string values of options to pass to cc_library.
     verbose: internal numeric level of verbosity for the build rule.
     **kwargs: other common attributes for binary targets.
-
-  For more information on the common rule attributes refer to:
-  http://bazel.io/docs/build-encyclopedia.html#common-attributes
   """
   # This macro calls _make_cdeps_library, _lisp_library.
 
