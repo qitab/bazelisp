@@ -15,8 +15,8 @@ The code here defines a few Skylark "real" rules and wraps them in
 "Skylark macro" functions. The few real rules have following names:
  _lisp_binary
  _lisp_library
- _combine_lisp_binary
- _combine_lisp_test
+ _skylark_wrap_lisp_test
+ _skylark_wrap_lisp_binary
 These "rule class names" are used to find Lisp targets.
 This is useful with 'bazel query' and for tools indexing the Lisp codebase.
 """
@@ -29,12 +29,6 @@ load("//:provider.bzl",
 BAZEL_LISP = "//:bazel"
 
 BAZEL_LISP_MAIN = "bazel.main::main"
-
-# TODO(czak): Provide an appropriate path to k8 here.
-# A single choice of distribution per architecture is ok for now,
-# because libsbcl-exported-symbols.lds does not vary based on
-# which (if any) of clang's sanitizers is enabled.
-SBCL_DISTRIBUTION = "//third_party/lisp/sbcl/mixed-distribution/k8"
 
 lisp_files = [".lisp", ".lsp"]
 
@@ -69,7 +63,7 @@ _lisp_common_attrs = {
     "verbose": attr.int(),
     # For testing coverage.
     "enable_coverage" : attr.bool()
-}
+}.items()
 
 def _paths(files):
   """Return the full file paths for all the 'files'.
@@ -304,8 +298,7 @@ def _lisp_binary_implementation(ctx):
 
   if verbosep:
     print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    print("Executable Core: %s" % ctx.attr.binary_name)
-
+    print("Executable Core: %s" % ctx.outputs.executable)
 
   trans = extend_lisp_provider(
       transitive_deps(ctx.attr.deps, image = ctx.attr.image),
@@ -344,7 +337,7 @@ def _lisp_binary_implementation(ctx):
     deps = depset([d for d in deps if not d in included.deps])
     hashes = depset([h for h in hashes if not h in included.hashes])
     warnings = depset([w for w in warnings if not w in included.warnings])
-  dump_symtable = ctx.file._dump_symtable
+
   build_image = ctx.file.image
   if verbosep:
     print("Build image: %s" % build_image.short_path)
@@ -357,49 +350,42 @@ def _lisp_binary_implementation(ctx):
                      _spec("warnings", warnings),
                      _spec("hashes", hashes)])))
 
-  inputs = sorted(depset([build_image, dump_symtable, specs] + compile.fasls,
+  inputs = sorted(depset([build_image, specs] + compile.fasls,
                          transitive = [deps, trans.compile_data,
                                        hashes, warnings]).to_list())
 
-  core = ctx.outputs.core
-  dynamic_list_lds = ctx.outputs.dynamic_list_lds
-  extern_symbols = ctx.outputs.extern_symbols
-  lisp_symbols = ctx.outputs.lisp_symbols
-  outs = [core, dynamic_list_lds, extern_symbols, lisp_symbols]
+  core = ctx.outputs.executable
+  outs = [core]
 
   flags += ["--specs", specs.path]
   flags += ["--outs", _paths(outs)]
-  flags += ["--dump-extern-symbols", extern_symbols.path]
-  flags += ["--dump-dynamic-list-lds", dynamic_list_lds.path]
   flags += ["--main", ctx.attr.main]
   if nowarn:                        flags += ["--nowarn", " ".join(nowarn)]
   if ctx.attr.precompile_generics:  flags += ["--precompile-generics"]
   if ctx.attr.compressed:           flags += ["--compressed"]
   if ctx.attr.save_runtime_options: flags += ["--save-runtime-options"]
 
-  cmd = ("LISP_MAIN=%s %s binary '%s'; " +
-         "LISP_MAIN=t %s --script %s > %s") % (
-             BAZEL_LISP_MAIN, build_image.path, "' '".join(flags),
-             core.path, dump_symtable.path, lisp_symbols.path)
-
   ctx.action(
       outputs = outs,
       inputs = inputs,
-      progress_message = "Linking %s" % core.short_path,
+      progress_message = "Building lisp core %s" % core.short_path,
       mnemonic = "LispCore",
-      command = cmd)
+      command = "LISP_MAIN=%s %s binary '%s'; " % (
+             BAZEL_LISP_MAIN, build_image.path, "' '".join(flags)))
+
+  lisp = extend_lisp_provider(
+          trans,
+          srcs = ctx.files.srcs,
+          hashes = compile.hashes,
+          warnings = compile.warnings)
 
   return struct(
-      image = ctx.outputs.core,
+      image = ctx.outputs.executable,
       runtime_data = trans.runtime_data,
       # The image also provides a lisp environment.
       # TODO(czak): Need to provide the srcs as lisp_library.
       # This way it can be loaded, if this image is used to compile Lisp.
-      lisp = extend_lisp_provider(
-          trans,
-          srcs = ctx.files.srcs,
-          hashes = compile.hashes,
-          warnings = compile.warnings),
+      lisp = lisp,
       instrumented_files = struct(
           source_attributes = ["srcs"],
           dependency_attributes = ["deps", "image"]))
@@ -408,40 +394,21 @@ def _lisp_binary_implementation(ctx):
 # Keep the name to be _lisp_binary - Grok depends on this name to find targets.
 _lisp_binary = rule(
     implementation = _lisp_binary_implementation,
-    output_to_genfiles = True,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
-    attrs = dict(_lisp_common_attrs.items() + {
-        "main": attr.string(default="main"),
-        "precompile_generics": attr.bool(),
-        "compressed": attr.bool(),
-        "save_runtime_options": attr.bool(),
-        "binary_name": attr.string(),
-        "_dump_symtable": attr.label(
-            allow_files=True,
-            single_file=True,
-            # TODO(czak): Need to provide a proper path for this.
-            default=Label("//:dump-symtable.lisp")
-        )
-    }.items()),
-    outputs = {"core": "%{binary_name}.core",
-               "dynamic_list_lds": "%{binary_name}.dynamic-list.lds",
-               "extern_symbols": "%{binary_name}.extern.S",
-               "lisp_symbols": "%{binary_name}.lisp.S"})
+    attrs = dict(_lisp_common_attrs + [
+        ("main", attr.string(default="main")),
+        ("precompile_generics", attr.bool()),
+        ("compressed", attr.bool()),
+        ("save_runtime_options", attr.bool()),
+    ]),
+    executable = True)
 
-
-# Attributes used by _combine_lisp_* rules.
-_combine_lisp_binary_attrs = {
+# Attributes used by _skylark_wrap_lisp_* rules.
+_skylark_wrap_lisp_attrs = {
+    "binary": attr.label(allow_files=True, single_file=True),
     "data": attr.label_list(cfg="data", allow_files=True),
-    "runtime": attr.label(allow_files = True, single_file = True),
-    "core": attr.label(providers=["image", "runtime_data"]),
-    "_combine": attr.label(
-        executable=True,
-        cfg = "data",
-        allow_files=True,
-        single_file=True,
-        # TODO(czak): Need to provide a proper path.
-        default = Label("//:bazel")),
+    "core": attr.label(providers=["runtime_data", "lisp"]),
     # TODO(sfreilich): After there's some API for accessing native rule
     # internals in Skylark rules, rewrite lisp_* macros to be rule functions
     # instead and remove these additional attributes used in instrumented_files.
@@ -449,19 +416,13 @@ _combine_lisp_binary_attrs = {
     "instrumented_srcs": attr.label_list(allow_files=True),
     "instrumented_deps": attr.label_list(allow_files=True)}
 
-def _combine_core_and_runtime(ctx):
-  """An action that combines a Lisp core and C++ runtime."""
-  # Implementation: _combine_lisp_binary, _combine_lisp_test
+def _skylark_wrap_lisp(ctx):
+  """A Skylark rule that provides Lisp-related providers for a cc_binary."""
   ctx.action(
-      inputs = [ctx.file.runtime, ctx.attr.core.image],
+      inputs = [ctx.file.binary],
       outputs = [ctx.outputs.executable],
-      progress_message = "Linking %s" % ctx.outputs.executable.short_path,
-      arguments = ["combine",
-                   "--run-time", ctx.file.runtime.path,
-                   "--core", ctx.attr.core.image.path,
-                   "--output", ctx.outputs.executable.path,
-                   "--verbose", ctx.var.get("VERBOSE_LISP_BUILD", "0")],
-      executable = ctx.executable._combine)
+      progress_message = "Copying to %s" % ctx.outputs.executable.short_path,
+      command = "cp "+ctx.file.binary.path+" "+ctx.outputs.executable.path)
 
   # TODO: use a uniq() function instead of depset(...).to_list() when it's available
   runfiles = ctx.runfiles(
@@ -471,29 +432,25 @@ def _combine_core_and_runtime(ctx):
   instrumented_files = struct(
       source_attributes = ["instrumented_srcs"],
       dependency_attributes = ["instrumented_deps"])
-  if hasattr(ctx.attr.core, "lisp"):
-    trans = ctx.attr.core.lisp
-    return struct(
-        lisp = trans,
-        runfiles = runfiles,
-        instrumented_files = instrumented_files)
-  else:
-    return struct(
-        runfiles = runfiles,
-        instrumented_files = instrumented_files)
+  return struct(
+      lisp = ctx.attr.core.lisp,
+      runfiles = runfiles,
+      instrumented_files = instrumented_files)
 
-# Internal rule used to combine a Lisp core and C++ binary to a Lisp binary.
-_combine_lisp_binary = rule(
-    implementation = _combine_core_and_runtime,
+# Rule used to wrap an internal cc_binary rule to provide Lisp Skylark
+# providers for lisp_binary.
+_skylark_wrap_lisp_binary = rule(
+    implementation = _skylark_wrap_lisp,
     executable = True,
-    attrs = _combine_lisp_binary_attrs)
+    attrs = _skylark_wrap_lisp_attrs)
 
-# Internal rule used to combine a Lisp core and C++ binary to a Lisp test.
-_combine_lisp_test = rule(
-    implementation = _combine_core_and_runtime,
+# Rule used to wrap an internal cc_binary rule to provide Lisp Skylark
+# providers for lisp_test.
+_skylark_wrap_lisp_test = rule(
+    implementation = _skylark_wrap_lisp,
     executable = True,
     test = True,
-    attrs = _combine_lisp_binary_attrs)
+    attrs = _skylark_wrap_lisp_attrs)
 
 # DEPS file is used to list all the Lisp sources for a target.
 # It is a quick hack to make (bazel:load ...) work.
@@ -546,6 +503,7 @@ def lisp_binary(name,
                 image = BAZEL_LISP,
                 save_runtime_options = True,
                 precompile_generics = True,
+                elfcore = True,
                 compressed = False,
                 visibility = None,
                 testonly = 0,
@@ -605,6 +563,7 @@ def lisp_binary(name,
         Setting this to False allows SBCL to process following flags:
          --help, --version, --core, --dynamic-space-size, --control-stack-size.
     precompile_generics: precompile generic functions if True (as by default).
+    elfcore: whether code should be placed in an ELF section (default True).
     compressed: if the generated core should be compressed.
     visibility: list of labels controlling which other rules can use this one.
     testonly: If 1, only test targets can use this rule.
@@ -623,16 +582,11 @@ def lisp_binary(name,
     verbose: internal numeric level of verbosity for the build rule.
     **kwargs: other common attributes for binary targets.
   """
-  # Macro: calling _lisp_binary, cc_binary, _combine_lisp_test/binary
-  core = "%s.core.target" % name
-  core_dynamic_list_lds = "%s.dynamic-list.lds" % name
-  core_extern_symbols = "%s.extern.S" % name
-  core_lisp_symbols = "%s.lisp.S" % name
 
+  core = ("%s.core.target" % name) if elfcore else name
   _lisp_binary(
-      # Common lisp attributes.
       name = core,
-      binary_name = name,
+      # Common lisp attributes.
       srcs = srcs,
       deps = deps,
       order = order,
@@ -647,7 +601,7 @@ def lisp_binary(name,
       compressed = compressed,
       save_runtime_options = save_runtime_options,
       # Common rule attributes.
-      visibility = ["//visibility:private"],
+      visibility = ["//visibility:private"] if elfcore else visibility,
       testonly = testonly,
       verbose = verbose,
       **kwargs)
@@ -673,14 +627,27 @@ def lisp_binary(name,
       visibility = visibility,
       testonly = testonly)
 
-  # Link the C++ runtime.
-  runtime = "%s.rt" % name
-  deps_rt = ([core_dynamic_list_lds,
-              SBCL_DISTRIBUTION + ":libsbcl",
-              SBCL_DISTRIBUTION + ":libsbcl-exported-symbols.lds",
-              cdeps_library])
+  if not elfcore:
+      return
+
+  # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
+  # containing the balance of the original Lisp spaces.
+  native.genrule(
+      name = name + "-parts",
+      tools = ["@local_sbcl//:elfinate"],
+      srcs = [core],
+      outs = [name + ".s", name + ".core", name + "-core.o"],
+      cmd = "$(location @local_sbcl//:elfinate) split --sizes " +
+            "$(location %s) $(location %s.s)" % (core, name),
+      testonly = testonly)
+
+  # The final executable still needs to be produced by a Skylark rule, so it
+  # can get the lisp and instrumented_files providers correct. That means
+  # the internal rule must be cc_binary, only the outermost rule is a test
+  # for lisp_test.
+  binary = name + "-combined"
   native.cc_binary(
-      name = runtime,
+      name = binary,
       linkopts = [
           # SBCL cannot generate position-independent code, and -pie
           # is becoming the default. (NOTE: until the SBCL-compiled
@@ -690,16 +657,15 @@ def lisp_binary(name,
           # most of the code would still be mapped at a fixed
           # address.)
           "-Wl,-no-pie",
-          # Ensure that symbols needed by lisp code (which grabs them
-          # via dlsym at runtime) are exported in the dynamic symbol
-          # table.
-          "-Wl,--dynamic-list", core_dynamic_list_lds],
-      srcs = [core_extern_symbols, core_lisp_symbols],
-      deps = deps_rt,
-      visibility = ["//visibility:private"],
+      ],
+      srcs = [name + ".s", name+"-core.o"],
+      deps = [cdeps_library, "@local_sbcl//:c-support"],
+      visibility = visibility,
       stamp = stamp,
       malloc = malloc,
-      testonly = testonly)
+      testonly = testonly,
+      args = args,
+      data = data)
 
   # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
   # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
@@ -710,11 +676,11 @@ def lisp_binary(name,
   instrumented_deps = deps + [image, cdeps_library]
 
   if test:
-    _combine_lisp_test(
+    _skylark_wrap_lisp_test(
         name = name,
+        binary = binary,
         instrumented_srcs = instrumented_srcs,
         instrumented_deps = instrumented_deps,
-        runtime = runtime,
         core = core,
         data = data,
         size = size,
@@ -726,16 +692,17 @@ def lisp_binary(name,
         testonly = testonly,
         tags = tags)
   else:
-    _combine_lisp_binary(
+    _skylark_wrap_lisp_binary(
         name = name,
+        binary = binary,
         instrumented_srcs = instrumented_srcs,
         instrumented_deps = instrumented_deps,
-        runtime = runtime,
         core = core,
         data = data,
         args = args,
         visibility = visibility,
-        testonly = testonly)
+        testonly = testonly,
+        tags = tags)
 
 def lisp_test(name, image=BAZEL_LISP, stamp=0, **kwargs):
   """Bazel rule to create a unit test from Common Lisp source files.
@@ -829,12 +796,13 @@ def lisp_library_implementation(ctx,
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
     implementation = lisp_library_implementation,
-    attrs = dict(_lisp_common_attrs.items() + [
+    attrs = dict(_lisp_common_attrs + [
         # After there's some API for accessing native rule internals, we can get
         # rid of this, but while we're implementing this as a macro that
         # generates native and Skylark rules, this rule needs some additional
         # attributes in order to get coverage instrumentation correct.
-        ("instrumented_deps", attr.label_list(allow_files=True))]),
+        ("instrumented_deps", attr.label_list(allow_files=True))
+    ]),
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
