@@ -206,3 +206,9 @@ lisp_test(
     srcs = ["eval-main.lisp"],
     main = "(if nil (break) (foo :x 1 :y 2))",
 )
+
+lisp_test(
+    name = "stack-alloc",
+    srcs = ["stack-alloc.lisp"],
+    nowarn = ["stack-allocate-note"],
+)

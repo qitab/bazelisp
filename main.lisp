@@ -395,15 +395,19 @@ package context. This allows for the user to specify their own handlers as a str
   (unless *current-source-file* (return-from handle-warning nil))
   (let ((result (invoke-warning-handlers (action-warning-handlers action) warning))
         (warning-p (typep warning 'warning)))
-    (message :info (if warning-p 2 3) "~A: ~S '~A'" result (type-of warning) warning)
     (ecase result
-      ((:show :ignore))
+      (:ignore
+       (bazel.log:vvv "IGNORE: ~S '~A'" (type-of warning) warning))
+      (:show
+       (bazel.log:info "SHOW: ~S '~A'" (type-of warning) warning))
       (:muffle
+       (bazel.log:vv "MUFFLE: ~S '~A'" (type-of warning) warning)
        (if warning-p
            (incf (action-muffled-warnings-count action))
            (incf (action-muffled-infos-count action)))
        (muffle-warning warning))
       (:fail
+       (bazel.log:error "FAIL: ~S '~A'" (type-of warning) warning)
        (action-add-failure warning action)))))
 
 (defun handle-error (error)
@@ -959,8 +963,10 @@ package context. This allows for the user to specify their own handlers as a str
 
     (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
 
-    ;; must precede uninteresting-condition
+    ;; Compiler-note failures must precede uninteresting-condition.
     (action-add-nowarn #'bazel.warning:fail-inline-expansion-limit)
+    (action-add-nowarn #'bazel.warning:fail-stack-allocate-notes)
+    ;; All notes are discarded here.
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 

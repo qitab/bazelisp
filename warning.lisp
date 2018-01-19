@@ -31,7 +31,8 @@
            #:uninteresting-condition
            #:deprecation
            #:show-notes
-           #:show-stack-allocate-notes
+           #:stack-allocate-note
+           #:fail-stack-allocate-notes
            #:fail-inline-expansion-limit))
 
 (cl:in-package #:bazel.warning)
@@ -261,15 +262,36 @@ This returns two values: a boolean and a name symbol of the function."
   (when (typep note 'sb-ext:compiler-note)
     :show))
 
-(defun show-stack-allocate-notes (note)
-  "Shows compiler NOTE about stack allocation failures in opt mode."
+(defun stack-allocate-note-p (note)
+  "True for a stack allocation failure NOTE."
   (declare (ignorable note))
   #+sbcl
   (when (typep note 'sb-ext:compiler-note)
     (let ((control (simple-condition-format-control note)))
-      (when (and (or (search "could" control) (search "can" control))
-                 (search "not stack allocate" control))
-        :show))))
+      (and (or (search "could" control) (search "can" control))
+           (search "not stack allocate" control)))))
+
+;;;
+;;; Stack allocation aka. dynamic-extent.
+;;;
+;;; The three symbols below are subtly different when used as a warning handler:
+;;;  - FAIL-STACK-ALLOCATE-NOTES - will fail if the notes show up.
+;;;  - STACK-ALLOCATE-NOTE - will ignore the notes.
+;;;
+;;; FAIL-STACK-ALLOCATE-NOTES is installed by default in BAZEL:MAIN.
+;;; Use nowarn = ["stack-allocate-note"] to override.
+;;;
+(deftype stack-allocate-note ()
+  "Type of a condition STACK-ALLOCATE-NOTE for stack allocation failures."
+  '(and
+    #+sbcl sb-ext:compiler-note
+    #-sbcl condition
+    (satisfies stack-allocate-note-p)))
+
+(defun fail-stack-allocate-notes (note)
+  "Fail on compiler NOTE about stack allocation failures."
+  (when (stack-allocate-note-p note)
+    :fail))
 
 (defun uninteresting-condition-p (condition)
   "A test for an uninteresting CONDITION to be muffled including compiler notes.
