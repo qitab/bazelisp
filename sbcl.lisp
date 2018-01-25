@@ -100,15 +100,13 @@
 
 (defun getenv (variable)
   "Returns the value of the environment VARIABLE."
-  (sb-posix:getenv variable))
+  (sb-ext:posix-getenv variable))
 
 (defun unsetenv (variable)
   "Removes the VARIABLE from the environment."
-  (sb-posix:unsetenv variable))
-
-(defun chdir (dir)
-  "Sets the process current working directory to DIR."
-  (sb-posix:chdir dir))
+  (alien-funcall
+   (extern-alien "unsetenv" (function sb-alien:int sb-alien:c-string))
+   variable))
 
 (defun command-line-arguments ()
   "Returns the command-line arguments without the program name."
