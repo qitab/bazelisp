@@ -108,6 +108,7 @@ cc_library(
 lisp_binary(
     name = "lisp-test-image",
     cdeps = [":empty"],
+    elfcore = False,
     main = None,
     # verbose = 1,
     deps = [
