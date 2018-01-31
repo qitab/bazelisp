@@ -443,15 +443,23 @@
 (defun call-with-augmented-find-package (body &key (use '("COMMON-LISP")) (default nil))
   "Calls the BODY after making sure that the reader
  will not error on unknown packages or not exported symbols.
- USE is the set of packages to use by the new package."
+ USE is the set of packages to use by the new package.
+ This affects _all_ threads' calls to FIND-PACKAGE, and
+ is generally not appropriate to use in production code"
   (declare (function body))
+  ;; The instant that ENCAPSULATE stores the new definition of FIND-PACKAGE, we must
+  ;; accept that any thread - whether already running, or newly created - can access
+  ;; our local function as a consequence of needing FIND-PACKAGE for any random reason.
+  ;; Were the closure allocated on this thread's stack, then this function's frame
+  ;; would be forbidden from returning until no other thread was executing the code
+  ;; that was made globally visible. Since there's no way to determine when the last
+  ;; execution has ended, the FLET body has indefinite, not dynamic, extent.
   (flet ((creating-find-package (f name)
            (or (funcall f name)
                default
                (unless *in-find-package*
                  (let ((*in-find-package* t))
                    (make-package name :use use))))))
-    (declare (dynamic-extent #'creating-find-package))
     (with-recursive-lock (*with-creating-find-package-mutex*)
       (sb-int:encapsulate 'find-package 'create #'creating-find-package)
       (unwind-protect
