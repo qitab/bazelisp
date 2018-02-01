@@ -1056,8 +1056,7 @@ package context. This allows for the user to specify their own handlers as a str
                                   "~&~S: ~A while executing: ~A~%"
                                   (type-of e) e command)
                           (print-action-full
-                           :args args :stream *error-output*
-                           :verbose (max (or *verbose* 2) 2)))))
+                           :args args :stream *error-output*))))
     (with-continue-on-error (:when force)
       (call-next-method))))
 
