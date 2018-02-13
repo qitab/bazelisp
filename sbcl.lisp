@@ -128,8 +128,11 @@
   nil)
 
 (defun terminate-other-threads ()
-  "Terminates all threads but the current one."
-  (let ((threads (remove *current-thread* (list-all-threads))))
+  "Terminates all non-system threads but the current one."
+  (let ((threads (remove-if (lambda (x)
+                              (or (thread-ephemeral-p x)
+                                  (eq x *current-thread*)))
+                            (list-all-threads))))
     (mapc #'terminate-thread threads)
     (mapc (lambda (thread) (join-thread thread :default nil)) threads)))
 
