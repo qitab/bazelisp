@@ -665,7 +665,9 @@ def lisp_binary(name,
       malloc = malloc,
       testonly = testonly,
       args = args,
-      data = data)
+      data = data,
+      # TODO(dougk): fix b/73818907, and remove the flag below.
+      features = ["no_fatal_linker_warnings"])
 
   # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
   # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
