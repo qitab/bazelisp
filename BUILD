@@ -23,6 +23,12 @@ SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
 
 SBCL_MSAN = "//third_party/lisp/sbcl/binary-distribution/k8-msan:sbcl"
 
+# Using "--define=LISPCORE=sbcl-aprof.core" will produce an executable in which
+# all builtin functions have allocation profiling enabled.
+# The same launcher is compatible with either core.
+# But don't try it with msan, because there is no precompiled aprof+msan core
+vardef("LISPCORE", "sbcl.core")
+
 config_setting(
     name = "msan",
     values = {"compiler": "msan"},
@@ -44,7 +50,7 @@ genrule(
     outs = ["bazel"],
     cmd = select({
         ":msan": "$(location %s)/bin/sbcl" % SBCL_MSAN,
-        "//conditions:default": "$(location %s)/bin/sbcl" % SBCL,
+        "//conditions:default": "$(location %s)/bin/sbcl --core $(location %s)/lib/sbcl/$(LISPCORE)" % (SBCL, SBCL),
     }) + (
         " --noinform" +
         " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
