@@ -5,15 +5,13 @@
 ; #-dbg (declaim (optimize (speed 3) (safety 1)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (require :sb-bsd-sockets)
-  (require :sb-cltl2)
-  (require :sb-introspect)
-  (require :sb-md5)
-  (require :sb-sprof)
-  (require :sb-posix))
+  ;; MD5 pulls in SB-ROTATE-BYTE which makes it impossible
+  ;; to compile either of those from fresh upstream sources without some magic.
+  (require :sb-md5))
 
 (defpackage #:bazel.sbcl
-  (:use #:common-lisp #:sb-thread #:sb-md5 #:sb-alien #:bazel.utils)
+  (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
+  (:import-from #:sb-md5 #:md5sum-file)
   (:export #:exit
            #:run
            #:inline-function-p
