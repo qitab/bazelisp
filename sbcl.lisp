@@ -5,6 +5,7 @@
 ; #-dbg (declaim (optimize (speed 3) (safety 1)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :sb-bsd-sockets) ; temporary patch for Slime
   ;; MD5 pulls in SB-ROTATE-BYTE which makes it impossible
   ;; to compile either of those from fresh upstream sources without some magic.
   (require :sb-md5))
