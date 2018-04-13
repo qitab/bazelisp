@@ -31,7 +31,7 @@ vardef("LISPCORE", "sbcl.core")
 
 config_setting(
     name = "msan",
-    values = {"compiler": "msan"},
+    flag_values = {"@bazel_tools//tools/cpp:compiler": "msan"},
     visibility = ["//visibility:public"],
 )
 
