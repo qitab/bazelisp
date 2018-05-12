@@ -636,9 +636,9 @@ def lisp_binary(name,
       name = name + "-parts",
       tools = ["@local_sbcl//:elfinate"],
       srcs = [core],
-      outs = [name + ".S", name + ".core", name + "-core.o"],
+      outs = [name + ".s", name + ".core", name + "-core.o"],
       cmd = "$(location @local_sbcl//:elfinate) split --sizes " +
-            "$(location %s) $(location %s.S)" % (core, name),
+            "$(location %s) $(location %s.s)" % (core, name),
       testonly = testonly)
 
   # The final executable still needs to be produced by a Skylark rule, so it
@@ -658,7 +658,7 @@ def lisp_binary(name,
           # address.)
           "-Wl,-no-pie",
       ],
-      srcs = [name + ".S", name+"-core.o"],
+      srcs = [name + ".s", name+"-core.o"],
       deps = [cdeps_library, "@local_sbcl//:c-support"],
       copts = copts,
       visibility = visibility,
