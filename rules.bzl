@@ -418,11 +418,14 @@ _skylark_wrap_lisp_attrs = {
 
 def _skylark_wrap_lisp(ctx):
   """A Skylark rule that provides Lisp-related providers for a cc_binary."""
+  out = ctx.actions.declare_file(ctx.label.name)
   ctx.action(
       inputs = [ctx.file.binary],
-      outputs = [ctx.outputs.executable],
-      progress_message = "Copying to %s" % ctx.outputs.executable.short_path,
-      command = "cp "+ctx.file.binary.path+" "+ctx.outputs.executable.path)
+      outputs = [out],
+      progress_message = "Copying to %s" % out.short_path,
+      command = (
+          "mv "+ctx.file.binary.path+" "+out.path+";"+
+          "ln -s "+out.path+" "+ctx.file.binary.path))
 
   # TODO: use a uniq() function instead of depset(...).to_list() when it's available
   runfiles = ctx.runfiles(
@@ -433,6 +436,7 @@ def _skylark_wrap_lisp(ctx):
       source_attributes = ["instrumented_srcs"],
       dependency_attributes = ["instrumented_deps"])
   return struct(
+      executable = out,
       lisp = ctx.attr.core.lisp,
       runfiles = runfiles,
       instrumented_files = instrumented_files)
@@ -664,9 +668,7 @@ def lisp_binary(name,
       visibility = visibility,
       stamp = stamp,
       malloc = malloc,
-      testonly = testonly,
-      args = args,
-      data = data)
+      testonly = testonly)
 
   # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
   # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
