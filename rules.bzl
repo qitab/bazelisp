@@ -24,6 +24,7 @@ This is useful with 'bazel query' and for tools indexing the Lisp codebase.
 load("//:provider.bzl",
      "transitive_deps",
      "extend_lisp_provider")
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 
 # TODO(czak): This needs to have a proper path.
 BAZEL_LISP = "//:bazel"
@@ -62,7 +63,11 @@ _lisp_common_attrs = {
         default=Label(BAZEL_LISP)),
     "verbose": attr.int(),
     # For testing coverage.
-    "enable_coverage" : attr.bool()
+    "enable_coverage" : attr.bool(),
+    # Do not add references, temporary attribute for find_cpp_toolchain.
+    # See go/skylark-api-for-cc-toolchain for more details.
+    "_cc_toolchain" : attr.label(
+        default=Label("@bazel_tools//tools/cpp:current_cc_toolchain")),
 }.items()
 
 def _paths(files):
@@ -147,7 +152,7 @@ def _default_flags(ctx, trans, verbose_level):
   Returns:
     A list of flags
   """
-  c_options = ctx.fragments.cpp.compiler_options([])
+  c_options = find_cpp_toolchain(ctx).compiler_options()
   sanitizer = ['msan'] if "-fsanitize=memory" in c_options else []
   flags = [
       "--compilation-mode",
@@ -162,7 +167,7 @@ def _default_flags(ctx, trans, verbose_level):
   if verbose_level > 0:
     flags += ["--verbose", str(verbose_level)]
 
-  cpp_options = depset(ctx.fragments.cpp.compiler_options([]))
+  cpp_options = depset(find_cpp_toolchain(ctx).compiler_options())
   if "-UNDEBUG" in cpp_options:
     flags += ["--safety", "3"]
   elif "-DNDEBUG" in cpp_options:
