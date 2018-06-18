@@ -634,7 +634,8 @@ def lisp_binary(name,
       cdeps = cdeps,
       copts = copts,
       visibility = visibility,
-      testonly = testonly)
+      testonly = testonly,
+      **kwargs)
 
   if not elfcore:
       return
@@ -832,6 +833,7 @@ def make_cdeps_library(name,
                        csrcs = [],
                        cdeps = [],
                        copts = [],
+                       features = [],
                        visibility = None,
                        testonly = 0):
   """Create a CDEPS library and a .SO binary for the Lisp library with 'name'.
@@ -857,6 +859,7 @@ def make_cdeps_library(name,
       srcs = csrcs,
       deps = cdeps,
       copts = copts,
+      features = features,
       visibility = visibility,
       testonly = testonly)
   native.cc_binary(
@@ -919,7 +922,7 @@ def lisp_library(name,
 
   cdeps_library = make_cdeps_library(
       name = name, deps = [image] + deps,
-      csrcs = csrcs, cdeps = cdeps, copts = copts,
+      csrcs = csrcs, cdeps = cdeps, copts = copts, features = features,
       visibility = visibility, testonly = testonly)
 
   _lisp_library(
