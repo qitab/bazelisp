@@ -743,7 +743,10 @@ package context. This allows for the user to specify their own handlers as a str
 
 (defmethod process-file ((action action) (file string) (type (eql :fasl)))
   "Loads a FASL file."
-  (load-file file :fasl file :action action :load-mode (action-fasl-load-mode action)))
+  (prog1 (load-file file :fasl file :action action
+                         :load-mode (action-fasl-load-mode action))
+    ;; Sort some heap after every FASL.
+    #+sbcl (sb-ext:gc)))
 
 (defmethod process-file ((action action) (file string) (type (eql :cfasl)))
   "Loads a CFASL file. Those are dependencies only loaded when compiling or building a binary."
