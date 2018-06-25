@@ -42,9 +42,8 @@ _lisp_common_attrs = {
     ),
     "order": attr.string(
         default = "serial",
-        # TODO(czak): Fix VALUES param in attr.string.
-        # values = ["multipass", "serial", "parallel"]
-        ),
+        values = ["multipass", "serial", "parallel"],
+    ),
     # runtime data - is data available at runtime.
     "data": attr.label_list(
         allow_files=True,
@@ -196,9 +195,6 @@ def _compile_srcs(ctx, srcs, deps, image, order,
   Returns:
     A structure with FASLs, hash files, and warning files.
   """
-
-  if order not in ["multipass", "serial", "parallel"]:
-    fail("Accepted values: multipass, serial, parallel", "order")
 
   build_image = list(image.files)[0]
   compile_image = build_image
