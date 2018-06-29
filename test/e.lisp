@@ -14,3 +14,9 @@
 
 (defun test-undefined-function-2 ()
   (some-yet-undefined-function-from-c "called by E"))
+
+(defun zot ()
+  (flet ((sub-zot (x)
+           (format t "Hey ~d~%" x)))
+    (sub-zot 1)
+    (sub-zot "again")))
