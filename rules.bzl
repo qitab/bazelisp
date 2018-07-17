@@ -50,7 +50,6 @@ _lisp_common_attrs = {
     # runtime data - is data available at runtime.
     "data": attr.label_list(
         allow_files = True,
-        cfg = "data",
     ),
     # compile data - is data available at compile and load time.
     "compile_data": attr.label_list(
@@ -63,7 +62,7 @@ _lisp_common_attrs = {
         allow_files = True,
         single_file = True,
         executable = True,
-        cfg = "data",
+        cfg = "target",
         default = Label(BAZEL_LISP),
     ),
     "verbose": attr.int(),
@@ -468,7 +467,7 @@ _lisp_binary = rule(
 # Attributes used by _skylark_wrap_lisp_* rules.
 _skylark_wrap_lisp_attrs = {
     "binary": attr.label(allow_files = True, single_file = True),
-    "data": attr.label_list(cfg = "data", allow_files = True),
+    "data": attr.label_list(allow_files = True),
     "core": attr.label(providers = ["runtime_data", "lisp"]),
     # TODO(sfreilich): After there's some API for accessing native rule
     # internals in Skylark rules, rewrite lisp_* macros to be rule functions
@@ -562,7 +561,7 @@ _dump_lisp_deps = rule(
             allow_files = True,
             single_file = True,
             executable = True,
-            cfg = "data",
+            cfg = "target",
             default = Label(BAZEL_LISP),
         ),
     },
