@@ -27,6 +27,19 @@ load(
     "transitive_deps",
 )
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load(
+    "@bazel_tools//tools/build_defs/cc:action_names.bzl",
+    "CPP_COMPILE_ACTION_NAME",
+    "C_COMPILE_ACTION_NAME",
+)
+
+UNSUPPORTED_FEATURES = [
+    "thin_lto",
+    "module_maps",
+    "use_header_modules",
+    "fdo_instrument",
+    "fdo_optimize",
+]
 
 # TODO(czak): This needs to have a proper path.
 BAZEL_LISP = "//:bazel"
@@ -158,7 +171,33 @@ def _default_flags(ctx, trans, verbose_level):
     Returns:
       A list of flags
     """
-    c_options = find_cpp_toolchain(ctx).compiler_options()
+    cc_toolchain = find_cpp_toolchain(ctx)
+    feature_configuration = cc_common.configure_features(
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = ctx.disabled_features + UNSUPPORTED_FEATURES,
+    )
+    c_variables = cc_common.create_compile_variables(
+        feature_configuration = feature_configuration,
+        cc_toolchain = cc_toolchain,
+    )
+    cpp_variables = cc_common.create_compile_variables(
+        feature_configuration = feature_configuration,
+        cc_toolchain = cc_toolchain,
+        add_legacy_cxx_options = True,
+    )
+    c_options = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = C_COMPILE_ACTION_NAME,
+        variables = c_variables,
+    )
+    cpp_options = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = CPP_COMPILE_ACTION_NAME,
+        variables = cpp_variables,
+    )
+
+    # TODO(dougk): Use a --define flag in bazelrc for this.
     sanitizer = ["msan"] if "-fsanitize=memory" in c_options else []
     flags = [
         "--compilation-mode",
@@ -176,7 +215,7 @@ def _default_flags(ctx, trans, verbose_level):
     if verbose_level > 0:
         flags += ["--verbose", str(verbose_level)]
 
-    cpp_options = depset(find_cpp_toolchain(ctx).compiler_options())
+    # TODO(czak): Find out how to simplify passing NDEBUG here.
     if "-UNDEBUG" in cpp_options:
         flags += ["--safety", "3"]
     elif "-DNDEBUG" in cpp_options:
