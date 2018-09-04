@@ -709,7 +709,10 @@ def lisp_binary(
       **kwargs: other common attributes for binary targets.
     """
 
-    core = ("%s.core.target" % name) if elfcore else name
+    # With non-ELF linkage, SAVE-LISP-AND-DIE can produce the final artifact
+    # unless there are C deps involved. With ELF linkage, the SBCL native core
+    # is always an intermediate artifact.
+    core = ("%s.core.target" % name) if (elfcore or len(cdeps) > 0) else name
     _lisp_binary(
         name = core,
         # Common lisp attributes.
@@ -757,46 +760,76 @@ def lisp_binary(
         **kwargs
     )
 
-    if not elfcore:
+    if elfcore:
+        # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
+        # containing the balance of the original Lisp spaces.
+        native.genrule(
+            name = name + "-parts",
+            tools = ["@local_sbcl//:elfinate"],
+            srcs = [core],
+            outs = [name + ".s", name + ".core", name + "-core.o"],
+            cmd = "$(location @local_sbcl//:elfinate) split --sizes " +
+                  "$(location %s) $(location %s.s)" % (core, name),
+            testonly = testonly,
+        )
+
+        # The final executable still needs to be produced by a Skylark rule, so it
+        # can get the lisp and instrumented_files providers correct. That means
+        # the internal rule must be cc_binary, only the outermost rule is a test
+        # for lisp_test.
+        binary = name + "-combined"
+        native.cc_binary(
+            name = binary,
+            linkopts = [
+                # SBCL cannot generate position-independent code, and -pie
+                # is becoming the default. (NOTE: until the SBCL-compiled
+                # functions are actually built as an ELF library,
+                # theoretically we could build with -pie by modifying the
+                # build for libsbcl.a, but that'd be basically a lie since
+                # most of the code would still be mapped at a fixed
+                # address.)
+                "-Wl,-no-pie",
+            ],
+            srcs = [name + ".s", name + "-core.o"],
+            deps = [cdeps_library, "@local_sbcl//:c-support"],
+            copts = copts,
+            visibility = visibility,
+            stamp = stamp,
+            malloc = malloc,
+            testonly = testonly,
+        )
+    elif len(cdeps) == 0:
+        # You'd think that the general case subsumes the special case of 0 cdeps,
+        # but there's a bootstrapping issue with //lisp/devtools/bazel
+        # that makes this necessary.
+        return  # we're done
+    else:
+        # Copy entire native SBCL core into a binary blob in a normal '.o' file
+        native.genrule(
+            name = name + "-elfcore",
+            tools = ["@local_sbcl//:elfinate"],
+            srcs = [core],
+            outs = [name + "-core.o"],
+            cmd = "$(location @local_sbcl//:elfinate) copy " +
+                  "$(location %s) $(location %s-core.o)" % (core, name),
+        )
+
+        # Link that '.o' file with cdeps and SBCL's main
+        native.cc_binary(
+            name = name,
+            linkopts = [
+                "-Wl,--export-dynamic",
+                "-Wl,-no-pie",
+            ],
+            srcs = [name + "-core.o"],
+            deps = [cdeps_library, "@local_sbcl//:c-support"],
+            copts = copts,
+            visibility = visibility,
+            stamp = stamp,
+            malloc = malloc,
+            testonly = testonly,
+        )
         return
-
-    # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
-    # containing the balance of the original Lisp spaces.
-    native.genrule(
-        name = name + "-parts",
-        tools = ["@local_sbcl//:elfinate"],
-        srcs = [core],
-        outs = [name + ".s", name + ".core", name + "-core.o"],
-        cmd = "$(location @local_sbcl//:elfinate) split --sizes " +
-              "$(location %s) $(location %s.s)" % (core, name),
-        testonly = testonly,
-    )
-
-    # The final executable still needs to be produced by a Skylark rule, so it
-    # can get the lisp and instrumented_files providers correct. That means
-    # the internal rule must be cc_binary, only the outermost rule is a test
-    # for lisp_test.
-    binary = name + "-combined"
-    native.cc_binary(
-        name = binary,
-        linkopts = [
-            # SBCL cannot generate position-independent code, and -pie
-            # is becoming the default. (NOTE: until the SBCL-compiled
-            # functions are actually built as an ELF library,
-            # theoretically we could build with -pie by modifying the
-            # build for libsbcl.a, but that'd be basically a lie since
-            # most of the code would still be mapped at a fixed
-            # address.)
-            "-Wl,-no-pie",
-        ],
-        srcs = [name + ".s", name + "-core.o"],
-        deps = [cdeps_library, "@local_sbcl//:c-support"],
-        copts = copts,
-        visibility = visibility,
-        stamp = stamp,
-        malloc = malloc,
-        testonly = testonly,
-    )
 
     # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
     # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
