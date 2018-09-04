@@ -809,20 +809,27 @@ def lisp_binary(
             name = name + "-elfcore",
             tools = ["@local_sbcl//:elfinate"],
             srcs = [core],
-            outs = [name + "-core.o"],
-            cmd = "$(location @local_sbcl//:elfinate) copy " +
-                  "$(location %s) $(location %s-core.o)" % (core, name),
+            outs = [name + "-core.o", name + "-syms.lds"],
+            cmd = ("$(location @local_sbcl//:elfinate) copy " +
+                   "$(location %s) $(location %s-core.o)" % (core, name)) +
+                  ("""&& nm -p $(location %s-core.o)|\
+awk '{print $$2";"}BEGIN{print "{"}END{print "};"}'>$(location %s-syms.lds)""" %
+                   (name, name)),
         )
 
         # Link that '.o' file with cdeps and SBCL's main
         native.cc_binary(
             name = name,
             linkopts = [
-                "-Wl,--export-dynamic",
+                ("-Wl,--dynamic-list=$(location %s-syms.lds)" % name),
                 "-Wl,-no-pie",
             ],
             srcs = [name + "-core.o"],
-            deps = [cdeps_library, "@local_sbcl//:c-support"],
+            deps = [
+                name + "-syms.lds",
+                cdeps_library,
+                "@local_sbcl//:c-support",
+            ],
             copts = copts,
             visibility = visibility,
             stamp = stamp,
