@@ -1020,7 +1020,7 @@ def make_cdeps_library(
         features = [],
         visibility = None,
         testonly = 0):
-    """Create a CDEPS library and a .SO binary for the Lisp library with 'name'.
+    """Create a CDEPS library for the Lisp library with 'name'.
 
     Args:
       name: the name of the Lisp library.
@@ -1028,6 +1028,7 @@ def make_cdeps_library(
       csrcs: the C++ sources for the library.
       cdeps: the C++ dependencies.
       copts: options passed to the C++ compiler.
+      features: features passed through to cc_library.
       visibility: the visibility of the C++ library.
       testonly: if 1, the targets are marked as needed for tests only.
 
@@ -1035,7 +1036,7 @@ def make_cdeps_library(
       The name of the C++ library: <name>.cdeps
     """
 
-    # Macro: calling cc_library (and cc_binary).
+    # Macro: calling cc_library.
     # Called from lisp_library and lisp_binary.
     cdeps_library = "%s.cdeps" % name
     cdeps = cdeps + _make_cdeps_dependencies(deps)
@@ -1045,15 +1046,6 @@ def make_cdeps_library(
         deps = cdeps,
         copts = copts,
         features = features,
-        visibility = visibility,
-        testonly = testonly,
-    )
-    native.cc_binary(
-        name = "lib%s.so" % name,
-        deps = [cdeps_library],
-        copts = copts,
-        linkshared = 1,
-        linkstatic = 0,
         visibility = visibility,
         testonly = testonly,
     )

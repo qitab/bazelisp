@@ -42,7 +42,6 @@
            #:action-args
            #:action-output-files
            #:action-processing-sources-p
-           #:action-dump-alien-symbols-p
            #:action-compressed-p
            #:action-save-runtime-options-p
            #:action-main-function
@@ -119,12 +118,6 @@
   (source-file nil :type (or null string))
   ;; Flag indicating that the cfasl needs to be generated.
   (emit-cfasl-p nil :type boolean)
-  ;; A flag that will cause the binary to write alien symbols to a file.
-  (dump-alien-symbols-p nil :type boolean)
-  ;; A file name to dump the extern symbols to.
-  (dump-extern-symbols-file nil :type (or null string))
-  ;; A file name to dump the dynamic list lds script file.
-  (dump-dynamic-list-lds-file nil :type (or null string))
   ;; Flag indicating that the compilation should commence even with errors.
   (force-compilation-p nil :type boolean)
   ;; Flag indicating that the output image should be compressed.
@@ -806,13 +799,6 @@ package context. This allows for the user to specify their own handlers as a str
   (check-failures action)
   (check-features)
 
-  (when (action-dump-alien-symbols-p action)
-    (dump-alien-symbols (action-find-output-file action "aliensyms")))
-  (when (action-dump-extern-symbols-file action)
-    (dump-extern-symbols (action-dump-extern-symbols-file action)))
-  (when (action-dump-dynamic-list-lds-file action)
-    (dump-dynamic-list-lds (action-dump-dynamic-list-lds-file action)))
-
   ;; Assure things are in a defined state.
   ;; Save as an executable image. Exit.
   (save-binary (first (action-output-files action))
@@ -871,9 +857,6 @@ package context. This allows for the user to specify their own handlers as a str
                    precompile-generics
                    save-runtime-options
                    coverage
-                   dump-alien-symbols
-                   dump-extern-symbols
-                   dump-dynamic-list-lds
                    emit-cfasl
                    deps-already-loaded
                    &allow-other-keys)
@@ -898,8 +881,6 @@ package context. This allows for the user to specify their own handlers as a str
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
-  DUMP-ALINE-SYMBOLS, DUMP-EXTERN-SYMBOLS, DUMP-DYNAMIC-LIST-LDS -
-        dumps the C symbols that the Lisp sources depend on.
   EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
   DEPS-ALREADY-LOADED - true when files in DEPS are already loaded in the image."
 
@@ -933,10 +914,8 @@ package context. This allows for the user to specify their own handlers as a str
                         ;; Load lisp dependencies when compiling or making srcs image
                         :lisp-load-mode (when (member command '(:binary :compile)) :load)
                         ;; Load fasl dependencies when compiling or creating a binary image.
-                        :fasl-load-mode (when (member command '(:binary :compile)) compilation-mode)
-                        :dump-alien-symbols-p dump-alien-symbols
-                        :dump-extern-symbols-file dump-extern-symbols
-                        :dump-dynamic-list-lds-file dump-dynamic-list-lds))
+                        :fasl-load-mode
+                        (when (member command '(:binary :compile)) compilation-mode)))
 
          (*compile-verbose* (>= *verbose* 1))
          (*compile-print* (>= *verbose* 3))
@@ -1005,15 +984,6 @@ package context. This allows for the user to specify their own handlers as a str
 (defmethod execute-command ((command (eql :binary)) &rest args)
   (apply #'process command args))
 
-
-;;;
-;;; Used to combine images
-;;;
-
-(defmethod execute-command ((command (eql :combine))
-                            &key run-time core output &allow-other-keys)
-  "Combines the RUN-TIME with the CORE and saves it to OUTPUT."
-  (combine-run-time-and-core run-time core output))
 
 ;;;
 ;;; Main entry point
