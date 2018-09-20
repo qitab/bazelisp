@@ -23,10 +23,8 @@ SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
 
 SBCL_MSAN = "//third_party/lisp/sbcl/binary-distribution/k8-msan:sbcl"
 
-# Using "--define=LISPCORE=sbcl-aprof.core" will produce an executable in which
-# all builtin functions have allocation profiling enabled.
-# The same launcher is compatible with either core.
-# But don't try it with msan, because there is no precompiled aprof+msan core
+# Using "--define=LISPCORE=<something else>" will allow using a different core
+# to build lisp.
 vardef("LISPCORE", "sbcl.core")
 
 config_setting(
