@@ -535,14 +535,6 @@ def _skylark_wrap_lisp(ctx):
         ),
     )
 
-    # TODO: use a uniq() function instead of depset(...).to_list() when it's available
-    runfiles = ctx.runfiles(
-        files = depset(
-            ctx.files.data,
-            transitive = [ctx.attr.core.runtime_data],
-        ).to_list(),
-    )
-
     instrumented_files = struct(
         source_attributes = ["instrumented_srcs"],
         dependency_attributes = ["instrumented_deps"],
@@ -550,7 +542,10 @@ def _skylark_wrap_lisp(ctx):
     return struct(
         executable = out,
         lisp = ctx.attr.core.lisp,
-        runfiles = runfiles,
+        runfiles = ctx.runfiles(
+            files = ctx.files.data,
+            transitive_files = depset(transitive = [ctx.attr.core.runtime_data]),
+        ),
         instrumented_files = instrumented_files,
     )
 
