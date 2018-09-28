@@ -147,8 +147,11 @@
      (declare (ignore size))
      (when (= type sb-vm:code-header-widetag)
        (dotimes (i (sb-kernel:code-n-entries obj))
-         (let ((f (sb-kernel:%code-entry-point obj i)))
-           (setf (sb-kernel:%simple-fun-info f) nil)))))
+         (let* ((f (sb-kernel:%code-entry-point obj i))
+                (info (sb-kernel:%simple-fun-info f)))
+           ;; Preserve source forms, assuming we want them if they exist.
+           (sb-kernel:set-simple-fun-info
+            f (sb-kernel:%simple-fun-lexpr f) nil nil)))))
    :all))
 
 ;;;
