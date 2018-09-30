@@ -311,7 +311,7 @@
   (when precompile-generics
     (precompile-generic-functions :verbose bazel.log:*verbose*))
   (unless verbose (mute-output-streams))
-  (sb-ext:gc :full t)
+  (sb-ext:fold-identical-code :aggressive t)
   (setf (extern-alien "gc_coalesce_string_literals" char) 2)
   (sb-ext:save-lisp-and-die
    name :executable t :compression compression :toplevel toplevel
