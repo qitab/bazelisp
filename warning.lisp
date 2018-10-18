@@ -268,7 +268,8 @@ This returns two values: a boolean and a name symbol of the function."
   #+sbcl
   (when (typep note 'sb-ext:compiler-note)
     (let ((control (simple-condition-format-control note)))
-      (and (or (search "could" control) (search "can" control))
+      (and (stringp control)
+           (or (search "could" control) (search "can" control))
            (search "not stack allocate" control)))))
 
 ;;;
@@ -310,8 +311,9 @@ The conditions muffled here are the minimal/uncontroversial set."
   "True if NOTE is an inline expansion limit note."
   #+sbcl
   (and (typep note 'sb-int:simple-compiler-note)
-       (search "*INLINE-EXPANSION-LIMIT*"
-               (simple-condition-format-control note))))
+       (let ((fc (simple-condition-format-control note)))
+         (and (stringp fc)
+              (search "*INLINE-EXPANSION-LIMIT*" fc)))))
 
 (deftype inline-expansion-limit ()
   "A note of inline-expansion-limit reached."
