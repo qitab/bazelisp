@@ -92,7 +92,8 @@ This returns two values: a boolean and a name symbol of the function."
   #+sbcl
   (when (typep warning '(and warning simple-condition))
     (let ((control (simple-condition-format-control warning)))
-      (search "previously compiled. A declaration of NOTINLINE" control))))
+      (and (stringp control)
+           (search "previously compiled. A declaration of NOTINLINE" control)))))
 
 (deftype inline-used-before-definition ()
   "Type of warning for early use of functions with inline or compiler-macro optimizations."
