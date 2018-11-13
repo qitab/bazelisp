@@ -279,7 +279,7 @@ def _compile_srcs(
 
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
-    if ((len(srcs) - 1) * len(deps) > 100):
+    if ((len(srcs) - 1) * len(deps.to_list()) > 100):
         # Generate a SRCS image.
         compile_image = ctx.new_file(ctx.label.name + ".srcs.image")
         srcs_flags = flags[:]
@@ -295,7 +295,7 @@ def _compile_srcs(
             [build_image] + load_,
             transitive = [compile_data, deps],
         ).to_list())
-        msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps))
+        msg = "Preparing %s (from %d deps" % (compile_image.short_path, len(deps.to_list()))
         if load_:
             msg += " and %d srcs)" % len(load_)
         else:
