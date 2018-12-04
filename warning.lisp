@@ -200,7 +200,7 @@ This returns two values: a boolean and a name symbol of the function."
   "True if WARNING is about a function call with a wrong number of arguments."
   #+sbcl (when (typep warning '(and warning simple-condition))
            (let ((control (simple-condition-format-control warning)))
-             (and (search "The function was called with" control)
+             (and (search "The function ~S is called" control)
                   (search "but wants exactly" control)))))
 
 (deftype wrong-argument-count ()
