@@ -705,9 +705,13 @@ def lisp_binary(
     """
 
     # With non-ELF linkage, SAVE-LISP-AND-DIE can produce the final artifact
-    # unless there are C deps involved. With ELF linkage, the SBCL native core
-    # is always an intermediate artifact.
-    core = ("%s.core.target" % name) if (elfcore or len(cdeps) > 0) else name
+    # unless there are C deps involved, or a data dependency.
+    # With ELF linkage, the SBCL native core is always an intermediate artifact.
+    if (elfcore or len(cdeps) > 0 or len(data) > 0):
+        core = ("%s.core.target" % name)
+    else:
+        core = name
+
     _lisp_binary(
         name = core,
         # Common lisp attributes.
@@ -793,7 +797,7 @@ def lisp_binary(
             malloc = malloc,
             testonly = testonly,
         )
-    elif len(cdeps) == 0:
+    elif len(cdeps) == 0 and len(data) == 0:
         # You'd think that the general case subsumes the special case of 0 cdeps,
         # but there's a bootstrapping issue with //lisp/devtools/bazel
         # that makes this necessary.
@@ -825,6 +829,7 @@ awk '{print $$2";"}BEGIN{print "{"}END{print "};"}'>$(location %s-syms.lds)""" %
                 cdeps_library,
                 "@local_sbcl//:c-support",
             ],
+            data = data,
             copts = copts,
             visibility = visibility,
             stamp = stamp,
