@@ -37,6 +37,16 @@
 
 (cl:in-package #:bazel.warning)
 
+(defun format-control-string-or-nil (simple-condition)
+  "Return the control slot of SIMPLE-CONDITION only if it is a string."
+  (let ((control (simple-condition-format-control simple-condition)))
+    (typecase control
+      (string control)
+      #+sbcl ;; needs SBCL version here.
+      (sb-format::fmt-control
+       (sb-format::fmt-control-string control))
+      (t nil))))
+
 (deftype style ()
   "A generic style warning."
   'cl:style-warning)
@@ -47,9 +57,9 @@ KIND maybe :FUNCTION or :VARIABLE.
 Returns two values: a boolean and a name symbol of the thing."
   #+sbcl
   (when (typep warning '(and warning simple-condition))     ; not really a simple-warning
-    (let ((control (simple-condition-format-control warning))
+    (let ((control (format-control-string-or-nil warning))
           (args (simple-condition-format-arguments warning)))
-      (cond ((equal control "undefined ~(~A~): ~S")
+      (cond ((search "undefined ~(~A~):" control)
              (and (eq (first args) kind)
                   (values t (second args))))
             ((equal control "~W more use~:P of undefined ~(~A~) ~S")
@@ -69,7 +79,7 @@ This returns two values: a boolean and a name symbol of the variable."
   "True if WARNING is about an unused variable."
   #+sbcl
   (when (typep warning '(and warning simple-condition))     ; not really a simple-warning
-    (let ((control (simple-condition-format-control warning)))
+    (let ((control (format-control-string-or-nil warning)))
       (and (search "variable" control :test #'char-equal)
            (search "defined but never used" control :test #'char-equal)))))
 
@@ -91,9 +101,8 @@ This returns two values: a boolean and a name symbol of the function."
   #-sbcl nil
   #+sbcl
   (when (typep warning '(and warning simple-condition))
-    (let ((control (simple-condition-format-control warning)))
-      (and (stringp control)
-           (search "previously compiled. A declaration of NOTINLINE" control)))))
+    (let ((control (format-control-string-or-nil warning)))
+      (search "previously compiled. A declaration of NOTINLINE" control))))
 
 (deftype inline-used-before-definition ()
   "Type of warning for early use of functions with inline or compiler-macro optimizations."
@@ -114,7 +123,7 @@ This returns two values: a boolean and a name symbol of the function."
   #-sbcl nil
   #+sbcl
   (when (typep warning '(and warning simple-condition))
-    (let ((control (simple-condition-format-control warning)))
+    (let ((control (format-control-string-or-nil warning)))
       (search "compiled before a compiler-macro was defined for it" control))))
 
 (deftype compiler-macro-after-function-use ()
@@ -141,7 +150,7 @@ This returns two values: a boolean and a name symbol of the function."
   "True when WARNING is a warning about changed function FTYPE."
   #+sbcl
   (when (typep warning '(and warning simple-condition))
-    (let ((control (simple-condition-format-control warning))
+    (let ((control (format-control-string-or-nil warning))
           (args (simple-condition-format-arguments warning)))
       (and (search "function" control)
            (search "clobbers" control)
@@ -156,7 +165,7 @@ This returns two values: a boolean and a name symbol of the function."
   "True when WARNING is a warning about a new, conflicting FTYPE declaration."
   #+sbcl
   (when (typep warning '(and warning simple-condition))
-    (let ((control (simple-condition-format-control warning)))
+    (let ((control (format-control-string-or-nil warning)))
       (and (search "The previously declared FTYPE" control)
            (search "conflicts with the definition type" control)))))
 
@@ -199,7 +208,7 @@ This returns two values: a boolean and a name symbol of the function."
 (defun wrong-argument-count-p (warning)
   "True if WARNING is about a function call with a wrong number of arguments."
   #+sbcl (when (typep warning '(and warning simple-condition))
-           (let ((control (simple-condition-format-control warning)))
+           (let ((control (format-control-string-or-nil warning)))
              (and (search "The function ~S is called" control)
                   (search "but wants exactly" control)))))
 
@@ -210,7 +219,7 @@ This returns two values: a boolean and a name symbol of the function."
 (defun optional-and-key-p (warning)
   "Is WARNING a bad style warning about &optional and &key present in the same lambda list?"
   (when (typep warning 'simple-condition)
-    (equal (simple-condition-format-control warning)
+    (equal (format-control-string-or-nil warning)
            "&OPTIONAL and &KEY found in the same lambda list: ~S")))
 
 (deftype optional-and-key ()
@@ -268,9 +277,8 @@ This returns two values: a boolean and a name symbol of the function."
   (declare (ignorable note))
   #+sbcl
   (when (typep note 'sb-ext:compiler-note)
-    (let ((control (simple-condition-format-control note)))
-      (and (stringp control)
-           (or (search "could" control) (search "can" control))
+    (let ((control (format-control-string-or-nil note)))
+      (and (or (search "could" control) (search "can" control))
            (search "not stack allocate" control)))))
 
 ;;;
@@ -312,9 +320,8 @@ The conditions muffled here are the minimal/uncontroversial set."
   "True if NOTE is an inline expansion limit note."
   #+sbcl
   (and (typep note 'sb-int:simple-compiler-note)
-       (let ((fc (simple-condition-format-control note)))
-         (and (stringp fc)
-              (search "*INLINE-EXPANSION-LIMIT*" fc)))))
+       (let ((control (format-control-string-or-nil note)))
+         (search "*INLINE-EXPANSION-LIMIT*" control))))
 
 (deftype inline-expansion-limit ()
   "A note of inline-expansion-limit reached."
@@ -333,7 +340,7 @@ The conditions muffled here are the minimal/uncontroversial set."
     #+sbcl
     (sb-ext:deprecation-condition t)
     ((and warning simple-condition)
-     (search "deprecated" (simple-condition-format-control c)
+     (search "deprecated" (format-control-string-or-nil c)
              :test #'char-equal))))
 
 (deftype deprecation ()
