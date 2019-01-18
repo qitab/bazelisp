@@ -42,9 +42,11 @@
   (let ((control (simple-condition-format-control simple-condition)))
     (typecase control
       (string control)
-      #+sbcl ;; needs SBCL version here.
-      (sb-format::fmt-control
-       (sb-format::fmt-control-string control))
+      #+#.(cl:if (cl:or #+sbcl (sb-c::version>= (sb-c::split-version-string
+                                                 (cl:lisp-implementation-version))
+                                                '(1 4 13)))
+                 '(:and) '(:or))
+      (sb-format::fmt-control (sb-format::fmt-control-string control))
       (t nil))))
 
 (deftype style ()
