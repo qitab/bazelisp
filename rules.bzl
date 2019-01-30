@@ -639,7 +639,7 @@ def lisp_binary(
         tags = [],
         stamp = -1,
         # TODO(czak): Need to provide proper path here.
-        malloc = "//tcmalloc:tcmalloc_or_debug",
+        malloc = "@bazel_tools//tools/cpp:malloc",
         verbose = None,
         **kwargs):
     """Bazel rule to create a binary executable from Common Lisp source files.
