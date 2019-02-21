@@ -72,8 +72,7 @@ _lisp_common_attrs = {
     "nowarn": attr.string_list(),
     # TODO(czak): Rename to "build_image".
     "image": attr.label(
-        allow_files = True,
-        single_file = True,
+        allow_single_file = True,
         executable = True,
         cfg = "target",
         default = Label(BAZEL_LISP),
@@ -152,7 +151,7 @@ def _concat_files(ctx, inputs, output):
         cmd = "cat %s > %s" % (_paths(inputs), output.path)
         msg = "Linking %s (from %d sources)" % (output.short_path, count)
 
-    ctx.action(
+    ctx.actions.run_shell(
         inputs = inputs,
         outputs = [output],
         progress_message = msg,
@@ -281,7 +280,7 @@ def _compile_srcs(
     # FASL and source files load into one compile-image binary.
     if ((len(srcs) - 1) * len(deps.to_list()) > 100):
         # Generate a SRCS image.
-        compile_image = ctx.new_file(ctx.label.name + ".srcs.image")
+        compile_image = ctx.actions.declare_file(ctx.label.name + ".srcs.image")
         srcs_flags = flags[:]
         srcs_flags += ["--outs", compile_image.path]
         if deps:
@@ -300,7 +299,7 @@ def _compile_srcs(
             msg += " and %d srcs)" % len(load_)
         else:
             msg += ")"
-        ctx.action(
+        ctx.actions.run(
             outputs = [compile_image],
             inputs = inputs,
             progress_message = msg,
@@ -328,7 +327,7 @@ def _compile_srcs(
     for src in srcs:
         stem = _lisp_file_stem(src.short_path)
         file_flags = flags[:]
-        outs = [ctx.new_file(stem + e) for e in ["~.fasl", "~.hash", "~.warnings"]]
+        outs = [ctx.actions.declare_file(stem + e) for e in ["~.fasl", "~.hash", "~.warnings"]]
         fasls += [outs[0]]
         hashes += [outs[1]]
         warnings += [outs[2]]
@@ -346,7 +345,7 @@ def _compile_srcs(
             [compile_image, src] + load_,
             transitive = [compile_data, deps],
         )
-        ctx.action(
+        ctx.actions.run(
             outputs = outs,
             inputs = sorted(inputs.to_list()),
             progress_message = "Compiling %s" % src.short_path,
@@ -424,8 +423,8 @@ def _lisp_binary_implementation(ctx):
     build_image = ctx.file.image
     if verbosep:
         print("Build image: %s" % build_image.short_path)
-    specs = ctx.new_file(ctx.label.name + ".specs")
-    ctx.file_action(
+    specs = ctx.actions.declare_file(ctx.label.name + ".specs")
+    ctx.actions.write(
         output = specs,
         content = (
             "\n".join([
@@ -462,7 +461,7 @@ def _lisp_binary_implementation(ctx):
     if ctx.attr.save_runtime_options:
         flags += ["--save-runtime-options"]
 
-    ctx.action(
+    ctx.actions.run_shell(
         outputs = outs,
         inputs = inputs,
         progress_message = "Building lisp core %s" % core.short_path,
@@ -511,7 +510,7 @@ _lisp_binary = rule(
 
 # Attributes used by _skylark_wrap_lisp_* rules.
 _skylark_wrap_lisp_attrs = {
-    "binary": attr.label(allow_files = True, single_file = True),
+    "binary": attr.label(allow_single_file = True),
     "data": attr.label_list(allow_files = True),
     "core": attr.label(providers = ["runtime_data", "lisp"]),
     # TODO(sfreilich): After there's some API for accessing native rule
@@ -525,7 +524,7 @@ _skylark_wrap_lisp_attrs = {
 def _skylark_wrap_lisp(ctx):
     """A Skylark rule that provides Lisp-related providers for a cc_binary."""
     out = ctx.actions.declare_file(ctx.label.name)
-    ctx.action(
+    ctx.actions.run_shell(
         inputs = [ctx.file.binary],
         outputs = [out],
         progress_message = "Copying to %s" % out.short_path,
@@ -578,7 +577,7 @@ def _dump_lisp_deps_impl(ctx):
         features = ctx.attr.lisp_features,
         srcs = ctx.files.srcs,
     )
-    ctx.file_action(
+    ctx.actions.write(
         output = ctx.outputs.deps,
         content = (
             "\n".join(["feature: " + f for f in trans.features] +
@@ -598,8 +597,7 @@ _dump_lisp_deps = rule(
         "deps": attr.label_list(providers = ["lisp"]),
         "lisp_features": attr.string_list(),
         "image": attr.label(
-            allow_files = True,
-            single_file = True,
+            allow_single_file = True,
             executable = True,
             cfg = "target",
             default = Label(BAZEL_LISP),
