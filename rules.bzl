@@ -765,7 +765,7 @@ def lisp_binary(
             tools = ["@local_sbcl//:elfinate"],
             srcs = [core],
             outs = [name + ".s", name + ".core", name + "-core.o"],
-            cmd = "$(location @local_sbcl//:elfinate) split --sizes " +
+            cmd = "$(location @local_sbcl//:elfinate) split " +
                   "$(location %s) $(location %s.s)" % (core, name),
             testonly = testonly,
         )
