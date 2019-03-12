@@ -702,13 +702,75 @@ def lisp_binary(
       **kwargs: other common attributes for binary targets.
     """
 
-    # With non-ELF linkage, SAVE-LISP-AND-DIE can produce the final artifact
-    # unless there are C deps involved, or a data dependency.
+    # We have essentially three ways to produce a lisp binary:
+    # (1) Call SAVE-LISP-AND-DIE, and use _exactly_ the executable file
+    #     from that, no more, no less.  This is a slightly funny binary file
+    #     in that it has a (large) opaque blob of bytes at the end comprising
+    #     the whole lisp heap. But that's the garden-variety SBCL executable
+    #     used by literally everyone.
+    #     No C code other than SBCL's support is present in the text file,
+    #     as the dump step does not know how to write bytes from any source
+    #     other than /path/to/sbcl/bin/sbcl and the in-memory heap.
+    #
+    # (2) A partially ELFinated binary: After SAVE-LISP-AND-DIE, slurp the lisp
+    #     heap back out of the resulting file, and turn it into a data section
+    #     in a proper ELF file, but a relatively opaque section with the
+    #     only C symbols acting to demarcate the bounds of the lisp spaces.
+    #     Feed that in to a regular link step (with C++ libaries and such,
+    #     and the SBCL main).  This binary when launched will "parse" the lisp
+    #     heap out of the data section and begin life as usual. The main
+    #     distinctions between it and the garden-variety executable are that:
+    #     - the heap is not randomly glued on at the end, but instead a true
+    #       section that survives manipulation by various ELF tools.
+    #     - C++ code other than SBCL's runtime is directly present in the image
+    #     In almost all respects this acts like a garden-variety Lisp binary.
+    #
+    # (3) A fully ELFinated binary: Again start with SAVE-LISP-AND-DIE,
+    #     but this time turn the attached lisp heap into two ELF sections:
+    #     one comprising the '.text' and nothing but, and one containing
+    #     everything else that did not go in the '.text' section. The latter
+    #     section is akin to what goes in one section for partial ELF mode,
+    #     minus what became '.text'.
+    #     The precise details of how we produce the '.text' section are
+    #     unimportant, but suffice it to say that it imposes a constraint on
+    #     the size of the lisp code space, as it gets _directly_ memory-mapped
+    #     from the '.text' section in the resulting executable. Simultaneously
+    #     it is a proper segment of the final file and a GC-managed space.
+    #     (This is actually an astonishing feat, not without drawbacks,
+    #     namely, that it has to be read/write memory "because Lisp")
+    # In truth, there is one other kind of executable which has no lisp heap
+    # attached, and requires a --core argument, but we seldom if ever use that.
+    #
+    # It is extremely important to understand another limitation as well: in no
+    # scenario except (1) does the system linker receive "--export-dynamic" for
+    # *all* C symbols, i.e. literally --export-dynamic as opposed to
+    # --export-dynamic-symbol=something.
+    # This means that you CAN NOT refer to an arbitrary C symbol from Lisp,
+    # though we do still link with libdl to look up symbols "because reasons".
+    # Any C symbol that the Lisp code has to know about must have its address
+    # in a 'reloc' section of the ELF file whence came the Lisp heap.
+    # Mention of "one" or "two" sections in the above descriptions refers to
+    # the number of sections of lisp data. In either case, there are other
+    # ELF sections which inform the linker how to link Lisp to C code.
+    #
+    # When the BUILD rule specifies elfcore=False, SAVE-LISP-AND-DIE can produce
+    # the final artifact unless there are C deps involved, or a data dependency,
+    # and we prefer to do that. If there are lisp deps involved, then we don't
+    # immediately know whether there are transitive C deps, so we have to assume
+    # that there are. However, the bazel tool itself CAN NOT use either partial
+    # or full ELFination, so we have to detect that case and avoid it.
     # With ELF linkage, the SBCL native core is always an intermediate artifact.
-    if (elfcore or len(cdeps) > 0 or len(data) > 0):
-        core = ("%s.core.target" % name)
-    else:
+    my_package = native.package_name()
+    if "/" in my_package:
+        my_package = my_package[my_package.rindex("/") + 1:]
+    selfbuild = my_package == "bazel" and name == "bazel"
+    final_step_is_save_lisp = (not elfcore and (len(cdeps) + len(data) == 0) and
+                               (len(deps) == 0 or selfbuild))
+
+    if final_step_is_save_lisp:
         core = name
+    else:
+        core = ("%s.core.target" % name)
 
     _lisp_binary(
         name = core,
@@ -795,8 +857,8 @@ def lisp_binary(
             malloc = malloc,
             testonly = testonly,
         )
-    elif len(cdeps) == 0 and len(data) == 0:
-        # You'd think that the general case subsumes the special case of 0 cdeps,
+    elif final_step_is_save_lisp:
+        # You'd think that the general case subsumes this case,
         # but there's a bootstrapping issue with //lisp/devtools/bazel
         # that makes this necessary.
         return  # we're done
