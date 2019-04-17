@@ -1,5 +1,3 @@
-# -*- mode: Python; -*-
-
 """Functions generating or modifying the Lisp provider struct.
 
 A Lisp (lisp) provider is a struct with:
@@ -16,53 +14,57 @@ for all transitive dependencies.
 """
 
 def transitive_deps(deps = [], image = None):
-    """Returns a provider structure containing transitive dependencies.
+    """Given a list of depsets create a structure containing the
+    transitive dependencies.
 
     Note the DEPS themselves are not added to the provider transitive list.
 
     Args:
-     deps: the list of dependencies,
-     image: the image which may contain dependencies as well.
-  """
+      deps: the list of dependencies,
+      image: the image which may contain dependencies as well.
+
+    Returns:
+      A structure containing the transitive dependancies
+    """
 
     # Figure out the transitive properties.
-    trans_deps = depset()
-    trans_srcs = depset()
-    trans_hashes = depset()
-    trans_warnings = depset()
-    trans_features = depset()
-    trans_runtime_data = depset()
-    trans_compile_data = depset()
+    trans_deps = []
+    trans_srcs = []
+    trans_hashes = []
+    trans_warnings = []
+    trans_features = []
+    trans_runtime_data = []
+    trans_compile_data = []
 
     # Add the transitive dependencies from the image.
     # Image's DEPS and SRCS need to be removed before compilation.
     if image and hasattr(image, "lisp"):
-        trans_deps += image.lisp.deps
-        trans_srcs += image.lisp.srcs
-        trans_hashes += image.lisp.hashes
-        trans_warnings += image.lisp.warnings
-        trans_features += image.lisp.features
-        trans_runtime_data += image.lisp.runtime_data
-        trans_compile_data += image.lisp.compile_data
+        trans_deps += [image.lisp.deps]
+        trans_srcs += [image.lisp.srcs]
+        trans_hashes += [image.lisp.hashes]
+        trans_warnings += [image.lisp.warnings]
+        trans_features += [image.lisp.features]
+        trans_runtime_data += [image.lisp.runtime_data]
+        trans_compile_data += [image.lisp.compile_data]
 
     for dep in deps:
         if hasattr(dep, "lisp"):
-            trans_deps += dep.lisp.deps
-            trans_srcs += dep.lisp.srcs
-            trans_hashes += dep.lisp.hashes
-            trans_warnings += dep.lisp.warnings
-            trans_features += dep.lisp.features
-            trans_runtime_data += dep.lisp.runtime_data
-            trans_compile_data += dep.lisp.compile_data
+            trans_deps += [dep.lisp.deps]
+            trans_srcs += [dep.lisp.srcs]
+            trans_hashes += [dep.lisp.hashes]
+            trans_warnings += [dep.lisp.warnings]
+            trans_features += [dep.lisp.features]
+            trans_runtime_data += [dep.lisp.runtime_data]
+            trans_compile_data += [dep.lisp.compile_data]
 
     return struct(
-        deps = trans_deps,
-        srcs = trans_srcs,
-        hashes = trans_hashes,
-        warnings = trans_warnings,
-        features = trans_features,
-        runtime_data = trans_runtime_data,
-        compile_data = trans_compile_data,
+        deps = depset(transitive = trans_deps),
+        srcs = depset(transitive = trans_srcs),
+        hashes = depset(transitive = trans_hashes),
+        warnings = depset(transitive = trans_warnings),
+        features = depset(transitive = trans_features),
+        runtime_data = depset(transitive = trans_runtime_data),
+        compile_data = depset(transitive = trans_compile_data),
     )
 
 def extend_lisp_provider(
