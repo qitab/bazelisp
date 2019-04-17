@@ -176,6 +176,7 @@ def _default_flags(ctx, trans, verbose_level):
     cxxopts = cpp_fragment.cxxopts
     cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
+        ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
         unsupported_features = ctx.disabled_features + UNSUPPORTED_FEATURES,
