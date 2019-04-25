@@ -409,10 +409,9 @@ def _lisp_binary_implementation(ctx):
         compile = struct(fasls = [], hashes = [], warnings = [])
 
     # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
-    # TOOD(czak): Fix: depset([1, 2, 3]) + depset([2, 4])
     deps = trans.deps
-    hashes = trans.hashes + compile.hashes
-    warnings = trans.warnings + compile.warnings
+    hashes = depset(compile.hashes, transitive = [trans.hashes])
+    warnings = depset(compile.warnings, transitive = [trans.warnings])
 
     if hasattr(ctx.attr.image, "lisp"):
         # The image already includes some deps.
