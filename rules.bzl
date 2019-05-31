@@ -343,12 +343,13 @@ def _compile_srcs(
             file_flags += ["--nowarn", " ".join(nowarn)]
 
         inputs = depset(
-            [compile_image, src] + load_,
+            [src] + load_,
             transitive = [compile_data, deps],
         )
         ctx.actions.run(
             outputs = outs,
             inputs = sorted(inputs.to_list()),
+            tools = [compile_image],
             progress_message = "Compiling %s" % src.short_path,
             mnemonic = "LispCompile",
             env = env,
@@ -437,7 +438,7 @@ def _lisp_binary_implementation(ctx):
     )
 
     inputs = sorted(depset(
-        [build_image, specs] + compile.fasls,
+        [specs] + compile.fasls,
         transitive = [
             deps,
             trans.compile_data,
@@ -464,6 +465,7 @@ def _lisp_binary_implementation(ctx):
     ctx.actions.run_shell(
         outputs = outs,
         inputs = inputs,
+        tools = [build_image],
         progress_message = "Building lisp core %s" % core.short_path,
         mnemonic = "LispCore",
         command = "LISP_MAIN=%s %s binary '%s'; " % (
