@@ -211,7 +211,7 @@ def _default_flags(ctx, trans, verbose_level):
         "--gendir",
         ctx.genfiles_dir.path,
         "--features",
-        " ".join(list(trans.features) + sanitizer),
+        " ".join(trans.features.to_list() + sanitizer),
     ]
 
     if (ctx.coverage_instrumented() or
@@ -259,7 +259,7 @@ def _compile_srcs(
       A structure with FASLs, hash files, and warning files.
     """
 
-    build_image = list(image.files)[0]
+    build_image = image.files.to_list()[0]
     compile_image = build_image
 
     if hasattr(image, "lisp"):
@@ -336,7 +336,7 @@ def _compile_srcs(
         file_flags += ["--srcs", src.path]
 
         if deps:
-            file_flags += ["--deps", _paths(deps)]
+            file_flags += ["--deps", _paths(deps.to_list())]
         if load_:
             file_flags += ["--load", _paths(load_)]
         if nowarn:
@@ -430,9 +430,9 @@ def _lisp_binary_implementation(ctx):
         content = (
             "\n".join([
                 _spec("srcs", compile.fasls),
-                _spec("deps", deps),
-                _spec("warnings", warnings),
-                _spec("hashes", hashes),
+                _spec("deps", deps.to_list()),
+                _spec("warnings", warnings.to_list()),
+                _spec("hashes", hashes.to_list()),
             ])
         ),
     )

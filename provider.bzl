@@ -89,13 +89,13 @@ def extend_lisp_provider(
       compile_data: more compile_data
     """
     return struct(
-        deps = depset(list(base.deps) + list(deps)),
-        srcs = depset(list(base.srcs) + list(srcs)),
-        hashes = depset(list(base.hashes) + list(hashes)),
-        warnings = depset(list(base.warnings) + list(warnings)),
-        features = depset(list(base.features) + list(features)),
-        runtime_data = depset(list(base.runtime_data) + list(data)),
-        compile_data = depset(list(base.compile_data) + list(compile_data)),
+        deps = depset(deps, transitive = [base.deps]),
+        srcs = depset(srcs, transitive = [base.srcs]),
+        hashes = depset(hashes, transitive = [base.hashes]),
+        warnings = depset(warnings, transitive = [base.warnings]),
+        features = depset(features, transitive = [base.features]),
+        runtime_data = depset(data, transitive = [base.runtime_data]),
+        compile_data = depset(compile_data, transitive = [base.compile_data]),
     )
 
 def print_provider(p):
