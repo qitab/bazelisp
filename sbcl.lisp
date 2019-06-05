@@ -88,7 +88,7 @@
 
 (defun inline-function-p (function)
   "Returns non-nil when the FUNCTION is declared inline."
-  (sb-int:info :function :inlinep function))
+  (eq (sb-int:info :function :inlinep function) 'inline))
 
 (defun function-has-transforms-p (function)
   "Returns non-nil if the FUNCTION has transforms."
