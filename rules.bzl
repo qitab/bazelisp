@@ -474,9 +474,17 @@ def _lisp_binary_implementation(ctx):
         ),
     )
 
+    if compile.fasls:
+        output_fasl = ctx.actions.declare_file(ctx.label.name + ".fasl")
+        _concat_files(ctx, compile.fasls, output_fasl)
+        output_fasls = [output_fasl]
+    else:
+        output_fasls = []
+
     lisp = extend_lisp_provider(
         trans,
         srcs = ctx.files.srcs,
+        deps = output_fasls,
         hashes = compile.hashes,
         warnings = compile.warnings,
     )
@@ -485,8 +493,6 @@ def _lisp_binary_implementation(ctx):
         image = ctx.outputs.executable,
         runtime_data = trans.runtime_data,
         # The image also provides a lisp environment.
-        # TODO(czak): Need to provide the srcs as lisp_library.
-        # This way it can be loaded, if this image is used to compile Lisp.
         lisp = lisp,
         instrumented_files = struct(
             source_attributes = ["srcs"],
