@@ -311,8 +311,7 @@ def _compile_srcs(
         )
 
         # All deps included above
-        # TODO(czak): Add dedup code and remove --deps-already-loaded.
-        flags = flags + ["--deps-already-loaded"]
+        deps = depset([])
 
     if multipass:
         nowarn = nowarn + ["redefined-method", "redefined-function"]
