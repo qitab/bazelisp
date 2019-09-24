@@ -8,14 +8,20 @@
 
 licenses(["unencumbered"])  # New BSD, Google-authored
 
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
 exports_files(["LICENSE"])
 
 exports_files(["dump-symtable.lisp"])
 
-filegroup(
+bzl_library(
     name = "build_rules",
     srcs = glob(["*.bzl"]),
     visibility = ["//visibility:public"],
+    deps = [
+        "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
+        "//third_party/bazel/tools/cpp:toolchain_utils",
+    ],
 )
 
 # TODO(czak): This needs to be set to some path reachable from Bazel.

@@ -1,5 +1,3 @@
-# -*- mode: Python; -*-
-
 """Implementation of the Lisp build rules.
 
 These rules are used by projects that contain Lisp sources.
@@ -26,9 +24,9 @@ load(
     "extend_lisp_provider",
     "transitive_deps",
 )
-load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("//third_party/bazel/tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load(
-    "@bazel_tools//tools/build_defs/cc:action_names.bzl",
+    "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
     "CPP_COMPILE_ACTION_NAME",
     "C_COMPILE_ACTION_NAME",
 )
@@ -49,43 +47,35 @@ BAZEL_LISP_MAIN = "bazel.main::main"
 lisp_files = [".lisp", ".lsp"]
 
 # Common attributes accepted by the (internal) lisp rules.
-_lisp_common_attrs = {
-    "srcs": attr.label_list(
-        allow_files = lisp_files,
-    ),
-    "deps": attr.label_list(
-        providers = ["lisp"],
-    ),
-    "order": attr.string(
+_lisp_common_attrs = [
+    ("srcs", attr.label_list(allow_files = lisp_files)),
+    ("deps", attr.label_list(providers = ["lisp"])),
+    ("order", attr.string(
         default = "serial",
         values = ["multipass", "serial", "parallel"],
-    ),
+    )),
     # runtime data - is data available at runtime.
-    "data": attr.label_list(
-        allow_files = True,
-    ),
+    ("data", attr.label_list(allow_files = True)),
     # compile data - is data available at compile and load time.
-    "compile_data": attr.label_list(
-        allow_files = True,
-    ),
-    "lisp_features": attr.string_list(),
-    "nowarn": attr.string_list(),
+    ("compile_data", attr.label_list(allow_files = True)),
+    ("lisp_features", attr.string_list()),
+    ("nowarn", attr.string_list()),
     # TODO(czak): Rename to "build_image".
-    "image": attr.label(
+    ("image", attr.label(
         allow_single_file = True,
         executable = True,
         cfg = "target",
         default = Label(BAZEL_LISP),
-    ),
-    "verbose": attr.int(),
+    )),
+    ("verbose", attr.int()),
     # For testing coverage.
-    "enable_coverage": attr.bool(),
+    ("enable_coverage", attr.bool()),
     # Do not add references, temporary attribute for find_cpp_toolchain.
     # See go/skylark-api-for-cc-toolchain for more details.
-    "_cc_toolchain": attr.label(
+    ("_cc_toolchain", attr.label(
         default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
-    ),
-}.items()
+    )),
+]
 
 def _paths(files):
     """Return the full file paths for all the 'files'.
@@ -768,17 +758,22 @@ def lisp_binary(
     # that there are. However, the bazel tool itself CAN NOT use either partial
     # or full ELFination, so we have to detect that case and avoid it.
     # With ELF linkage, the SBCL native core is always an intermediate artifact.
+    #
+    # TODO(sfreilich): If this was a proper rule instead of a macro, we could
+    # use providers to know for sure if there are indirect C++ dependencies.
     my_package = native.package_name()
     if "/" in my_package:
         my_package = my_package[my_package.rindex("/") + 1:]
     selfbuild = my_package == "bazel" and name == "bazel"
-    final_step_is_save_lisp = (not elfcore and (len(cdeps) + len(data) == 0) and
-                               (len(deps) == 0 or selfbuild))
+    final_step_is_save_lisp = selfbuild or not (elfcore or cdeps or data or deps)
 
-    if final_step_is_save_lisp:
+    # We can be done after lisp_binary if we're not linking in any C++ dependencies,
+    # restructuring the binary into ELF format, or wrapping the binary rule in a
+    # test rule.
+    if final_step_is_save_lisp and not test:
         core = name
     else:
-        core = ("%s.core.target" % name)
+        core = name + ".core.target"
 
     _lisp_binary(
         name = core,
@@ -797,7 +792,7 @@ def lisp_binary(
         compressed = compressed,
         save_runtime_options = save_runtime_options,
         # Common rule attributes.
-        visibility = ["//visibility:private"] if elfcore else visibility,
+        visibility = ["//visibility:private"] if core != name else visibility,
         testonly = testonly,
         verbose = verbose,
         **kwargs
@@ -827,7 +822,13 @@ def lisp_binary(
         **kwargs
     )
 
-    if elfcore:
+    if core == name:
+        # If we've decided to make the lisp_binary the outermost thing, we're done.
+        return
+
+    if final_step_is_save_lisp:
+        binary = core
+    elif elfcore:
         # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
         # containing the balance of the original Lisp spaces.
         native.genrule(
@@ -837,6 +838,7 @@ def lisp_binary(
             outs = [name + ".s", name + ".core", name + "-core.o"],
             cmd = "$(location @local_sbcl//:elfinate) split " +
                   "$(location %s) $(location %s.s)" % (core, name),
+            visibility = ["//visibility:private"],
             testonly = testonly,
         )
 
@@ -860,16 +862,11 @@ def lisp_binary(
             srcs = [name + ".s", name + "-core.o"],
             deps = [cdeps_library, "@local_sbcl//:c-support"],
             copts = copts,
-            visibility = visibility,
+            visibility = ["//visibility:private"],
             stamp = stamp,
             malloc = malloc,
             testonly = testonly,
         )
-    elif final_step_is_save_lisp:
-        # You'd think that the general case subsumes this case,
-        # but there's a bootstrapping issue with //lisp/devtools/bazel
-        # that makes this necessary.
-        return  # we're done
     else:
         # Copy entire native SBCL core into a binary blob in a normal '.o' file
         native.genrule(
@@ -878,15 +875,22 @@ def lisp_binary(
             srcs = [core],
             outs = [name + "-core.o", name + "-syms.lds"],
             cmd = ("$(location @local_sbcl//:elfinate) copy " +
-                   "$(location %s) $(location %s-core.o)" % (core, name)) +
-                  ("""&& nm -p $(location %s-core.o)|\
-awk '{print $$2";"}BEGIN{print "{"}END{print "};"}'>$(location %s-syms.lds)""" %
-                   (name, name)),
+                   "$(location {core}) $(location {name}-core.o) && " +
+                   "nm -p $(location {name}-core.o) | " +
+                   "awk '" +
+                   '{{print $$2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
+                   "' >$(location {name}-syms.lds)").format(
+                core = core,
+                name = name,
+            ),
+            visibility = ["//visibility:private"],
+            testonly = testonly,
         )
 
         # Link that '.o' file with cdeps and SBCL's main
+        binary = name + "-combined"
         native.cc_binary(
-            name = name,
+            name = binary,
             linkopts = [
                 ("-Wl,--dynamic-list=$(location %s-syms.lds)" % name),
                 "-Wl,-no-pie",
@@ -899,12 +903,11 @@ awk '{print $$2";"}BEGIN{print "{"}END{print "};"}'>$(location %s-syms.lds)""" %
             ],
             data = data,
             copts = copts,
-            visibility = visibility,
+            visibility = ["//visibility:private"],
             stamp = stamp,
             malloc = malloc,
             testonly = testonly,
         )
-        return
 
     # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
     # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
