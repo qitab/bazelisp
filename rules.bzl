@@ -300,8 +300,9 @@ def _compile_srcs(
             executable = build_image,
         )
 
-        # All deps included above
-        # TODO(czak): Add dedup code and remove --deps-already-loaded.
+        # All deps included above. However, we need to keep --deps the same in
+        # the command line below for the sake of analysis that uses extra
+        # actions to examine the command-line of LispCompile actions.
         flags = flags + ["--deps-already-loaded"]
 
     if multipass:
