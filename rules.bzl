@@ -448,8 +448,6 @@ def _lisp_binary_implementation(ctx):
         flags += ["--nowarn", " ".join(nowarn)]
     if ctx.attr.precompile_generics:
         flags += ["--precompile-generics"]
-    if ctx.attr.compressed:
-        flags += ["--compressed"]
     if ctx.attr.save_runtime_options:
         flags += ["--save-runtime-options"]
 
@@ -501,7 +499,6 @@ _lisp_binary = rule(
     attrs = dict(_lisp_common_attrs + [
         ("main", attr.string(default = "main")),
         ("precompile_generics", attr.bool()),
-        ("compressed", attr.bool()),
         ("save_runtime_options", attr.bool()),
     ]),
     executable = True,
@@ -622,7 +619,6 @@ def lisp_binary(
         save_runtime_options = True,
         precompile_generics = True,
         elfcore = True,
-        compressed = False,
         visibility = None,
         testonly = 0,
         csrcs = [],
@@ -681,11 +677,10 @@ def lisp_binary(
           Setting this to False allows SBCL to process following flags:
            --help, --version, --core, --dynamic-space-size, --control-stack-size.
       precompile_generics: precompile generic functions if True (as by default).
-      elfcore: whether code should be placed in an ELF section (default True).
         Must be set to False to allow compiling arbitary amounts of code to
         memory, so should be set to false for targets intended for use as a
         compilation image.
-      compressed: if the generated core should be compressed.
+      elfcore: whether code should be placed in an ELF section (default True).
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
       csrcs: a list of C/C++ source labels.
@@ -778,7 +773,6 @@ def lisp_binary(
         # Binary core attributes.
         main = main,
         precompile_generics = precompile_generics,
-        compressed = compressed,
         save_runtime_options = save_runtime_options,
         # Common rule attributes.
         visibility = ["//visibility:private"],

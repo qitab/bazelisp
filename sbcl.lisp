@@ -300,8 +300,6 @@
  Arguments:
   NAME - the file name to save the image.
   TOPLEVEL - the name of the toplevel function.
-  COMPRESSION - indicates the compression to be used for the image.
-      Will decompress in memory instead of mmapping the image.
   SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
       This is usually permanent.
   VERBOSE - if true, the output streams are not muted before dumping the image.
@@ -314,8 +312,10 @@
   (sb-ext:fold-identical-code :aggressive t)
   (setf (extern-alien "gc_coalesce_string_literals" char) 2)
   (sb-ext:save-lisp-and-die
-   name :executable t :compression compression :toplevel toplevel
-        :save-runtime-options save-runtime-options)
+   name
+   :executable t
+   :toplevel toplevel
+   :save-runtime-options save-runtime-options)
 
   (assert (not "Expected the image to survive after save-lisp-and-die."))) ; NOLINT
 

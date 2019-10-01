@@ -42,7 +42,6 @@
            #:action-args
            #:action-output-files
            #:action-processing-sources-p
-           #:action-compressed-p
            #:action-save-runtime-options-p
            #:action-main-function
            #:action-warning-handlers
@@ -120,8 +119,6 @@
   (emit-cfasl-p nil :type boolean)
   ;; Flag indicating that the compilation should commence even with errors.
   (force-compilation-p nil :type boolean)
-  ;; Flag indicating that the output image should be compressed.
-  (compressed-p nil :type boolean)
   ;; Used to precompile the generic functions.
   (precompile-generics-p nil :type boolean)
   ;; Flag indicating that the final binary should have its runtime options burned.
@@ -508,13 +505,12 @@ package context. This allows for the user to specify their own handlers as a str
       (t
        (fatal "Cannot use ~S as an entry point." main-exp)))))
 
-(defun save-binary (name main &key compression save-runtime-options precompile-generics
+(defun save-binary (name main &key save-runtime-options precompile-generics
                                    remove-debug-info)
   "Saves the image to a binary image named 'name'. Exits.
  Arguments:
   NAME - the file name to save the image.
   MAIN - the name of the toplevel function.
-  COMPRESSION - indicates the compression to be used for the image.
       Will decompress in memory instead of mmapping the image.
   SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
       This is usually permanent.
@@ -533,7 +529,6 @@ package context. This allows for the user to specify their own handlers as a str
   (save-lisp-and-die
    name
    :toplevel #'restart-image
-   :compression compression
    :save-runtime-options save-runtime-options
    :precompile-generics precompile-generics
    :verbose (plusp *verbose*)))
@@ -804,7 +799,6 @@ package context. This allows for the user to specify their own handlers as a str
   (save-binary (first (action-output-files action))
                (action-main-function action)
                :remove-debug-info (eq (action-compilation-mode action) :opt)
-               :compression (action-compressed-p action)
                :save-runtime-options (action-save-runtime-options-p action)
                :precompile-generics (action-precompile-generics-p action)))
 
@@ -853,7 +847,6 @@ package context. This allows for the user to specify their own handlers as a str
                    (compilation-mode :fastbuild)
                    safety force
                    main features nowarn
-                   compressed
                    precompile-generics
                    save-runtime-options
                    coverage
@@ -877,7 +870,6 @@ package context. This allows for the user to specify their own handlers as a str
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
   NOWARN - list of warnings to be muffled,
-  COMPRESSED - if the binary should be compressed,
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
@@ -905,7 +897,6 @@ package context. This allows for the user to specify their own handlers as a str
                         :compilation-mode compilation-mode
                         :safety safety
                         :main-function main
-                        :compressed-p compressed
                         :force-compilation-p force
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
