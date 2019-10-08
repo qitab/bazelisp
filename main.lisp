@@ -605,7 +605,7 @@ package context. This allows for the user to specify their own handlers as a str
     (return-from load-file))
   (with-open-file (in (or fasl name))
     (unless (plusp (file-length in))
-      (bazel.log:warning "Not loading an empty file: ~S." name)
+      (bazel.log:verbose "Not loading an empty file: ~S." name)
       (return-from load-file)))
   (with-standard-io-syntax
     (handler-bind ((non-fatal-error #'handle-error))
