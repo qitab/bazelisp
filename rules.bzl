@@ -563,7 +563,7 @@ _skylark_wrap_lisp_test = rule(
 def _dump_lisp_deps_impl(ctx):
     """Creates a file that lists all Lisp files needed by the target in order."""
     trans = extend_lisp_provider(
-        transitive_deps(ctx.attr.deps, image = ctx.attr.image),
+        transitive_deps(ctx.attr.deps, build_image = ctx.attr.image),
         # Add those to trans.
         features = ctx.attr.lisp_features,
         srcs = ctx.files.srcs,
@@ -575,7 +575,10 @@ def _dump_lisp_deps_impl(ctx):
                       ["src: " + f.path for f in trans.srcs])
         ),
     )
-    return [DefaultInfo(files = [ctx.outputs.deps])]
+    return [
+        output_dir_info(ctx),
+        DefaultInfo(files = depset([ctx.outputs.deps])),
+    ]
 
 # Internal rule that creates a Lisp library DEPS file.
 # DEPS file is used to list all the Lisp sources for a target.
