@@ -185,8 +185,8 @@ def _default_flags(ctx, trans, verbose_level):
     flags = [
         "--compilation-mode",
         ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
-        "--gendir",
-        ctx.genfiles_dir.path,
+        "--bindir",
+        ctx.bin_dir.path,
         "--features",
         " ".join(trans.features.to_list() + sanitizer),
     ]
@@ -599,7 +599,6 @@ _dump_lisp_deps = rule(
         ),
     },
     outputs = {"deps": "%{library_name}.deps"},
-    output_to_genfiles = True,
 )
 
 def lisp_binary(
@@ -1073,7 +1072,6 @@ _lisp_library = rule(
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
-    output_to_genfiles = True,
 )
 
 def _label(label):

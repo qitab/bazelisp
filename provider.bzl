@@ -16,13 +16,11 @@ LispInfo = provider(fields = {
 # This is a workaround, it would be better if that was provided by DefaultInfo
 # or handled by something in unittest.bzl.
 OutputDirInfo = provider(fields = {
-    "genfiles_path": "ctx.genfiles_dir.path",
     "bin_path": "ctx.bin_dir.path",
 })
 
 def output_dir_info(ctx):
     return OutputDirInfo(
-        genfiles_path = ctx.genfiles_dir.path,
         bin_path = ctx.bin_dir.path,
     )
 

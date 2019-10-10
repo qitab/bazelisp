@@ -109,7 +109,7 @@
   ;; The first of the output files.
   (output-files nil :type list)
   ;; The root directory for generated files.
-  (gendir nil :type (or null string))
+  (bindir nil :type (or null string))
   ;; Flag indicating that the dependencies have been processed
   ;; and the outstanding files are sources for this BUILD action.
   (processing-sources-p nil :type boolean)
@@ -188,7 +188,7 @@
          (outs (split (getf args :outs)))
          (warnings (split (getf args :warning)))
          (hashes (split (getf args :hashes)))
-         (gendir (getf args :gendir)))
+         (bindir (getf args :bindir)))
     (when (< verbose 2)
       (when (> (length deps) 1) (remf args :deps))
       (when (> (length srcs) 1) (remf args :srcs))
@@ -204,16 +204,16 @@
     #+sbcl
     (vv "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
     (verbose "Action: ~A~%" action)
-    (flet ((strip-gendir (name) (if gendir (strip-prefix gendir name) name)))
+    (flet ((strip-bindir (name) (if bindir (strip-prefix bindir name) name)))
       (cond ((< verbose 2)
              (verbose "Deps: ~A" (length deps))
              (verbose "Srcs: ~A" (length srcs))
              (verbose "Load: ~A" (length load)))
             (t
-             (vv "Deps:~{~%~3T~A~}" (mapcar #'strip-gendir deps))
-             (vv "Srcs:~{~%~3T~A~}" (mapcar #'strip-gendir srcs))
-             (vv "Load:~{~%~3T~A~}" (mapcar #'strip-gendir load))))
-      (verbose "Outs:~{~%~3T~A~}" (mapcar #'strip-gendir outs))
+             (vv "Deps:~{~%~3T~A~}" (mapcar #'strip-bindir deps))
+             (vv "Srcs:~{~%~3T~A~}" (mapcar #'strip-bindir srcs))
+             (vv "Load:~{~%~3T~A~}" (mapcar #'strip-bindir load))))
+      (verbose "Outs:~{~%~3T~A~}" (mapcar #'strip-bindir outs))
       (when (< verbose 3)
         (verbose "Hashes: ~A" (length hashes))
         (verbose "Warnings: ~A" (length warnings))))
@@ -419,15 +419,15 @@ package context. This allows for the user to specify their own handlers as a str
   `(handler-bind ((condition #'muffle-all-warnings))
      ,@body))
 
-(defun print-conditions (header conditions &optional gendir)
+(defun print-conditions (header conditions &optional bindir)
   "Outputs a list of CONDITIONS to the output stream.
- GENDIR is the directory for genfiles, that is stripped off when printing the CONDITIONS.
+ BINDIR is the directory for output files, that is stripped off when printing the CONDITIONS.
  HEADER is a prefix printed before all CONDITIONS."
   (when conditions
     (info "~A:~{~@[~&~3T~A:~]~&~6T ~S '~A'~}" header
           (loop for prev-src = nil then src
                 for (src type condition) in conditions
-                nconc (list (unless (equal src prev-src) (strip-prefix gendir src))
+                nconc (list (unless (equal src prev-src) (strip-prefix bindir src))
                             type (with-standard-io-syntax
                                    (or (ignore-errors (format nil "~S" condition))
                                        (format nil "~A" condition))))))))
@@ -441,7 +441,7 @@ package context. This allows for the user to specify their own handlers as a str
 
   (when (action-failures action)
     ;; Terminate with error. Blaze will clean up for us.
-    (print-conditions "Failures" (action-failures action) (action-gendir action))
+    (print-conditions "Failures" (action-failures action) (action-bindir action))
     (unless (action-force-compilation-p action)
       (fatal "Blaze lisp build failed"))))
 
@@ -841,7 +841,7 @@ package context. This allows for the user to specify their own handlers as a str
 ;;;
 
 (defun process (command &rest args
-                   &key deps load srcs outs gendir
+                   &key deps load srcs outs bindir
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
@@ -861,7 +861,7 @@ package context. This allows for the user to specify their own handlers as a str
   LOAD - files to be loaded after dependencies.
   SRCS - sources for a binary core or for compilation,
   OUTS - the output files,
-  GENDIR - the directory for the generated results (for debug),
+  BINDIR - the directory for the output files (for debug),
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from blaze -c <compilation-mode>,
@@ -893,7 +893,7 @@ package context. This allows for the user to specify their own handlers as a str
            (make-action :args args
                         :command command
                         :output-files outs
-                        :gendir gendir
+                        :bindir bindir
                         :compilation-mode compilation-mode
                         :safety safety
                         :main-function main
