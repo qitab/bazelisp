@@ -26,7 +26,7 @@ load(
     "output_dir_info",
     "transitive_deps",
 )
-load("//third_party/bazel/tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load(
     "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
     "CPP_COMPILE_ACTION_NAME",
@@ -74,7 +74,7 @@ _lisp_common_attrs = [
     ("enable_coverage", attr.bool()),
     # For testing compilation behavior.
     ("preload_image", attr.bool()),
-    # Do not add references, temporary attribute for find_cpp_toolchain.
+    # Do not add references, temporary attribute for find_cc_toolchain.
     # See go/skylark-api-for-cc-toolchain for more details.
     ("_cc_toolchain", attr.label(
         default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
@@ -151,7 +151,7 @@ def _default_flags(ctx, trans, verbose_level):
     copts = cpp_fragment.copts
     conlyopts = cpp_fragment.conlyopts
     cxxopts = cpp_fragment.cxxopts
-    cc_toolchain = find_cpp_toolchain(ctx)
+    cc_toolchain = find_cc_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,

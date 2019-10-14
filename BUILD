@@ -6,9 +6,9 @@
 # with the Skylark rules which are defined in rules.bzl
 # See README for more info about this package.
 
-licenses(["unencumbered"])  # New BSD, Google-authored
-
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+licenses(["unencumbered"])
 
 exports_files(["LICENSE"])
 
@@ -20,7 +20,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
-        "//third_party/bazel/tools/cpp:toolchain_utils",
+        "@rules_cc//cc:find_cc_toolchain",
     ],
 )
 
