@@ -562,22 +562,18 @@ _skylark_wrap_lisp_test = rule(
 # It is a quick hack to make (bazel:load ...) work.
 def _dump_lisp_deps_impl(ctx):
     """Creates a file that lists all Lisp files needed by the target in order."""
-    trans = extend_lisp_provider(
-        transitive_deps(ctx.attr.deps, build_image = ctx.attr.image),
-        # Add those to trans.
-        features = ctx.attr.lisp_features,
-        srcs = ctx.files.srcs,
-    )
+    lisp_info = ctx.attr.target[LispInfo]
+    out = ctx.actions.declare_file(ctx.attr.target.label.name + ".deps")
     ctx.actions.write(
-        output = ctx.outputs.deps,
+        output = out,
         content = (
-            "\n".join(["feature: " + f for f in trans.features] +
-                      ["src: " + f.path for f in trans.srcs])
+            "\n".join(["feature: " + f for f in lisp_info.features] +
+                      ["src: " + f.path for f in lisp_info.srcs])
         ),
     )
     return [
         output_dir_info(ctx),
-        DefaultInfo(files = depset([ctx.outputs.deps])),
+        DefaultInfo(files = depset([out])),
     ]
 
 # Internal rule that creates a Lisp library DEPS file.
@@ -586,19 +582,8 @@ def _dump_lisp_deps_impl(ctx):
 _dump_lisp_deps = rule(
     implementation = _dump_lisp_deps_impl,
     attrs = {
-        "library_name": attr.string(),
-        # TODO(czak): Share with _lisp_common_attrs.
-        "srcs": attr.label_list(allow_files = lisp_files),
-        "deps": attr.label_list(providers = [LispInfo]),
-        "lisp_features": attr.string_list(),
-        "image": attr.label(
-            allow_single_file = True,
-            executable = True,
-            cfg = "target",
-            default = Label(BAZEL_LISP),
-        ),
+        "target": attr.label(mandatory = True, providers = [LispInfo]),
     },
-    outputs = {"deps": "%{library_name}.deps"},
 )
 
 def lisp_binary(
@@ -781,18 +766,6 @@ def lisp_binary(
         **kwargs
     )
 
-    _dump_lisp_deps(
-        name = "~" + name + ".deps",
-        library_name = name,
-        srcs = srcs,
-        deps = deps,
-        lisp_features = features,
-        image = image,
-        visibility = ["//visibility:private"],
-        tags = ["manual"],
-        testonly = testonly,
-    )
-
     # Precompile all C sources in advance, before core symbols are present.
     cdeps_library = make_cdeps_library(
         name = name,
@@ -924,6 +897,14 @@ def lisp_binary(
             testonly = testonly,
             tags = tags,
         )
+
+    _dump_lisp_deps(
+        name = name + ".deps",
+        target = name,
+        visibility = ["//visibility:private"],
+        tags = ["manual"],
+        testonly = testonly,
+    )
 
 def lisp_test(name, image = BAZEL_LISP, stamp = 0, **kwargs):
     """Bazel rule to create a unit test from Common Lisp source files.
@@ -1212,12 +1193,8 @@ def lisp_library(
     )
 
     _dump_lisp_deps(
-        name = "~" + name + ".deps",
-        library_name = name,
-        srcs = srcs,
-        deps = deps,
-        lisp_features = features,
-        image = image,
+        name = name + ".deps",
+        target = name,
         visibility = ["//visibility:private"],
         tags = ["manual"],
         testonly = testonly,
