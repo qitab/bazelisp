@@ -586,6 +586,10 @@ _dump_lisp_deps = rule(
     },
 )
 
+def _add_tag(tag, tags):
+    if tag not in tags:
+        tags.append(tag)
+
 def lisp_binary(
         name,
         srcs = [],
@@ -760,11 +764,12 @@ def lisp_binary(
         visibility = ["//visibility:private"],
         testonly = testonly,
         verbose = verbose,
-        # For testing, control the behavior where deps are preloads in
-        # compilation image.
-        preload_image = kwargs.pop("preload_image", None),
         **kwargs
     )
+
+    # Discard kwargs that are just for _lisp_binary.
+    kwargs.pop("preload_image", None)
+    kwargs.pop("enable_coverage", None)
 
     # Precompile all C sources in advance, before core symbols are present.
     cdeps_library = make_cdeps_library(
@@ -775,89 +780,82 @@ def lisp_binary(
         copts = copts,
         visibility = visibility,
         testonly = testonly,
+        tags = tags,
         **kwargs
     )
+
+    internal_tags = list(tags)
+    _add_tag("manual", internal_tags)
+
+    # SBCL cannot generate position-independent code, and -pie is becoming the
+    # default. (NOTE: until the SBCL-compiled functions are actually built as
+    # an ELF library, theoretically we could build with -pie by modifying the
+    # build for libsbcl.a, but that'd be basically a lie since most of the code
+    # would still be mapped at a fixed address.)
+    linkopts = ["-Wl,-no-pie"]
+
+    # Either way, we need to link with the cdeps and SBCL C++.
+    link_deps = [
+        cdeps_library,
+        "@local_sbcl//:c-support",
+    ]
 
     if elfcore:
         # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
         # containing the balance of the original Lisp spaces.
-        native.genrule(
-            name = name + "-parts",
-            tools = ["@local_sbcl//:elfinate"],
-            srcs = [core],
-            outs = [name + ".s", name + ".core", name + "-core.o"],
-            cmd = "$(location @local_sbcl//:elfinate) split " +
-                  "$(location %s) $(location %s.s)" % (core, name),
-            visibility = ["//visibility:private"],
-            testonly = testonly,
-        )
-
-        # The final executable still needs to be produced by a Skylark rule, so
-        # it can get the LispInfo and instrumented_files_info providers
-        # correct. That means the internal rule must be cc_binary, only the
-        # outermost rule is a test for lisp_test.
-        binary = name + "-combined"
-        native.cc_binary(
-            name = binary,
-            linkopts = [
-                # SBCL cannot generate position-independent code, and -pie
-                # is becoming the default. (NOTE: until the SBCL-compiled
-                # functions are actually built as an ELF library,
-                # theoretically we could build with -pie by modifying the
-                # build for libsbcl.a, but that'd be basically a lie since
-                # most of the code would still be mapped at a fixed
-                # address.)
-                "-Wl,-no-pie",
-            ],
-            srcs = [name + ".s", name + "-core.o"],
-            deps = [cdeps_library, "@local_sbcl//:c-support"],
-            copts = copts,
-            visibility = ["//visibility:private"],
-            stamp = stamp,
-            malloc = malloc,
-            testonly = testonly,
+        elfinate_outs = [name + ".s", name + ".core", name + "-core.o"]
+        link_srcs = [name + ".s", name + "-core.o"]
+        elfinate_cmd_template = (
+            "$(location @local_sbcl//:elfinate) split " +
+            "$(location {core}) $(location {name}.s)"
         )
     else:
         # Copy entire native SBCL core into a binary blob in a normal '.o' file
-        native.genrule(
-            name = name + "-elfcore",
-            tools = ["@local_sbcl//:elfinate"],
-            srcs = [core],
-            outs = [name + "-core.o", name + "-syms.lds"],
-            cmd = ("$(location @local_sbcl//:elfinate) copy " +
-                   "$(location {core}) $(location {name}-core.o) && " +
-                   "nm -p $(location {name}-core.o) | " +
-                   "awk '" +
-                   '{{print $$2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
-                   "' >$(location {name}-syms.lds)").format(
-                core = core,
-                name = name,
-            ),
-            visibility = ["//visibility:private"],
-            testonly = testonly,
+        elfinate_outs = [name + "-core.o", name + "-syms.lds"]
+        link_srcs = [name + "-core.o"]
+        elfinate_cmd_template = (
+            "$(location @local_sbcl//:elfinate) copy " +
+            "$(location {core}) $(location {name}-core.o) && " +
+            "nm -p $(location {name}-core.o) | " +
+            "awk '" +
+            '{{print $$2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
+            "' >$(location {name}-syms.lds)"
         )
+        linkopts.append("-Wl,--dynamic-list=$(location {}-syms.lds)".format(name))
+        link_deps.append(name + "-syms.lds")
 
-        # Link that '.o' file with cdeps and SBCL's main
-        binary = name + "-combined"
-        native.cc_binary(
-            name = binary,
-            linkopts = [
-                ("-Wl,--dynamic-list=$(location %s-syms.lds)" % name),
-                "-Wl,-no-pie",
-            ],
-            srcs = [name + "-core.o"],
-            deps = [
-                name + "-syms.lds",
-                cdeps_library,
-                "@local_sbcl//:c-support",
-            ],
-            data = data,
-            copts = copts,
-            visibility = ["//visibility:private"],
-            stamp = stamp,
-            malloc = malloc,
-            testonly = testonly,
-        )
+    native.genrule(
+        name = name + "-parts",
+        tools = ["@local_sbcl//:elfinate"],
+        srcs = [core],
+        outs = elfinate_outs,
+        cmd = elfinate_cmd_template.format(
+            core = core,
+            name = name,
+        ),
+        visibility = ["//visibility:private"],
+        testonly = testonly,
+        tags = internal_tags,
+    )
+
+    # The final executable still needs to be produced by a Skylark rule, so
+    # it can get the LispInfo and instrumented_files_info providers
+    # correct. That means the internal rule must be cc_binary, only the
+    # outermost rule is a test for lisp_test.
+    binary = name + "-combined"
+    native.cc_binary(
+        name = binary,
+        linkopts = linkopts,
+        srcs = link_srcs,
+        deps = link_deps,
+        data = data,
+        copts = copts,
+        visibility = ["//visibility:private"],
+        stamp = stamp,
+        malloc = malloc,
+        testonly = testonly,
+        tags = internal_tags,
+    )
 
     # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
     # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
@@ -868,35 +866,32 @@ def lisp_binary(
     instrumented_deps = deps + [image, cdeps_library]
 
     if test:
-        _skylark_wrap_lisp_test(
-            name = name,
-            binary = binary,
-            instrumented_srcs = instrumented_srcs,
-            instrumented_deps = instrumented_deps,
-            core = core,
-            data = data,
+        skylark_wrap_rule = _skylark_wrap_lisp_test
+
+        # TODO(sfreilich): This should object when test_kwargs are set on a
+        # non-test rule.
+        test_kwargs = dict(
             size = size,
             timeout = timeout,
             flaky = flaky,
             shard_count = shard_count,
-            args = args,
-            visibility = visibility,
-            testonly = testonly,
-            tags = tags,
         )
     else:
-        _skylark_wrap_lisp_binary(
-            name = name,
-            binary = binary,
-            instrumented_srcs = instrumented_srcs,
-            instrumented_deps = instrumented_deps,
-            core = core,
-            data = data,
-            args = args,
-            visibility = visibility,
-            testonly = testonly,
-            tags = tags,
-        )
+        skylark_wrap_rule = _skylark_wrap_lisp_binary
+        test_kwargs = {}
+    skylark_wrap_rule(
+        name = name,
+        binary = binary,
+        instrumented_srcs = instrumented_srcs,
+        instrumented_deps = instrumented_deps,
+        core = core,
+        data = data,
+        args = args,
+        visibility = visibility,
+        testonly = testonly,
+        tags = tags,
+        **test_kwargs
+    )
 
     _dump_lisp_deps(
         name = name + ".deps",
@@ -1071,38 +1066,33 @@ def make_cdeps_library(
         deps = [],
         csrcs = [],
         cdeps = [],
-        copts = [],
-        features = [],
-        visibility = None,
-        testonly = 0):
-    """Create a CDEPS library for the Lisp library with 'name'.
+        tags = [],
+        **kwargs):
+    """Create native.cc_library representing a Lisp target's csrcs and cdeps.
+
+    This target is named [name].cdeps.
 
     Args:
-      name: the name of the Lisp library.
-      deps: other Lisp library names used to derive transitive dependencies.
-      csrcs: the C++ sources for the library.
-      cdeps: the C++ dependencies.
-      copts: options passed to the C++ compiler.
-      features: features passed through to cc_library.
-      visibility: the visibility of the C++ library.
-      testonly: if 1, the targets are marked as needed for tests only.
+      name: Name of the Lisp target.
+      deps: Immediate Lisp deps for the Lisp target.
+      csrcs: C++ sources for the target.
+      cdeps: C++ dependencies for the target.
+      tags: Blaze tags for the cdeps target.
+      **kwargs: Other keyword arguments forwarded to cc_library.
 
     Returns:
       The name of the C++ library: <name>.cdeps
     """
-
-    # Macro: calling cc_library.
-    # Called from lisp_library and lisp_binary.
-    cdeps_library = "%s.cdeps" % name
-    cdeps = cdeps + _make_cdeps_dependencies(deps)
+    cdeps_library = name + ".cdeps"
+    lisp_cdeps = _make_cdeps_dependencies(deps)
+    tags = list(tags)
+    _add_tag("manual", tags)
     native.cc_library(
         name = cdeps_library,
         srcs = csrcs,
-        deps = cdeps,
-        copts = copts,
-        features = features,
-        visibility = visibility,
-        testonly = testonly,
+        deps = cdeps + lisp_cdeps,
+        tags = tags,
+        **kwargs
     )
     return cdeps_library
 
@@ -1151,12 +1141,15 @@ def lisp_library(
       cdeps: this will link the cc dependencies into the image.
       copts: a list of string values of options to pass to cc_library.
       verbose: internal numeric level of verbosity for the build rule.
-      **kwargs: other common attributes for binary targets.
+      **kwargs: other common attributes.
     """
     # This macro calls _make_cdeps_library, _lisp_library, _dump_lisp_deps.
 
-    # For testing, control the behavior that preloads deps before compilation.
-    preload_image = kwargs.pop("preload_image", None)
+    cc_kwargs = {
+        key: value
+        for key, value in kwargs.items()
+        if key not in ("preload_image", "enable_coverage")
+    }
 
     cdeps_library = make_cdeps_library(
         name = name,
@@ -1167,6 +1160,7 @@ def lisp_library(
         features = features,
         visibility = visibility,
         testonly = testonly,
+        **cc_kwargs
     )
 
     _lisp_library(
@@ -1188,7 +1182,6 @@ def lisp_library(
         visibility = visibility,
         testonly = testonly,
         verbose = verbose,
-        preload_image = preload_image,
         **kwargs
     )
 
