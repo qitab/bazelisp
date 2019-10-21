@@ -901,7 +901,7 @@ def lisp_binary(
         testonly = testonly,
     )
 
-def lisp_test(name, image = BAZEL_LISP, stamp = 0, **kwargs):
+def lisp_test(name, image = BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
     """Bazel rule to create a unit test from Common Lisp source files.
 
     Outputs: <name>
@@ -918,6 +918,8 @@ def lisp_test(name, image = BAZEL_LISP, stamp = 0, **kwargs):
       name: the rule name. Also name of the test executable to create.
       image: the base image used to compile the target.
       stamp: a flag indicating whether the binaries should be stamped.
+      testonly: Whether this target should only be a dependency of testonly
+          targets and tests.
       **kwargs: other keyword arguments that are passed to lisp_binary.
     """
 
@@ -926,8 +928,8 @@ def lisp_test(name, image = BAZEL_LISP, stamp = 0, **kwargs):
         name,
         image = image,
         stamp = stamp,
-        testonly = 1,
         test = True,
+        testonly = testonly,
         **kwargs
     )
 
