@@ -49,12 +49,13 @@ BAZEL_LISP_MAIN = "bazel.main::main"
 lisp_files = [".lisp", ".lsp"]
 
 # Common attributes accepted by the (internal) lisp rules.
+_compilation_orders = ["multipass", "serial", "parallel"]
 _lisp_common_attrs = [
     ("srcs", attr.label_list(allow_files = lisp_files)),
     ("deps", attr.label_list(providers = [LispInfo])),
     ("order", attr.string(
         default = "serial",
-        values = ["multipass", "serial", "parallel"],
+        values = _compilation_orders,
     )),
     # runtime data - is data available at runtime.
     ("data", attr.label_list(allow_files = True)),
@@ -110,23 +111,22 @@ def _spec(spec, files):
     return '(:{}\n "{}")\n'.format(spec, _paths(files, sep = '"\n "'))
 
 def _concat_files(ctx, inputs, output):
-    """An action to concatenate the 'inputs' into 'outputs' in context 'cxt'.
+    """Concatenates several FASLs into a combined FASL.
 
     Args:
-      ctx: the build context used to instantiate the concatenate build action.
-      inputs: a list of files to concatenate.
-      output: a file to store the concatenated contents.
+      ctx: Rule context
+      inputs: List of files to concatenate.
+      output: File output for the concatenated contents.
     """
-    count = len(inputs)
-    if count == 0:
-        cmd = "touch %s" % output.path
-        msg = "Linking %s (as empty FASL)" % output.short_path
-    elif count == 1:
-        cmd = "mv %s %s" % (inputs[0].path, output.path)
-        msg = "Linking %s (from 1 source)" % output.short_path
+    if not inputs:
+        cmd = "touch " + output.path
+        msg = "Linking {} (as empty FASL)".format(output.short_path)
+    elif len(inputs) == 1:
+        cmd = "mv {} {}".format(inputs[0].path, output.path)
+        msg = "Linking {} (from 1 source)".format(output.short_path)
     else:
-        cmd = "cat %s > %s" % (_paths(inputs), output.path)
-        msg = "Linking %s (from %d sources)" % (output.short_path, count)
+        cmd = "cat {} > {}".format(_paths(inputs), output.path)
+        msg = "Linking {} (from {} sources)".format(output.short_path, len(inputs))
 
     ctx.actions.run_shell(
         inputs = inputs,
@@ -136,16 +136,20 @@ def _concat_files(ctx, inputs, output):
         command = cmd,
     )
 
-def _default_flags(ctx, trans, verbose_level):
+def _default_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentation):
     """Returns a list of default flags based on the context and trans provider.
 
     Args:
-     ctx: the context of the compile action.
-     trans: the Lisp provider with transitive dependencies.
-     verbose_level: if positive a --verbose flags is added.
+     ctx: The rule context.
+     lisp_features: List of transitive Lisp feature strings provided by this
+         target and its dependencies.
+     verbose_level: int indicating level of debugging output. If positive, a
+         --verbose flags is added.
+     force_coverage_instrumentation: Whether to unconditionally add code
+         coverage instrumentation.
 
     Returns:
-      A list of flags
+        A list of args to be passed to Lisp build actions.
     """
     cpp_fragment = ctx.fragments.cpp
     copts = cpp_fragment.copts
@@ -180,19 +184,18 @@ def _default_flags(ctx, trans, verbose_level):
         variables = cpp_variables,
     )
 
-    # TODO(dougk): Use a --define flag in bazelrc for this.
-    sanitizer = ["msan"] if "-fsanitize=memory" in c_options else []
+    if "-fsanitize=memory" in c_options:
+        lisp_features.append("msan")
     flags = [
         "--compilation-mode",
         ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
         "--bindir",
         ctx.bin_dir.path,
         "--features",
-        " ".join(trans.features.to_list() + sanitizer),
+        " ".join(lisp_features),
     ]
 
-    if (ctx.coverage_instrumented() or
-        (hasattr(ctx.attr, "enable_coverage") and ctx.attr.enable_coverage)):
+    if ctx.coverage_instrumented() or force_coverage_instrumentation:
         flags += ["--coverage"]
 
     if verbose_level > 0:
@@ -209,44 +212,74 @@ def _default_flags(ctx, trans, verbose_level):
 
     return flags
 
-def _compile_srcs(
+def lisp_compile_srcs(
         ctx,
         srcs,
         deps,
         image,
+        lisp_features,
+        nowarn,
         order,
         compile_data,
-        flags,
-        nowarn,
-        verbosep,
-        preload_image):
-    """Compiles the 'srcs' in the context 'ctx'.
+        verbose_level,
+        force_coverage_instrumentation = False,
+        preload_image = None):
+    """Generate LispCompile actions, return LispInfo and FASL output.
 
     Args:
-     ctx: the context used to instantiate the compile actions.
-     srcs: the Lisp file sources.
-     deps: depset of Lisp files from dependencies
-     image: the Lisp executable image used to compile the sources.
-     order: the order in which sources are loaded and compiled.
-     compile_data: is additional data used to compile the sources.
-     flags: are the flags to be passed to Lisp compilation image.
-     nowarn: is the list of suppressed Lisp warning types or warning handlers.
-     verbosep: is a flag that if True, prints some verbose warnings.
-     preload_image: Whether to preload all deps into a single image to use for
-       compilation. If None, do this heurisitcally when there are multiple source
-       files and many deps.
+      ctx: The rule context.
+      srcs: List of src Files.
+      deps: List of immediate dependency Targets.
+      image: Build image Target used to compile the sources.
+      lisp_features: List of Lisp feature strings added by this target.
+      nowarn: List of supressed warning type strings.
+      order: Order in which to load sources, either "serial", "parallel", or
+          "multipass".
+      compile_data: depset of additional data Files used for compilation.
+      verbose_level: int indicating level of debugging output.
+      force_coverage_instrumentation: Whether to unconditionally add code
+         coverage instrumentation.
+      preload_image: Whether to preload all deps into a single image to use for
+         compilation. If None, do this heurisitcally when there are multiple source
+         files and many deps.
 
     Returns:
-      A structure with FASLs, hash files, and warning files.
+      struct with fields:
+          - lisp_info: LispInfo for the target
+          - output_fasl: Combined FASL for this target (which is also included in
+              lisp_info.deps if there are srcs)
+          - flags: List of args to pass to all compile/binary actions
     """
+    if not order in _compilation_orders:
+        fail("order {} must be one of {}".format(order, _compilation_orders))
+
+    verbosep = verbose_level > 0
+    lisp_info = extend_lisp_provider(
+        transitive_deps(deps, build_image = image),
+        features = lisp_features,
+        compile_data = compile_data,
+    )
+    output_fasl = ctx.actions.declare_file(ctx.label.name + ".fasl")
+    flags = _default_flags(
+        ctx = ctx,
+        lisp_features = lisp_info.features.to_list(),
+        verbose_level = verbose_level,
+        force_coverage_instrumentation = force_coverage_instrumentation,
+    )
+
     if not srcs:
-        return struct(fasls = [], hashes = [], warnings = [])
+        _concat_files(ctx, [], output_fasl)
+        return struct(
+            lisp_info = lisp_info,
+            output_fasl = output_fasl,
+            flags = flags,
+        )
 
     build_image = image.files.to_list()[0]
     compile_image = build_image
 
     image_srcs = image[LispInfo].srcs if LispInfo in image else []
-    deps = [d for d in deps.to_list() if not d in image_srcs]
+    deps = [s for s in lisp_info.srcs.to_list() if not s in image_srcs]
     env = {"LISP_MAIN": BAZEL_LISP_MAIN}
     multipass = (order == "multipass")
     serial = (order == "serial")
@@ -254,9 +287,6 @@ def _compile_srcs(
 
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
-    #
-    # TODO(sfreilich): Use a build_setting instead:
-    # google3/third_party/bazel_skylib/rules/common_settings.bzl
     if preload_image == None:
         preload_image = ((len(srcs) - 1) * len(deps) > 100)
     if preload_image:
@@ -271,10 +301,10 @@ def _compile_srcs(
         if nowarn:
             srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-        inputs = sorted(depset(
-            [build_image] + load_,
-            transitive = [compile_data, depset(deps)],
-        ).to_list())
+        inputs = [build_image]
+        inputs.extend(load_)
+        inputs.extend(deps)
+        inputs = depset(inputs, transitive = [lisp_info.compile_data])
         msg = "Preparing {} (from {} deps{})".format(
             compile_image.short_path,
             len(deps),
@@ -326,7 +356,7 @@ def _compile_srcs(
 
         inputs = sorted(depset(
             [src] + load_,
-            transitive = [compile_data, depset(deps)],
+            transitive = [lisp_info.compile_data, depset(deps)],
         ).to_list())
         ctx.actions.run(
             outputs = outs,
@@ -341,17 +371,26 @@ def _compile_srcs(
         if serial:
             load_.append(src)
 
-    return struct(
-        fasls = fasls,
+    # Need to concatenate the FASL files into name.fasl.
+    _concat_files(ctx, fasls, output_fasl)
+    lisp_info = extend_lisp_provider(
+        lisp_info,
+        srcs = srcs,
+        deps = [output_fasl] if srcs else [],
         hashes = hashes,
         warnings = warnings,
+    )
+    return struct(
+        lisp_info = lisp_info,
+        output_fasl = output_fasl,
+        flags = flags,
     )
 
 ################################################################################
 # Lisp Binary and Lisp Test
 ################################################################################
 
-def _lisp_binary_implementation(ctx):
+def _lisp_binary_impl(ctx):
     """Lisp specific implementation for lisp_binary and lisp_test rules."""
     verbose_level = max(
         ctx.attr.verbose,
@@ -364,75 +403,70 @@ def _lisp_binary_implementation(ctx):
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         print("Executable Core: %s" % ctx.outputs.executable)
 
-    trans = extend_lisp_provider(
-        transitive_deps(ctx.attr.deps, build_image = ctx.attr.image),
-        # Add those features to trans already.
-        features = ctx.attr.lisp_features,
-        compile_data = ctx.files.compile_data,
-    )
-
-    flags = _default_flags(ctx, trans, verbose_level)
-
-    nowarn = ctx.attr.nowarn
-
-    compile = _compile_srcs(
+    compile = lisp_compile_srcs(
         ctx = ctx,
         srcs = ctx.files.srcs,
-        deps = trans.srcs,
+        deps = ctx.attr.deps,
         image = ctx.attr.image,
+        lisp_features = ctx.attr.lisp_features,
+        nowarn = ctx.attr.nowarn,
         order = ctx.attr.order,
-        compile_data = trans.compile_data,
-        flags = flags,
-        nowarn = nowarn,
-        verbosep = verbosep,
+        compile_data = ctx.files.compile_data,
+        verbose_level = verbose_level,
+        force_coverage_instrumentation = ctx.attr.enable_coverage,
         preload_image = ctx.attr.preload_image,
     )
 
     # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
-    deps = trans.deps
-    hashes = depset(compile.hashes, transitive = [trans.hashes])
-    warnings = depset(compile.warnings, transitive = [trans.warnings])
+    lisp_info = compile.lisp_info
+
+    # TODO(sfreilich): Does lisp_binary really need to treat the FASLs generated
+    # by its srcs differently than the FASLs generated by its dependencies srcs?
+    deps = [d for d in lisp_info.deps.to_list() if d != compile.output_fasl]
+    hashes = lisp_info.hashes.to_list()
+    warnings = lisp_info.warnings.to_list()
 
     if LispInfo in ctx.attr.image:
         # The image already includes some deps.
         included = ctx.attr.image[LispInfo]
-        deps = depset([d for d in deps.to_list() if not d in included.deps])
-        hashes = depset([h for h in hashes.to_list() if not h in included.hashes])
-        warnings = depset([w for w in warnings.to_list() if not w in included.warnings])
+        deps = [d for d in deps if not d in included.deps]
+        hashes = [h for h in hashes if not h in included.hashes]
+        warnings = [w for w in warnings if not w in included.warnings]
 
     build_image = ctx.file.image
 
     # buildozer: disable=print
     if verbosep:
         print("Build image: %s" % build_image.short_path)
+
     specs = ctx.actions.declare_file(ctx.label.name + ".specs")
+    output_fasls = [compile.output_fasl] if ctx.files.srcs else []
     ctx.actions.write(
         output = specs,
         content = (
             "".join([
-                _spec("srcs", compile.fasls),
-                _spec("deps", deps.to_list()),
-                _spec("warnings", warnings.to_list()),
-                _spec("hashes", hashes.to_list()),
+                _spec("srcs", output_fasls),
+                _spec("deps", deps),
+                _spec("warnings", warnings),
+                _spec("hashes", hashes),
             ])
         ),
     )
 
-    inputs = sorted(depset(
-        [specs] + compile.fasls,
-        transitive = [
-            deps,
-            trans.compile_data,
-            hashes,
-            warnings,
-        ],
-    ).to_list())
+    inputs = [specs]
+    inputs.extend(output_fasls)
+    inputs.extend(deps)
+    inputs.extend(hashes)
+    inputs.extend(warnings)
+    inputs = depset(inputs, transitive = [lisp_info.compile_data])
 
     core = ctx.outputs.executable
     outs = [core]
+    flags = compile.flags
     flags += ["--specs", specs.path]
     flags += ["--outs", _paths(outs)]
     flags += ["--main", ctx.attr.main]
+    nowarn = ctx.attr.nowarn
     if nowarn:
         flags += ["--nowarn", " ".join(nowarn)]
     if ctx.attr.precompile_generics:
@@ -444,21 +478,14 @@ def _lisp_binary_implementation(ctx):
         outputs = outs,
         inputs = inputs,
         tools = [build_image],
-        progress_message = "Building lisp core %s" % core.short_path,
+        progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
-        command = "LISP_MAIN=%s %s binary '%s'" % (
+        command = "LISP_MAIN={} {} binary '{}'".format(
             BAZEL_LISP_MAIN,
             build_image.path,
             "' '".join(flags),
         ),
     )
-
-    if compile.fasls:
-        output_fasl = ctx.actions.declare_file(ctx.label.name + ".fasl")
-        _concat_files(ctx, compile.fasls, output_fasl)
-        output_fasls = [output_fasl]
-    else:
-        output_fasls = []
 
     runfiles = ctx.runfiles(files = outs, collect_default = True)
     if ctx.attr.image:
@@ -466,14 +493,8 @@ def _lisp_binary_implementation(ctx):
     for compile_data in ctx.attr.compile_data:
         runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
+        lisp_info,
         output_dir_info(ctx),
-        extend_lisp_provider(
-            trans,
-            srcs = ctx.files.srcs,
-            deps = output_fasls,
-            hashes = compile.hashes,
-            warnings = compile.warnings,
-        ),
         DefaultInfo(runfiles = runfiles, executable = core),
         coverage_common.instrumented_files_info(
             ctx,
@@ -485,7 +506,7 @@ def _lisp_binary_implementation(ctx):
 # Internal rule used to generate action that creates a Lisp binary core.
 # Keep the name to be _lisp_binary - Grok depends on this name to find targets.
 _lisp_binary = rule(
-    implementation = _lisp_binary_implementation,
+    implementation = _lisp_binary_impl,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     attrs = dict(_lisp_common_attrs + [
@@ -515,10 +536,8 @@ def _skylark_wrap_lisp_impl(ctx):
     ctx.actions.run_shell(
         inputs = [ctx.file.binary],
         outputs = [out],
-        progress_message = "Copying to %s" % out.short_path,
-        command = (
-            "mv " + ctx.file.binary.path + " " + out.path
-        ),
+        progress_message = "Copying to " + out.short_path,
+        command = "mv {} {}".format(ctx.file.binary.path, out.path),
     )
 
     # Forward the runfiles. The data attribute is passed here as well, but just
@@ -937,36 +956,8 @@ def lisp_test(name, image = BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
 # Lisp Library
 ################################################################################
 
-# Note that this is part of the cl_protobufs_aspect implementation in
-# google3/lisp/devtools/proto/clpb.bzl.
-def lisp_library_implementation(
-        ctx,
-        srcs = None,
-        transitive = None,
-        output_fasl = None,
-        image = None,
-        order = None,
-        nowarn = None,
-        include_rule_providers = True):
-    """Lisp specific implementation for lisp_library rules.
-
-    Args:
-       ctx: Rule context
-       srcs: Overrides ctx.attr.srcs
-       transitive: LispInfo representing transitive deps, overrides generation
-         of that based on deps and image
-       output_fasl: Overrides ctx.outputs.fasl
-       image: Overrides ctx.attr.image
-       order: Overrides ctx.attr.order
-       nowarn: Overrides ctx.attr.nowarn
-       include_rule_providers: Set this to false when using it in the implementation
-         of an aspect that wraps a tree of dependencies in Lisp libraries. That
-         prevents DefaultInfo from being generated for both the aspect and the
-         enclosing rule, which is prohibited.
-
-    Returns:
-        List of providers.
-    """
+def _lisp_library_impl(ctx):
+    """Lisp specific implementation for lisp_library rules."""
     verbose_level = max(
         getattr(ctx.attr, "verbose", 0),
         int(ctx.var.get("VERBOSE_LISP_BUILD", "0")),
@@ -978,68 +969,43 @@ def lisp_library_implementation(
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         print("Library: %s" % ctx.label.name)
 
-    build_image = image or ctx.attr.image
-    trans = transitive or extend_lisp_provider(
-        transitive_deps(ctx.attr.deps, build_image = build_image),
-        # Add those features to trans already.
-        features = ctx.attr.lisp_features,
-        compile_data = ctx.files.compile_data,
-    )
-
-    flags = _default_flags(ctx, trans, verbose_level)
-    srcs = srcs or ctx.files.srcs
-    output_fasl = output_fasl or ctx.outputs.fasl
-
-    nowarn = nowarn or getattr(ctx.attr, "nowarn", [])
-    compile = _compile_srcs(
+    compile = lisp_compile_srcs(
         ctx = ctx,
-        srcs = srcs,
-        deps = trans.srcs,
-        image = build_image,
-        order = order or ctx.attr.order,
-        compile_data = trans.compile_data,
-        flags = flags,
-        nowarn = nowarn,
-        verbosep = verbosep,
-        preload_image = getattr(ctx.attr, "preload_image", None),
+        srcs = ctx.files.srcs,
+        deps = ctx.attr.deps,
+        image = ctx.attr.image,
+        lisp_features = ctx.attr.lisp_features,
+        nowarn = ctx.attr.nowarn,
+        order = ctx.attr.order,
+        compile_data = ctx.files.compile_data,
+        verbose_level = verbose_level,
+        force_coverage_instrumentation = ctx.attr.enable_coverage,
+        preload_image = ctx.attr.preload_image,
     )
 
-    # Need to concatenate the FASL files into name.fasl.
-    _concat_files(ctx, compile.fasls, output_fasl)
-
-    providers = [
-        extend_lisp_provider(
-            trans,
-            deps = [output_fasl] if compile.fasls else [],
-            srcs = srcs,
-            hashes = compile.hashes,
-            warnings = compile.warnings,
+    runfiles = ctx.runfiles(collect_default = True)
+    if ctx.attr.image:
+        runfiles = runfiles.merge(ctx.attr.image[DefaultInfo].default_runfiles)
+    for compile_data in ctx.attr.compile_data:
+        runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
+    return [
+        compile.lisp_info,
+        output_dir_info(ctx),
+        DefaultInfo(
+            runfiles = runfiles,
+            files = depset([compile.output_fasl]),
+        ),
+        coverage_common.instrumented_files_info(
+            ctx,
+            source_attributes = ["srcs"],
+            dependency_attributes = ["instrumented_deps"],
         ),
     ]
-    if include_rule_providers:
-        runfiles = ctx.runfiles(collect_default = True)
-        if build_image:
-            runfiles = runfiles.merge(build_image[DefaultInfo].default_runfiles)
-        for compile_data in ctx.attr.compile_data:
-            runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
-        providers.extend([
-            output_dir_info(ctx),
-            DefaultInfo(
-                runfiles = runfiles,
-                files = depset([output_fasl]),
-            ),
-            coverage_common.instrumented_files_info(
-                ctx,
-                source_attributes = ["srcs"],
-                dependency_attributes = ["instrumented_deps"],
-            ),
-        ])
-    return providers
 
 # Internal rule that creates a Lisp library FASL file.
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
-    implementation = lisp_library_implementation,
+    implementation = _lisp_library_impl,
     attrs = dict(_lisp_common_attrs + [
         # After there's some API for accessing native rule internals, we can get
         # rid of this, but while we're implementing this as a macro that
