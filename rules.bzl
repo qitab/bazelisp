@@ -278,7 +278,7 @@ def lisp_compile_srcs(
     build_image = image.files.to_list()[0]
     compile_image = build_image
 
-    image_srcs = image[LispInfo].srcs if LispInfo in image else []
+    image_srcs = image[LispInfo].srcs.to_list() if LispInfo in image else []
     deps = [s for s in lisp_info.srcs.to_list() if not s in image_srcs]
     env = {"LISP_MAIN": BAZEL_LISP_MAIN}
     multipass = (order == "multipass")
@@ -427,9 +427,9 @@ def _lisp_binary_impl(ctx):
     if LispInfo in ctx.attr.image:
         # The image already includes some deps.
         included = ctx.attr.image[LispInfo]
-        deps = [d for d in deps if not d in included.deps]
-        hashes = [h for h in hashes if not h in included.hashes]
-        warnings = [w for w in warnings if not w in included.warnings]
+        deps = [d for d in deps if not d in included.deps.to_list()]
+        hashes = [h for h in hashes if not h in included.hashes.to_list()]
+        warnings = [w for w in warnings if not w in included.warnings.to_list()]
 
     build_image = ctx.file.image
 
