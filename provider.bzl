@@ -9,21 +9,6 @@ LispInfo = provider(fields = {
     "compile_data": "Depset of data used at load/compile time for all dependencies",
 })
 
-# TODO(b/142249042): Remove this workaround.
-# For use in testing. These paths end up in the command lines generated for
-# compilation actions, and analysis tests can assert about those:
-# https://docs.bazel.build/versions/master/skylark/testing.html
-# This is a workaround, it would be better if that was provided by DefaultInfo
-# or handled by something in unittest.bzl.
-OutputDirInfo = provider(fields = {
-    "bin_path": "ctx.bin_dir.path",
-})
-
-def output_dir_info(ctx):
-    return OutputDirInfo(
-        bin_path = ctx.bin_dir.path,
-    )
-
 def transitive_deps(deps = [], build_image = None):
     """Create LispInfo with transitive (but not immediate) deps.
 

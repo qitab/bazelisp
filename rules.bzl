@@ -23,7 +23,6 @@ load(
     "//:provider.bzl",
     "LispInfo",
     "extend_lisp_provider",
-    "output_dir_info",
     "transitive_deps",
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
@@ -491,7 +490,6 @@ def _lisp_binary_impl(ctx):
         runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
         lisp_info,
-        output_dir_info(ctx),
         DefaultInfo(runfiles = runfiles, executable = core),
         coverage_common.instrumented_files_info(
             ctx,
@@ -544,7 +542,6 @@ def _skylark_wrap_lisp_impl(ctx):
     runfiles = ctx.runfiles(files = [out])
     runfiles = runfiles.merge(ctx.attr.core[DefaultInfo].default_runfiles)
     return [
-        output_dir_info(ctx),
         ctx.attr.core[LispInfo],
         DefaultInfo(
             runfiles = ctx.attr.core[DefaultInfo].default_runfiles,
@@ -587,10 +584,7 @@ def _dump_lisp_deps_impl(ctx):
                       ["src: " + f.path for f in lisp_info.srcs])
         ),
     )
-    return [
-        output_dir_info(ctx),
-        DefaultInfo(files = depset([out])),
-    ]
+    return [DefaultInfo(files = depset([out]))]
 
 # Internal rule that creates a Lisp library DEPS file.
 # DEPS file is used to list all the Lisp sources for a target.
@@ -987,7 +981,6 @@ def _lisp_library_impl(ctx):
         runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
         compile.lisp_info,
-        output_dir_info(ctx),
         DefaultInfo(
             runfiles = runfiles,
             files = depset([compile.output_fasl]),
