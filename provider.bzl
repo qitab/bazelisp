@@ -1,7 +1,7 @@
 """Functions generating or modifying the LispInfo provider struct."""
 
 LispInfo = provider(fields = {
-    "deps": "Depset of transitive dependencies",
+    "fasls": "Depset of FASLs for transitive dependencies",
     "srcs": "Depset of transitive sources",
     "hashes": "Depset of md5 hash files for transitive sources",
     "warnings": "Depset of files of warnings checked at link time (FASL load) for transitive sources",
@@ -9,60 +9,55 @@ LispInfo = provider(fields = {
     "compile_data": "Depset of data used at load/compile time for all dependencies",
 })
 
-def transitive_deps(deps = [], build_image = None):
-    """Create LispInfo with transitive (but not immediate) deps.
-
-    Given a list of depsets create a structure containing the transitive
-    dependencies. Note the DEPS themselves are not added to the provider
-    transitive list.
+def collect_lisp_info(deps = [], build_image = None, features = [], compile_data = []):
+    """Create a LispInfo collecting the data needed for Lisp compilation.
 
     Args:
-      deps: the list of dependencies,
-      build_image: the image used to build this which may contain dependencies
-        as well.
+        deps: Immediate Lisp dependencies of this target.
+        build_image: Optional build image Target, which may also contain
+            dependencies. May be unset if this target just propagates LispInfo
+            from its dependencies.
+        features: Lisp features added by this target.
+        compile_data: Data available at compile time added by this target.
 
     Returns:
-      A structure containing the transitive dependancies
+        LispInfo
     """
     lisp_infos = [d[LispInfo] for d in deps if LispInfo in d]
     if build_image and LispInfo in build_image:
         lisp_infos.append(build_image[LispInfo])
 
     return LispInfo(
-        deps = depset(transitive = [li.deps for li in lisp_infos]),
+        fasls = depset(transitive = [li.fasls for li in lisp_infos]),
         srcs = depset(transitive = [li.srcs for li in lisp_infos]),
         hashes = depset(transitive = [li.hashes for li in lisp_infos]),
         warnings = depset(transitive = [li.warnings for li in lisp_infos]),
-        features = depset(transitive = [li.features for li in lisp_infos]),
-        compile_data = depset(transitive = [li.compile_data for li in lisp_infos]),
+        features = depset(features, transitive = [li.features for li in lisp_infos]),
+        compile_data = depset(compile_data, transitive = [li.compile_data for li in lisp_infos]),
     )
 
-def extend_lisp_provider(
+def extend_lisp_info(
         base,
-        deps = [],
+        fasls = [],
         srcs = [],
         hashes = [],
-        warnings = [],
-        features = [],
-        compile_data = []):
-    """Returns a LispInfo, adding the immediate info for a rule.
+        warnings = []):
+    """Extends a LispInfo with compilation inputs and outputs.
 
      Args:
-      base: the base LispInfo provider to be extended.
-      deps: more dependencies to be added to the old provider.
-      srcs: more sources
-      hashes: more hashes files
-      warnings: more deferred warning files
-      features: more features
-      compile_data: more compile_data
+      base: The base LispInfo provider to be extended.
+      fasls: FASLs generated for this target.
+      srcs: This target's Lisp sources.
+      hashes: Hash files for each file in srcs.
+      warnings: Warnings files for each file in srcs.
     """
     return LispInfo(
-        deps = depset(deps, transitive = [base.deps]),
+        fasls = depset(fasls, transitive = [base.fasls]),
         srcs = depset(srcs, transitive = [base.srcs]),
         hashes = depset(hashes, transitive = [base.hashes]),
         warnings = depset(warnings, transitive = [base.warnings]),
-        features = depset(features, transitive = [base.features]),
-        compile_data = depset(compile_data, transitive = [base.compile_data]),
+        features = base.features,
+        compile_data = base.compile_data,
     )
 
 # buildozer: disable=print
@@ -72,15 +67,15 @@ def print_provider(p):
     Args:
         p: A LispInfo provider.
     """
-    if p.deps:
-        print("Deps: %s" % [d.short_path for d in p.deps])
+    if p.fasls:
+        print("FASLs: %s" % [f.short_path for f in p.fasls.to_list()])
     if p.srcs:
-        print("Srcs: %s" % [s.short_path for s in p.srcs])
+        print("Srcs: %s" % [s.short_path for s in p.srcs.to_list()])
     if p.hashes:
-        print("Hashes: %s" % [h.short_path for h in p.hashes])
+        print("Hashes: %s" % [h.short_path for h in p.hashes.to_list()])
     if p.warnings:
-        print("Warnings: %s" % [w.short_path for w in p.warnings])
+        print("Warnings: %s" % [w.short_path for w in p.warnings.to_list()])
     if p.features:
-        print("Features: %s" % list(p.features))
+        print("Features: %s" % p.features.to_list())
     if p.compile_data:
-        print("Compile Data: %s" % list(p.compile_data))
+        print("Compile Data: %s" % p.compile_data.to_list())

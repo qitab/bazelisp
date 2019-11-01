@@ -22,8 +22,8 @@ This is useful with 'bazel query' and for tools indexing the Lisp codebase.
 load(
     "//:provider.bzl",
     "LispInfo",
-    "extend_lisp_provider",
-    "transitive_deps",
+    "collect_lisp_info",
+    "extend_lisp_info",
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load(
@@ -246,15 +246,16 @@ def lisp_compile_srcs(
       struct with fields:
           - lisp_info: LispInfo for the target
           - output_fasl: Combined FASL for this target (which is also included in
-              lisp_info.deps if there are srcs)
+              lisp_info.fasls if there are srcs)
           - flags: List of args to pass to all compile/binary actions
     """
     if not order in _compilation_orders:
         fail("order {} must be one of {}".format(order, _compilation_orders))
 
     verbosep = verbose_level > 0
-    lisp_info = extend_lisp_provider(
-        transitive_deps(deps, build_image = image),
+    lisp_info = collect_lisp_info(
+        deps = deps,
+        build_image = image,
         features = lisp_features,
         compile_data = compile_data,
     )
@@ -274,40 +275,49 @@ def lisp_compile_srcs(
             flags = flags,
         )
 
-    build_image = image.files.to_list()[0]
-    compile_image = build_image
-
-    image_srcs = image[LispInfo].srcs.to_list() if LispInfo in image else []
-    deps = [s for s in lisp_info.srcs.to_list() if not s in image_srcs]
     env = {"LISP_MAIN": BAZEL_LISP_MAIN}
     multipass = (order == "multipass")
     serial = (order == "serial")
-    load_ = srcs if multipass else []
+
+    build_image = image.files.to_list()[0]
+    compile_image = build_image
+    image_srcs = image[LispInfo].srcs.to_list() if LispInfo in image else []
+
+    # Lisp source files for all the transitive dependencies not already in the
+    # image, loaded before compilation, passed to --deps.
+    deps_srcs = [s for s in lisp_info.srcs.to_list() if not s in image_srcs]
+
+    # Sources for this target loaded before compilation (after deps), passed to
+    # --load. What this contains depends on the compilation order:
+    # multipass: Contains everything
+    # parallel: Contains nothing
+    # serial: Contains previous entries in srcs (accumulated below)
+    load_srcs = srcs if multipass else []
 
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
     if preload_image == None:
-        preload_image = ((len(srcs) - 1) * len(deps) > 100)
+        preload_image = ((len(srcs) - 1) * len(deps_srcs) > 100)
     if preload_image:
         # Generate a SRCS image.
         compile_image = ctx.actions.declare_file(ctx.label.name + ".srcs.image")
         srcs_flags = flags[:]
         srcs_flags += ["--outs", compile_image.path]
-        if deps:
-            srcs_flags += ["--deps", _paths(deps)]
-        if load_:
-            srcs_flags += ["--load", _paths(load_)]
+        if deps_srcs:
+            srcs_flags += ["--deps", _paths(deps_srcs)]
+        if load_srcs:
+            srcs_flags += ["--load", _paths(load_srcs)]
         if nowarn:
             srcs_flags += ["--nowarn", " ".join(nowarn)]
 
         inputs = [build_image]
-        inputs.extend(load_)
-        inputs.extend(deps)
+        inputs.extend(load_srcs)
+        inputs.extend(deps_srcs)
         inputs = depset(inputs, transitive = [lisp_info.compile_data])
         msg = "Preparing {} (from {} deps{})".format(
             compile_image.short_path,
             len(deps),
-            " and {} srcs".format(len(load_)) if load_ else "",
+            " and {} srcs".format(len(load_srcs)) if load_srcs else "",
         )
         ctx.actions.run(
             outputs = [compile_image],
@@ -346,17 +356,17 @@ def lisp_compile_srcs(
         file_flags += ["--outs", _paths(outs)]
         file_flags += ["--srcs", src.path]
 
-        if deps:
-            file_flags += ["--deps", _paths(deps)]
-        if load_:
-            file_flags += ["--load", _paths(load_)]
+        if deps_srcs:
+            file_flags += ["--deps", _paths(deps_srcs)]
+        if load_srcs:
+            file_flags += ["--load", _paths(load_srcs)]
         if nowarn:
             file_flags += ["--nowarn", " ".join(nowarn)]
 
-        inputs = sorted(depset(
-            [src] + load_,
-            transitive = [lisp_info.compile_data, depset(deps)],
-        ).to_list())
+        inputs = [src]
+        inputs.extend(deps_srcs)
+        inputs.extend(load_srcs)
+        inputs = depset(inputs, transitive = [lisp_info.compile_data])
         ctx.actions.run(
             outputs = outs,
             inputs = inputs,
@@ -368,14 +378,14 @@ def lisp_compile_srcs(
             executable = compile_image,
         )
         if serial:
-            load_.append(src)
+            load_srcs.append(src)
 
     # Need to concatenate the FASL files into name.fasl.
     _concat_files(ctx, fasls, output_fasl)
-    lisp_info = extend_lisp_provider(
+    lisp_info = extend_lisp_info(
         lisp_info,
         srcs = srcs,
-        deps = [output_fasl] if srcs else [],
+        fasls = [output_fasl] if srcs else [],
         hashes = hashes,
         warnings = warnings,
     )
@@ -419,14 +429,14 @@ def _lisp_binary_impl(ctx):
     # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
     lisp_info = compile.lisp_info
 
-    deps = lisp_info.deps.to_list()
+    fasls = lisp_info.fasls.to_list()
     hashes = lisp_info.hashes.to_list()
     warnings = lisp_info.warnings.to_list()
 
     if LispInfo in ctx.attr.image:
         # The image already includes some deps.
         included = ctx.attr.image[LispInfo]
-        deps = [d for d in deps if not d in included.deps.to_list()]
+        fasls = [f for f in fasls if not f in included.fasls.to_list()]
         hashes = [h for h in hashes if not h in included.hashes.to_list()]
         warnings = [w for w in warnings if not w in included.warnings.to_list()]
 
@@ -437,12 +447,11 @@ def _lisp_binary_impl(ctx):
         print("Build image: %s" % build_image.short_path)
 
     specs = ctx.actions.declare_file(ctx.label.name + ".specs")
-    output_fasls = [compile.output_fasl] if ctx.files.srcs else []
     ctx.actions.write(
         output = specs,
         content = (
             "".join([
-                _spec("deps", deps),
+                _spec("deps", fasls),
                 _spec("warnings", warnings),
                 _spec("hashes", hashes),
             ])
@@ -450,8 +459,7 @@ def _lisp_binary_impl(ctx):
     )
 
     inputs = [specs]
-    inputs.extend(output_fasls)
-    inputs.extend(deps)
+    inputs.extend(fasls)
     inputs.extend(hashes)
     inputs.extend(warnings)
     inputs = depset(inputs, transitive = [lisp_info.compile_data])
