@@ -40,10 +40,9 @@ UNSUPPORTED_FEATURES = [
     "fdo_optimize",
 ]
 
-# TODO(czak): This needs to have a proper path.
-BAZEL_LISP = "//:bazel"
-
-BAZEL_LISP_MAIN = "bazel.main::main"
+BAZEL_LISP = "//"
+BAZEL_LISP_MAIN = "bazel.main:main"
+BAZEL_LISP_ENV = {"LISP_MAIN": BAZEL_LISP_MAIN}
 
 lisp_files = [".lisp", ".lsp"]
 
@@ -275,7 +274,6 @@ def lisp_compile_srcs(
             flags = flags,
         )
 
-    env = {"LISP_MAIN": BAZEL_LISP_MAIN}
     multipass = (order == "multipass")
     serial = (order == "serial")
 
@@ -324,7 +322,7 @@ def lisp_compile_srcs(
             inputs = inputs,
             progress_message = msg,
             mnemonic = "LispSourceImage",
-            env = env,
+            env = BAZEL_LISP_ENV,
             arguments = ["binary"] + srcs_flags,
             executable = build_image,
         )
@@ -373,7 +371,7 @@ def lisp_compile_srcs(
             tools = [compile_image],
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
-            env = env,
+            env = BAZEL_LISP_ENV,
             arguments = ["compile"] + file_flags,
             executable = compile_image,
         )
@@ -478,17 +476,15 @@ def _lisp_binary_impl(ctx):
     if ctx.attr.save_runtime_options:
         flags += ["--save-runtime-options"]
 
-    ctx.actions.run_shell(
+    ctx.actions.run(
         outputs = outs,
         inputs = inputs,
         tools = [build_image],
         progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
-        command = "LISP_MAIN={} {} binary '{}'".format(
-            BAZEL_LISP_MAIN,
-            build_image.path,
-            "' '".join(flags),
-        ),
+        env = BAZEL_LISP_ENV,
+        arguments = ["binary"] + flags,
+        executable = build_image,
     )
 
     runfiles = ctx.runfiles(files = outs, collect_default = True)
@@ -635,7 +631,6 @@ def lisp_binary(
         shard_count = None,
         tags = [],
         stamp = -1,
-        # TODO(czak): Need to provide proper path here.
         malloc = "@bazel_tools//tools/cpp:malloc",
         verbose = None,
         **kwargs):
