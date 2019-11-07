@@ -588,8 +588,8 @@ def _dump_lisp_deps_impl(ctx):
     ctx.actions.write(
         output = out,
         content = (
-            "\n".join(["feature: " + f for f in lisp_info.features] +
-                      ["src: " + f.path for f in lisp_info.srcs])
+            "\n".join(["feature: " + f for f in lisp_info.features.to_list()] +
+                      ["src: " + f.path for f in lisp_info.srcs.to_list()])
         ),
     )
     return [DefaultInfo(files = depset([out]))]
