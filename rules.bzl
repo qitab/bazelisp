@@ -277,7 +277,7 @@ def lisp_compile_srcs(
     multipass = (order == "multipass")
     serial = (order == "serial")
 
-    build_image = image.files.to_list()[0]
+    build_image = image[DefaultInfo].files_to_run
     compile_image = build_image
     image_srcs = image[LispInfo].srcs.to_list() if LispInfo in image else []
 
@@ -308,10 +308,6 @@ def lisp_compile_srcs(
         if nowarn:
             srcs_flags += ["--nowarn", " ".join(nowarn)]
 
-        inputs = [build_image]
-        inputs.extend(load_srcs)
-        inputs.extend(deps_srcs)
-        inputs = depset(inputs, transitive = [lisp_info.compile_data])
         msg = "Preparing {} (from {} deps{})".format(
             compile_image.short_path,
             len(deps),
@@ -319,7 +315,10 @@ def lisp_compile_srcs(
         )
         ctx.actions.run(
             outputs = [compile_image],
-            inputs = inputs,
+            inputs = depset(
+                load_srcs + deps_srcs,
+                transitive = [lisp_info.compile_data],
+            ),
             progress_message = msg,
             mnemonic = "LispSourceImage",
             env = BAZEL_LISP_ENV,
