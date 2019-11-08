@@ -3,17 +3,17 @@
 # Description:
 # Test directory for the Lisp Skylark build rules.
 
-licenses(["unencumbered"])  # New BSD, Google-authored
-
-exports_files(["LICENSE"])
-
 # TODO(czak): Need to provide a proper path here.
 load(
     "//:rules.bzl",
-    "lisp_library",
     "lisp_binary",
+    "lisp_library",
     "lisp_test",
 )
+
+licenses(["unencumbered"])  # New BSD, Google-authored
+
+exports_files(["LICENSE"])
 
 lisp_library(
     name = "foo",
