@@ -20,7 +20,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
-        "@rules_cc//cc:find_cc_toolchain",
+        "@rules_cc//cc:find_cc_toolchain.bzl",
     ],
 )
 
