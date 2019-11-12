@@ -27,7 +27,7 @@ load(
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load(
-    "//third_party/bazel/tools/build_defs/cc:action_names.bzl",
+    "@rules_cc//cc:action_names.bzl",
     "CPP_COMPILE_ACTION_NAME",
     "C_COMPILE_ACTION_NAME",
 )
