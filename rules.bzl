@@ -209,6 +209,10 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
 
     return flags
 
+def _list_excluding_depset(items, exclude):
+    exclude_set = {item: True for item in exclude.to_list()}
+    return [item for item in items if item not in exclude_set]
+
 def lisp_compile_srcs(
         ctx,
         srcs,
@@ -279,11 +283,12 @@ def lisp_compile_srcs(
 
     build_image = image[DefaultInfo].files_to_run
     compile_image = build_image
-    image_srcs = image[LispInfo].srcs.to_list() if LispInfo in image else []
 
     # Lisp source files for all the transitive dependencies not already in the
     # image, loaded before compilation, passed to --deps.
-    deps_srcs = [s for s in lisp_info.srcs.to_list() if not s in image_srcs]
+    deps_srcs = lisp_info.srcs.to_list()
+    if LispInfo in image:
+        deps_srcs = _list_excluding_depset(deps_srcs, image[LispInfo].srcs)
 
     # Sources for this target loaded before compilation (after deps), passed to
     # --load. What this contains depends on the compilation order:
@@ -427,9 +432,9 @@ def _lisp_binary_impl(ctx):
     if LispInfo in ctx.attr.image:
         # The image already includes some deps.
         included = ctx.attr.image[LispInfo]
-        fasls = [f for f in fasls if not f in included.fasls.to_list()]
-        hashes = [h for h in hashes if not h in included.hashes.to_list()]
-        warnings = [w for w in warnings if not w in included.warnings.to_list()]
+        fasls = _list_excluding_depset(fasls, included.fasls)
+        hashes = _list_excluding_depset(hashes, included.hashes)
+        warnings = _list_excluding_depset(warnings, included.warnings)
 
     build_image = ctx.file.image
 
