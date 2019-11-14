@@ -1049,6 +1049,20 @@ def make_cdeps_library(
         tags = tags,
         **kwargs
     )
+
+    # This is used for dynamic loading of targets from the REPL.
+    kwargs.pop("testonly", None)
+    kwargs.pop("visibility", None)
+    native.cc_binary(
+        name = "lib{}.so".format(name),
+        deps = [cdeps_library],
+        linkshared = 1,
+        linkstatic = 0,
+        tags = tags,
+        visibility = ["//visibility:private"],
+        testonly = 1,
+        **kwargs
+    )
     return cdeps_library
 
 def lisp_library(
