@@ -134,12 +134,12 @@ def _concat_files(ctx, inputs, output):
         command = cmd,
     )
 
-def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentation):
-    """Returns Args for flags for all Lisp build actions.
+def _default_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentation):
+    """Returns a list of default flags based on the context and trans provider.
 
     Args:
      ctx: The rule context.
-     lisp_features: Depset of transitive Lisp feature strings provided by this
+     lisp_features: List of transitive Lisp feature strings provided by this
          target and its dependencies.
      verbose_level: int indicating level of debugging output. If positive, a
          --verbose flags is added.
@@ -147,7 +147,7 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
          coverage instrumentation.
 
     Returns:
-        Args object to be passed to Lisp build actions.
+        A list of args to be passed to Lisp build actions.
     """
     cpp_fragment = ctx.fragments.cpp
     copts = cpp_fragment.copts
@@ -183,29 +183,30 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
     )
 
     if "-fsanitize=memory" in c_options:
-        lisp_features = depset(["msan"], trans = [lisp_features])
-    flags = ctx.actions.args()
-    flags.add(
+        lisp_features.append("msan")
+    flags = [
         "--compilation-mode",
         ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
-    )
-    flags.add("--bindir", ctx.bin_dir.path)
-    flags.add_joined("--features", lisp_features, join_with = " ")
+        "--bindir",
+        ctx.bin_dir.path,
+        "--features",
+        " ".join(lisp_features),
+    ]
 
     if ctx.coverage_instrumented() or force_coverage_instrumentation:
-        flags.add("--coverage")
+        flags += ["--coverage"]
 
     if verbose_level > 0:
-        flags.add("--verbose", str(verbose_level))
+        flags += ["--verbose", str(verbose_level)]
 
     # TODO(czak): Find out how to simplify passing NDEBUG here.
     if "-UNDEBUG" in cpp_options:
-        flags.add("--safety", "3")
+        flags += ["--safety", "3"]
     elif "-DNDEBUG" in cpp_options:
-        flags.add("--safety", "0")
+        flags += ["--safety", "0"]
 
     if int(ctx.var.get("LISP_BUILD_FORCE", "0")) > 0:
-        flags.add("--force")
+        flags += ["--force"]
 
     return flags
 
@@ -254,7 +255,6 @@ def lisp_compile_srcs(
     if not order in _compilation_orders:
         fail("order {} must be one of {}".format(order, _compilation_orders))
 
-    name = ctx.label.name
     verbosep = verbose_level > 0
     lisp_info = collect_lisp_info(
         deps = deps,
@@ -262,10 +262,10 @@ def lisp_compile_srcs(
         features = lisp_features,
         compile_data = compile_data,
     )
-    output_fasl = ctx.actions.declare_file(name + ".fasl")
-    build_flags = _build_flags(
+    output_fasl = ctx.actions.declare_file(ctx.label.name + ".fasl")
+    flags = _default_flags(
         ctx = ctx,
-        lisp_features = lisp_info.features,
+        lisp_features = lisp_info.features.to_list(),
         verbose_level = verbose_level,
         force_coverage_instrumentation = force_coverage_instrumentation,
     )
@@ -275,7 +275,7 @@ def lisp_compile_srcs(
         return struct(
             lisp_info = lisp_info,
             output_fasl = output_fasl,
-            build_flags = build_flags,
+            flags = flags,
         )
 
     multipass = (order == "multipass")
@@ -299,17 +299,19 @@ def lisp_compile_srcs(
 
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
-    compile_flags = ctx.actions.args()
     if preload_image == None:
         preload_image = ((len(srcs) - 1) * len(deps_srcs) > 100)
     if preload_image:
         # Generate a SRCS image.
-        compile_image = ctx.actions.declare_file(name + ".srcs.image")
-        preload_image_flags = ctx.actions.args()
-        preload_image_flags.add("--outs", compile_image)
-        preload_image_flags.add_joined("--deps", deps_srcs, join_with = " ")
-        preload_image_flags.add_joined("--load", load_srcs, join_with = " ")
-        preload_image_flags.add_joined("--nowarn", nowarn, join_with = " ")
+        compile_image = ctx.actions.declare_file(ctx.label.name + ".srcs.image")
+        srcs_flags = flags[:]
+        srcs_flags += ["--outs", compile_image.path]
+        if deps_srcs:
+            srcs_flags += ["--deps", _paths(deps_srcs)]
+        if load_srcs:
+            srcs_flags += ["--load", _paths(load_srcs)]
+        if nowarn:
+            srcs_flags += ["--nowarn", " ".join(nowarn)]
 
         msg = "Preparing {} (from {} deps{})".format(
             compile_image.short_path,
@@ -325,21 +327,21 @@ def lisp_compile_srcs(
             progress_message = msg,
             mnemonic = "LispSourceImage",
             env = BAZEL_LISP_ENV,
-            arguments = ["binary", build_flags, preload_image_flags],
+            arguments = ["binary"] + srcs_flags,
             executable = build_image,
         )
 
         # All deps included above. However, we need to keep --deps the same in
         # the command line below for the sake of analysis that uses extra
         # actions to examine the command-line of LispCompile actions.
-        compile_flags.add("--deps-already-loaded")
+        flags = flags + ["--deps-already-loaded"]
 
     if multipass:
         nowarn = nowarn + ["redefined-method", "redefined-function"]
 
     # buildozer: disable=print
     if verbosep:
-        print("Target: " + name)
+        print("Target: " + ctx.label.name)
         print("Build Img: " + build_image.short_path)
         print("Compile Img: " + compile_image.short_path)
 
@@ -348,16 +350,20 @@ def lisp_compile_srcs(
     hashes = []
     for src in srcs:
         stem = src.short_path[:-len(src.extension) - 1]
+        file_flags = flags[:]
         fasls.append(ctx.actions.declare_file(stem + "~.fasl"))
         hashes.append(ctx.actions.declare_file(stem + "~.hash"))
         warnings.append(ctx.actions.declare_file(stem + "~.warnings"))
         outs = [fasls[-1], hashes[-1], warnings[-1]]
-        file_flags = ctx.actions.args()
-        file_flags.add_joined("--outs", outs, join_with = " ")
-        file_flags.add("--srcs", src)
-        file_flags.add_joined("--deps", deps_srcs, join_with = " ")
-        file_flags.add_joined("--load", load_srcs, join_with = " ")
-        file_flags.add_joined("--nowarn", nowarn, join_with = " ")
+        file_flags += ["--outs", _paths(outs)]
+        file_flags += ["--srcs", src.path]
+
+        if deps_srcs:
+            file_flags += ["--deps", _paths(deps_srcs)]
+        if load_srcs:
+            file_flags += ["--load", _paths(load_srcs)]
+        if nowarn:
+            file_flags += ["--nowarn", " ".join(nowarn)]
 
         inputs = [src]
         inputs.extend(deps_srcs)
@@ -370,7 +376,7 @@ def lisp_compile_srcs(
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
             env = BAZEL_LISP_ENV,
-            arguments = ["compile", build_flags, compile_flags, file_flags],
+            arguments = ["compile"] + file_flags,
             executable = compile_image,
         )
         if serial:
@@ -388,7 +394,7 @@ def lisp_compile_srcs(
     return struct(
         lisp_info = lisp_info,
         output_fasl = output_fasl,
-        build_flags = build_flags,
+        flags = flags,
     )
 
 ################################################################################
@@ -461,23 +467,27 @@ def _lisp_binary_impl(ctx):
     inputs = depset(inputs, transitive = [lisp_info.compile_data])
 
     core = ctx.outputs.executable
-    core_flags = ctx.actions.args()
-    core_flags.add("--specs", specs)
-    core_flags.add("--outs", core)
-    core_flags.add("--main", ctx.attr.main)
-    core_flags.add_joined("--nowarn", ctx.attr.nowarn, join_with = " ")
-    if ctx.attr.precompile_generics:
-        core_flags.add("--precompile-generics")
-    if ctx.attr.save_runtime_options:
-        core_flags.add("--save-runtime-options")
     outs = [core]
+    flags = compile.flags
+    flags += ["--specs", specs.path]
+    flags += ["--outs", _paths(outs)]
+    flags += ["--main", ctx.attr.main]
+    nowarn = ctx.attr.nowarn
+    if nowarn:
+        flags += ["--nowarn", " ".join(nowarn)]
+    if ctx.attr.precompile_generics:
+        flags += ["--precompile-generics"]
+    if ctx.attr.save_runtime_options:
+        flags += ["--save-runtime-options"]
+
     ctx.actions.run(
         outputs = outs,
         inputs = inputs,
+        tools = [build_image],
         progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
         env = BAZEL_LISP_ENV,
-        arguments = ["binary", compile.build_flags, core_flags],
+        arguments = ["binary"] + flags,
         executable = build_image,
     )
 
