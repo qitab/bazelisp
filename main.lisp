@@ -53,7 +53,8 @@
            #:action-failures
            #:action-deferred-warnings
            ;; Misc
-           #:add-features))
+           #:add-features
+           #:add-feature))
 
 (in-package #:bazel.main)
 
