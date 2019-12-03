@@ -311,6 +311,7 @@ The conditions muffled here are the minimal/uncontroversial set."
   #+sbcl
   (typep condition '(or sb-kernel:redefinition-with-defmacro
                      sb-kernel:uninteresting-redefinition
+                     sb-int:slot-initform-type-style-warning
                      sb-ext:compiler-note
                      sb-kernel:undefined-alien-style-warning)))
 
