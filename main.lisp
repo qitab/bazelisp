@@ -560,13 +560,44 @@ package context. This allows for the user to specify their own handlers as a str
                          ;; optimizing this out was measured not to be worth the trouble.
                          #+sbcl(sb-c::insert-array-bounds-checks 3)))))
 
+(defun to-feature (feature)
+  "Return a symbol feature derived from a FEATURE string or symbol.
+
+By default the string is read into the KEYWORD package.
+If the feature string is package prefixed, the package
+is instantiated unless already provided.
+
+If the feature parses as anything other than a symbol,
+it will signal an error."
+  (typecase feature
+    (symbol feature)
+    (string
+     (multiple-value-bind (value error)
+         (ignore-errors
+          (let ((*package* (find-package "KEYWORD")))
+            (with-creating-find-package ()
+              (values (read-from-string feature)))))
+       (cond ((and (symbolp value) value))
+             (error
+              (bazel.log:fatal
+               "Could not parse ~S as a feature due to~% ~S: ~A~%"
+               feature (type-of error) error)
+              nil)
+             (t
+              (bazel.log:fatal "Cannot parse ~S as a feature." feature)
+              nil))))
+    (t
+     (bazel.log:fatal "~S is not a feature." feature))))
+
 (defun add-feature (feature)
   "Add a single string FEATURE to *features*."
-  (pushnew (to-keyword feature) *features*))
+  (let ((feature (to-feature feature)))
+    (when feature
+      (pushnew feature *features*))))
 
 (defun add-features (string)
   "Add the features from the STRING first converting them into keywords."
-  (let ((new-features (set-difference (mapcar #'to-keyword (split string)) *features*)))
+  (let ((new-features (set-difference (mapcar #'to-feature (split string)) *features*)))
     (vv "Adding features: ~S" new-features)
     (mapcar #'add-feature new-features)))
 
