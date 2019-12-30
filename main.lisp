@@ -420,18 +420,19 @@ package context. This allows for the user to specify their own handlers as a str
   `(handler-bind ((condition #'muffle-all-warnings))
      ,@body))
 
-(defun print-conditions (header conditions &optional bindir)
-  "Outputs a list of CONDITIONS to the output stream.
- BINDIR is the directory for output files, that is stripped off when printing the CONDITIONS.
+(defun print-warning-conditions (header conditions &optional bindir)
+  "Outputs a list of CONDITIONS to the *error-output* output stream.
+ BINDIR is the directory for output files, that is stripped off when
+   printing the CONDITIONS.
  HEADER is a prefix printed before all CONDITIONS."
   (when conditions
-    (info "~A:~{~@[~&~3T~A:~]~&~6T ~S '~A'~}" header
-          (loop for prev-src = nil then src
-                for (src type condition) in conditions
-                nconc (list (unless (equal src prev-src) (strip-prefix bindir src))
-                            type (with-standard-io-syntax
-                                   (or (ignore-errors (format nil "~S" condition))
-                                       (format nil "~A" condition))))))))
+    (warning "~A:~{~@[~&~3T~A:~]~&~6T ~S '~A'~}" header
+             (loop for prev-src = nil then src
+                   for (src type condition) in conditions
+                   nconc (list (unless (equal src prev-src) (strip-prefix bindir src))
+                               type (with-standard-io-syntax
+                                      (or (ignore-errors (format nil "~S" condition))
+                                          (format nil "~A" condition))))))))
 
 (defun check-failures (action)
   "Checks for compilation failures stored in ACTION."
@@ -442,7 +443,7 @@ package context. This allows for the user to specify their own handlers as a str
 
   (when (action-failures action)
     ;; Terminate with error. Blaze will clean up for us.
-    (print-conditions "Failures" (action-failures action) (action-bindir action))
+    (print-warning-conditions "Failures" (action-failures action) (action-bindir action))
     (unless (action-force-compilation-p action)
       (fatal "Blaze lisp build failed"))))
 
