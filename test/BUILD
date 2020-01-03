@@ -172,6 +172,11 @@ lisp_test(
     deps = [":features"],
 )
 
+lisp_test(
+    name = "main-test",
+    srcs = ["main-test.lisp"],
+)
+
 lisp_library(
     name = "wrong-arg-count-lib",
     srcs = ["wrong-arg-count.lisp"],
