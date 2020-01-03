@@ -294,7 +294,7 @@
 ;;; Generate an image.
 ;;;
 
-(defun save-lisp-and-die (name &key toplevel compression save-runtime-options verbose
+(defun save-lisp-and-die (name &key toplevel save-runtime-options verbose
                                precompile-generics)
   "Saves the current Lisp image and dies.
  Arguments:
