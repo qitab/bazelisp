@@ -24,7 +24,6 @@ bzl_library(
     ],
 )
 
-# TODO(czak): This needs to be set to some path reachable from Bazel.
 SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
 
 SBCL_MSAN = "//third_party/lisp/sbcl/binary-distribution/k8-msan:sbcl"

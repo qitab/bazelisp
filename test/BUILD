@@ -3,7 +3,6 @@
 # Description:
 # Test directory for the Lisp Skylark build rules.
 
-# TODO(czak): Need to provide a proper path here.
 load(
     "//:rules.bzl",
     "lisp_binary",
@@ -60,7 +59,6 @@ lisp_library(
         "d.lisp",
     ],
     order = None,
-    # setup = ["a.lisp"],
 )
 
 lisp_library(
@@ -111,7 +109,6 @@ lisp_binary(
     cdeps = [":empty"],
     elfcore = False,
     main = None,
-    # verbose = 1,
     deps = [
         # Sequential
         ":lib2",
