@@ -13,7 +13,7 @@
                 #:verbose #:vv #:vvv #:*verbose*
                 #:info #:message #:fatal
                 #:fatal-error #:non-fatal-error)
-  (:export #:save-binary
+  (:export #:save-image
            ;; Main entry point for blaze-lisp
            #:main
            ;; Splits a string by space.
@@ -509,8 +509,8 @@ package context. This allows for the user to specify their own handlers as a str
       (t
        (fatal "Cannot use ~S as an entry point." main-exp)))))
 
-(defun save-binary (name main &key save-runtime-options precompile-generics
-                                   remove-debug-info)
+(defun save-image (name main &key save-runtime-options precompile-generics remove-debug-info
+                        executable)
   "Saves the image to a binary image named 'name'. Exits.
  Arguments:
   NAME - the file name to save the image.
@@ -518,7 +518,8 @@ package context. This allows for the user to specify their own handlers as a str
       Will decompress in memory instead of mmapping the image.
   SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
       This is usually permanent.
-  PRECOMPILE-GENERICS - will precompile the generic functions before saving."
+  PRECOMPILE-GENERICS - will precompile the generic functions before saving.
+  EXECUTABLE - Whether to combine the launcher with the image to create an executable."
   (let ((main-fn (derive-entry-point main)))
     (verbose "Saving binary to: ~S~@[ (old-main: ~S)~]~@[ (main: ~S)~]"
              name (unless (eq main-fn *entry-point*) *entry-point*) main-fn)
@@ -535,6 +536,7 @@ package context. This allows for the user to specify their own handlers as a str
    :toplevel #'restart-image
    :save-runtime-options save-runtime-options
    :precompile-generics precompile-generics
+   :executable executable
    :verbose (plusp *verbose*)))
 
 (defun set-compilation-mode (compilation-mode &key safety)
@@ -778,7 +780,7 @@ it will signal an error."
 
 (defmethod process-file ((action action) (file string) (type (eql :warnings)))
   "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
-  (cond ((eq (action-command action) :binary)
+  (cond ((member (action-command action) '(:core :binary))
          ;; For binary target read the deferred warnings here so those can be checked
          ;; when the action is finalized later.
          (read-deferred-warnings action file))))
@@ -821,7 +823,7 @@ it will signal an error."
 (defgeneric finish-action (action command)
   (:documentation "Given a finished BUILD action execute the final command."))
 
-(defmethod finish-action ((action action) (command (eql :binary)))
+(defun check-and-save-image (action command)
   "Save the binary from this image."
   (nconcf (action-failures action)
           (resolve-deferred-warnings
@@ -830,12 +832,18 @@ it will signal an error."
   (check-features)
 
   ;; Assure things are in a defined state.
-  ;; Save as an executable image. Exit.
-  (save-binary (first (action-output-files action))
-               (action-main-function action)
-               :remove-debug-info (eq (action-compilation-mode action) :opt)
-               :save-runtime-options (action-save-runtime-options-p action)
-               :precompile-generics (action-precompile-generics-p action)))
+  ;; Save image. Exit.
+  (save-image (first (action-output-files action))
+              (action-main-function action)
+              :remove-debug-info (eq (action-compilation-mode action) :opt)
+              :save-runtime-options (action-save-runtime-options-p action)
+              :precompile-generics (action-precompile-generics-p action)
+              :executable (eq command :binary)))
+
+(defmethod finish-action ((action action) (command (eql :binary)))
+  (check-and-save-image action command))
+(defmethod finish-action ((action action) (command (eql :core)))
+  (check-and-save-image action command))
 
 (defmethod finish-action ((action action) (command (eql :compile)))
   "Compiles the last source file."
@@ -891,7 +899,7 @@ it will signal an error."
   "Main processing function for bazel.main.
  Arguments:
   ARGS - all the arguments,
-  COMMAND - one of :binary or :compile,
+  COMMAND - one of :core, :binary, or :compile,
   DEPS - dependencies,
   LOAD - files to be loaded after dependencies.
   SRCS - sources for a binary core or for compilation,
@@ -910,7 +918,6 @@ it will signal an error."
   COVERAGE - if the results should be instrumented with coverage information.
   EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
   DEPS-ALREADY-LOADED - true when files in DEPS are already loaded in the image."
-
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
         (parse-specs specs)
@@ -938,10 +945,10 @@ it will signal an error."
                         :emit-cfasl-p emit-cfasl
                         :record-path-location-p (and coverage t)
                         ;; Load lisp dependencies when compiling or making srcs image
-                        :lisp-load-mode (when (member command '(:binary :compile)) :load)
+                        :lisp-load-mode (when (member command '(:binary :core :compile)) :load)
                         ;; Load fasl dependencies when compiling or creating a binary image.
                         :fasl-load-mode
-                        (when (member command '(:binary :compile)) compilation-mode)))
+                        (when (member command '(:binary :core :compile)) compilation-mode)))
 
          (*compile-verbose* (>= *verbose* 1))
          (*compile-print* (>= *verbose* 3))
@@ -1009,7 +1016,8 @@ it will signal an error."
   (apply #'process command args))
 (defmethod execute-command ((command (eql :binary)) &rest args)
   (apply #'process command args))
-
+(defmethod execute-command ((command (eql :core)) &rest args)
+  (apply #'process command args))
 
 ;;;
 ;;; Main entry point

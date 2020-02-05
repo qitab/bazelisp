@@ -295,7 +295,7 @@
 ;;;
 
 (defun save-lisp-and-die (name &key toplevel save-runtime-options verbose
-                               precompile-generics)
+                               precompile-generics executable)
   "Saves the current Lisp image and dies.
  Arguments:
   NAME - the file name to save the image.
@@ -303,7 +303,8 @@
   SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
       This is usually permanent.
   VERBOSE - if true, the output streams are not muted before dumping the image.
-  PRECOMPILE-GENERICS - will precompile the generic functions before saving."
+  PRECOMPILE-GENERICS - will precompile the generic functions before saving.
+  EXECUTABLE - Whether to combine the launcher with the image to create an executable."
   (sb-ext:disable-debugger)
   (terminate-other-threads)
   (when precompile-generics
@@ -313,7 +314,7 @@
   (setf (extern-alien "gc_coalesce_string_literals" char) 2)
   (sb-ext:save-lisp-and-die
    name
-   :executable t
+   :executable executable
    :toplevel toplevel
    :save-runtime-options save-runtime-options)
 

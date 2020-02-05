@@ -62,7 +62,7 @@ genrule(
         " --load '$(location log.lisp)'" +
         " --load '$(location sbcl.lisp)'" +
         " --load '$(location main.lisp)'" +
-        " --eval '(bazel.main:save-binary \"$@\" (quote bazel.main:main))'"
+        " --eval '(bazel.main:save-image \"$@\" (quote bazel.main:main) :executable t)'"
     ),
     executable = 1,
     output_to_bindir = 1,

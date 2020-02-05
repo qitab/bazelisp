@@ -11,8 +11,8 @@ The three rules implemented here are:
 
 The code here defines a few Skylark "real" rules and wraps them in
 "Skylark macro" functions. The few real rules have following names:
- _lisp_binary
  _lisp_library
+ _lisp_core
  _skylark_wrap_lisp_test
  _skylark_wrap_lisp_binary
 These "rule class names" are used to find Lisp targets.
@@ -395,8 +395,9 @@ def lisp_compile_srcs(
 # Lisp Binary and Lisp Test
 ################################################################################
 
-def _lisp_binary_impl(ctx):
+def _lisp_core_impl(ctx):
     """Lisp specific implementation for lisp_binary and lisp_test rules."""
+    core = ctx.actions.declare_file(ctx.label.name)
     verbose_level = max(
         ctx.attr.verbose,
         int(ctx.var.get("VERBOSE_LISP_BUILD", "0")),
@@ -406,7 +407,7 @@ def _lisp_binary_impl(ctx):
     # buildozer: disable=print
     if verbosep:
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("Executable Core: %s" % ctx.outputs.executable)
+        print("Executable Core: %s" % core)
 
     compile = lisp_compile_srcs(
         ctx = ctx,
@@ -460,7 +461,6 @@ def _lisp_binary_impl(ctx):
     inputs.extend(warnings)
     inputs = depset(inputs, transitive = [lisp_info.compile_data])
 
-    core = ctx.outputs.executable
     core_flags = ctx.actions.args()
     core_flags.add("--specs", specs)
     core_flags.add("--outs", core)
@@ -477,18 +477,21 @@ def _lisp_binary_impl(ctx):
         progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
         env = BAZEL_LISP_ENV,
-        arguments = ["binary", compile.build_flags, core_flags],
+        arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
     )
 
-    runfiles = ctx.runfiles(files = outs, collect_default = True)
+    runfiles = ctx.runfiles(collect_default = True)
     if ctx.attr.image:
         runfiles = runfiles.merge(ctx.attr.image[DefaultInfo].default_runfiles)
     for compile_data in ctx.attr.compile_data:
         runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
         lisp_info,
-        DefaultInfo(runfiles = runfiles, executable = core),
+        DefaultInfo(
+            runfiles = runfiles,
+            files = depset([core]),
+        ),
         coverage_common.instrumented_files_info(
             ctx,
             source_attributes = ["srcs"],
@@ -497,9 +500,9 @@ def _lisp_binary_impl(ctx):
     ]
 
 # Internal rule used to generate action that creates a Lisp binary core.
-# Keep the name to be _lisp_binary - Grok depends on this name to find targets.
-_lisp_binary = rule(
-    implementation = _lisp_binary_impl,
+# Keep the name to be _lisp_core - Grok depends on this name to find targets.
+_lisp_core = rule(
+    implementation = _lisp_core_impl,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     attrs = dict(_lisp_common_attrs + [
@@ -507,7 +510,6 @@ _lisp_binary = rule(
         ("precompile_generics", attr.bool()),
         ("save_runtime_options", attr.bool()),
     ]),
-    executable = True,
 )
 
 # Attributes used by _skylark_wrap_lisp_* rules.
@@ -752,7 +754,7 @@ def lisp_binary(
     # ELF sections which inform the linker how to link Lisp to C code.
 
     core = name + ".core.target"
-    _lisp_binary(
+    _lisp_core(
         name = core,
         # Common lisp attributes.
         srcs = srcs,
@@ -774,7 +776,7 @@ def lisp_binary(
         **kwargs
     )
 
-    # Discard kwargs that are just for _lisp_binary.
+    # Discard kwargs that are just for _lisp_core.
     kwargs.pop("preload_image", None)
     kwargs.pop("enable_coverage", None)
 

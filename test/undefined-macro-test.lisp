@@ -15,8 +15,8 @@
 ;; we dump the image as the build output artifact. When loading the FASLs the generic below
 ;; will be found at the method dispatch time.
 
-(defmethod bazel.main:finish-action :before ((action bazel.main:action) (command (eql :binary)))
-  "Checks ACTION if there was an undefined-function warning for the binary COMMAND."
+(defmethod bazel.main:finish-action :before ((action bazel.main:action) (command (eql :core)))
+  "Checks ACTION if there was an undefined-function warning for the core COMMAND."
   ;; TODO(czak): Need to provide a better path here.
   (assert (equalp (bazel.main:action-deferred-warnings action)
                   '(("third_party/lisp/bazel/test/undefined-macro-reference.lisp"
