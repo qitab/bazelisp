@@ -12,8 +12,6 @@ licenses(["unencumbered"])
 
 exports_files(["LICENSE"])
 
-exports_files(["dump-symtable.lisp"])
-
 bzl_library(
     name = "build_rules",
     srcs = glob(["*.bzl"]),
