@@ -4,7 +4,7 @@
 # The package implements the Lisp plugin to the Bazel.
 # This BUILD file describes a Lisp side driver used
 # with the Skylark rules which are defined in rules.bzl
-# See README for more info about this package.
+# See README.md for more info about this package.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
