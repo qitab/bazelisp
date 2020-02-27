@@ -1145,7 +1145,6 @@ def lisp_library(
         csrcs = csrcs,
         cdeps = cdeps,
         copts = copts,
-        features = features,
         visibility = visibility,
         testonly = testonly,
         **cc_kwargs
