@@ -617,7 +617,6 @@ def lisp_binary(
         allow_save_lisp = False,
         visibility = None,
         testonly = 0,
-        csrcs = [],
         cdeps = [],
         copts = [],
         test = False,
@@ -693,9 +692,8 @@ def lisp_binary(
         a mix of Lisp and other code with a common toolchain.
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
-      csrcs: a list of C/C++ source labels.
       cdeps: this will link the cc dependencies into the image.
-      copts: a list of string values of options to pass to cc_library.
+      copts: a list of string values of options to pass to cc_binary.
       test: indicates that the binary is a test.
       flaky: a flag indicating that a test is flaky.
       size: the size of a test: small, medium (default), large, enormous.
@@ -706,7 +704,7 @@ def lisp_binary(
       stamp: C++ build stamp info (0 = no, 1 = yes, default -1 = bazel option).
       malloc: malloc implementation to be used for linking of cc code.
       verbose: internal numeric level of verbosity for the build rule.
-      **kwargs: other common attributes for binary targets.
+      **kwargs: other common attributes for all targets.
     """
 
     # We have essentially three ways to produce a Lisp binary:
@@ -801,9 +799,7 @@ def lisp_binary(
     cdeps_library = make_cdeps_library(
         name = name,
         deps = [image] + deps,
-        csrcs = csrcs,
         cdeps = cdeps,
-        copts = copts,
         visibility = visibility,
         testonly = testonly,
         tags = tags,
@@ -883,14 +879,6 @@ def lisp_binary(
         tags = internal_tags,
     )
 
-    # Note that this treats csrcs the same as the srcs of targets in cdeps. That's
-    # not quite intuitive, but just adding csrcs to instrumented_srcs (and adding
-    # cdeps and _make_cdeps_dependencies(deps) to instrumented_deps instead of
-    # cdeps_library doesn't work, it doesn't include the right metadata files
-    # included by the InstrumentedFilesProvider of the native cc_library rule).
-    instrumented_srcs = srcs
-    instrumented_deps = deps + [image, cdeps_library]
-
     if test:
         skylark_wrap_rule = _skylark_wrap_lisp_test
 
@@ -908,8 +896,8 @@ def lisp_binary(
     skylark_wrap_rule(
         name = name,
         binary = binary,
-        instrumented_srcs = instrumented_srcs,
-        instrumented_deps = instrumented_deps,
+        instrumented_srcs = srcs,
+        instrumented_deps = deps + [image, cdeps_library],
         core = core,
         data = data,
         args = args,
@@ -1038,40 +1026,41 @@ def _make_cdeps_dependencies(deps):
 def make_cdeps_library(
         name,
         deps = [],
-        csrcs = [],
         cdeps = [],
         tags = [],
+        testonly = False,
+        visibility = "//visibility:private",
         **kwargs):
-    """Create native.cc_library representing a Lisp target's csrcs and cdeps.
+    """Create native.cc_library representing a Lisp target's cdeps.
 
     This target is named [name].cdeps.
 
     Args:
       name: Name of the Lisp target.
       deps: Immediate Lisp deps for the Lisp target.
-      csrcs: C++ sources for the target.
       cdeps: C++ dependencies for the target.
       tags: Blaze tags for the cdeps target.
-      **kwargs: Other keyword arguments forwarded to cc_library.
+      testonly: Whether the target should be testonly. Should be true if the
+          Lisp target is a test or testonly.
+      visibility: Visibility for the Lisp target.
+      **kwargs: Common attributes for all targets.
 
     Returns:
       The name of the C++ library: <name>.cdeps
     """
     cdeps_library = name + ".cdeps"
-    lisp_cdeps = _make_cdeps_dependencies(deps)
     tags = list(tags)
     _add_tag("manual", tags)
     native.cc_library(
         name = cdeps_library,
-        srcs = csrcs,
-        deps = cdeps + lisp_cdeps,
+        deps = cdeps + _make_cdeps_dependencies(deps),
         tags = tags,
+        testonly = testonly,
+        visibility = visibility,
         **kwargs
     )
 
     # This is used for dynamic loading of targets from the REPL.
-    kwargs.pop("testonly", None)
-    kwargs.pop("visibility", None)
     native.cc_binary(
         name = "lib{}.so".format(name),
         deps = [cdeps_library],
@@ -1079,7 +1068,7 @@ def make_cdeps_library(
         linkstatic = 0,
         tags = tags,
         visibility = ["//visibility:private"],
-        testonly = 1,
+        testonly = True,
         **kwargs
     )
     return cdeps_library
@@ -1096,9 +1085,7 @@ def lisp_library(
         image = BAZEL_LISP,
         visibility = None,
         testonly = 0,
-        csrcs = [],
         cdeps = [],
-        copts = [],
         verbose = None,
         **kwargs):
     """Bazel rule to create a library from Common Lisp source files.
@@ -1125,29 +1112,18 @@ def lisp_library(
       image: the base image used to compile the target (default BAZEL_LISP).
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
-      csrcs: a list of C/C++ source labels.
       cdeps: this will link the cc dependencies into the image.
-      copts: a list of string values of options to pass to cc_library.
       verbose: internal numeric level of verbosity for the build rule.
       **kwargs: other common attributes.
     """
     # This macro calls _make_cdeps_library, _lisp_library, _dump_lisp_deps.
 
-    cc_kwargs = {
-        key: value
-        for key, value in kwargs.items()
-        if key not in ("preload_image", "enable_coverage")
-    }
-
     cdeps_library = make_cdeps_library(
         name = name,
         deps = [image] + deps,
-        csrcs = csrcs,
         cdeps = cdeps,
-        copts = copts,
         visibility = visibility,
         testonly = testonly,
-        **cc_kwargs
     )
 
     _lisp_library(
@@ -1161,9 +1137,7 @@ def lisp_library(
         lisp_features = features,
         nowarn = nowarn,
         image = image,
-        # lisp_library attributes (for coverage instrumentation). Note that this
-        # treats csrcs the same as the srcs of targets in cdeps. See longer note
-        # about instrumented_deps in definition of lisp_binary above.
+        # lisp_library attributes (for coverage instrumentation).
         instrumented_deps = deps + [image, cdeps_library],
         # Common rule attributes.
         visibility = visibility,
