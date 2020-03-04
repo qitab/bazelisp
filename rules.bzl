@@ -568,7 +568,6 @@ def lisp_binary(
         visibility = None,
         testonly = 0,
         cdeps = [],
-        copts = [],
         test = False,
         flaky = False,
         size = "medium",
@@ -643,7 +642,6 @@ def lisp_binary(
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
       cdeps: this will link the cc dependencies into the image.
-      copts: a list of string values of options to pass to cc_binary.
       test: indicates that the binary is a test.
       flaky: a flag indicating that a test is flaky.
       size: the size of a test: small, medium (default), large, enormous.
@@ -821,7 +819,6 @@ def lisp_binary(
         srcs = link_srcs,
         deps = link_deps,
         data = data,
-        copts = copts,
         visibility = ["//visibility:private"],
         stamp = stamp,
         malloc = malloc,
