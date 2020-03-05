@@ -1,22 +1,25 @@
-"""Implementation of the Lisp build rules.
+"""Build rules for Common Lisp.
 
-These rules are used by projects that contain Lisp sources.
-They are required to build Lisp binaries or libraries, or run Lisp tests.
+The three rules defined here are:
+  lisp_library - The basic unit of compilation
+  lisp_binary - Outputs an executable binary
+  lisp_test - Outputs a binary that is run with the test command
 
-The three rules implemented here are:
- lisp_binary - for Lisp binaries,
- lisp_library - for Lisp libraries,
- lisp_test - a test binary run with blaze/bazel test.
+Technically, these are Starlark macros with rule-like semantics. This file
+defines a few Starlark rules, then wraps those with macros to use them in
+combination with native rules for C++, since the APIs for C++ compilation
+actions (cc_common.compile/link) do not yet support all the features used.
 
+The Starlark rules defined here have following names:
+  _lisp_core
+  _lisp_library
+  _starlark_wrap_lisp_binary
+  _starlark_wrap_lisp_test
 
-The code here defines a few Skylark "real" rules and wraps them in
-"Skylark macro" functions. The few real rules have following names:
- _lisp_library
- _lisp_core
- _skylark_wrap_lisp_test
- _skylark_wrap_lisp_binary
-These "rule class names" are used to find Lisp targets.
-This is useful with 'bazel query' and for tools indexing the Lisp codebase.
+Those last three are used to define targets with the name passed to
+lisp_library, lisp_binary, and lisp_test, respectively. These rule names can be
+used when analyzing Lisp targets with the query command, which analyzes the
+graph of targets after Starlark macros are evaluated.
 """
 
 load(
@@ -32,7 +35,7 @@ load(
     "C_COMPILE_ACTION_NAME",
 )
 
-UNSUPPORTED_FEATURES = [
+_UNSUPPORTED_FEATURES = [
     "thin_lto",
     "module_maps",
     "use_header_modules",
@@ -40,45 +43,45 @@ UNSUPPORTED_FEATURES = [
     "fdo_optimize",
 ]
 
-BAZEL_LISP = "//"
-BAZEL_LISP_MAIN = "bazel.main:main"
-BAZEL_LISP_ENV = {"LISP_MAIN": BAZEL_LISP_MAIN}
-
-lisp_files = [".lisp", ".lsp"]
+_BAZEL_LISP = "//"
+_BAZEL_LISP_MAIN = "bazel.main:main"
+_BAZEL_LISP_ENV = {"LISP_MAIN": _BAZEL_LISP_MAIN}
+_ELFINATE = "@local_sbcl//:elfinate"
+_DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
+_LIBSBCL = "@local_sbcl//:c-support"
 
 # Common attributes accepted by the (internal) lisp rules.
-_compilation_orders = ["multipass", "serial", "parallel"]
-_lisp_common_attrs = [
-    ("srcs", attr.label_list(allow_files = lisp_files)),
-    ("deps", attr.label_list(providers = [LispInfo])),
-    ("order", attr.string(
+_COMPILATION_ORDERS = ["multipass", "serial", "parallel"]
+_LISP_COMMON_ATTRS = {
+    "srcs": attr.label_list(allow_files = [".lisp", ".lsp"]),
+    "deps": attr.label_list(providers = [LispInfo]),
+    "order": attr.string(
         default = "serial",
-        values = _compilation_orders,
-    )),
+        values = _COMPILATION_ORDERS,
+    ),
     # runtime data - is data available at runtime.
-    ("data", attr.label_list(allow_files = True)),
+    "data": attr.label_list(allow_files = True),
     # compile data - is data available at compile and load time.
-    ("compile_data", attr.label_list(allow_files = True)),
-    ("lisp_features", attr.string_list()),
-    ("nowarn", attr.string_list()),
-    # TODO(czak): Rename to "build_image".
-    ("image", attr.label(
+    "compile_data": attr.label_list(allow_files = True),
+    "lisp_features": attr.string_list(),
+    "nowarn": attr.string_list(),
+    "image": attr.label(
         allow_single_file = True,
         executable = True,
         cfg = "target",
-        default = Label(BAZEL_LISP),
-    )),
-    ("verbose", attr.int()),
+        default = Label(_BAZEL_LISP),
+    ),
+    "verbose": attr.int(),
     # For testing coverage.
-    ("enable_coverage", attr.bool()),
+    "enable_coverage": attr.bool(),
     # For testing compilation behavior.
-    ("preload_image", attr.bool()),
+    "preload_image": attr.bool(),
     # Do not add references, temporary attribute for find_cc_toolchain.
     # See go/skylark-api-for-cc-toolchain for more details.
-    ("_cc_toolchain", attr.label(
+    "_cc_toolchain": attr.label(
         default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
-    )),
-]
+    ),
+}
 
 def _paths(files, sep = " "):
     """Return the full file paths for all the 'files'.
@@ -158,7 +161,7 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
         ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
-        unsupported_features = ctx.disabled_features + UNSUPPORTED_FEATURES,
+        unsupported_features = ctx.disabled_features + _UNSUPPORTED_FEATURES,
     )
     c_variables = cc_common.create_compile_variables(
         feature_configuration = feature_configuration,
@@ -215,6 +218,7 @@ def _list_excluding_depset(items, exclude):
 
 def lisp_compile_srcs(
         ctx,
+        name,
         srcs,
         deps,
         image,
@@ -229,6 +233,7 @@ def lisp_compile_srcs(
 
     Args:
       ctx: The rule context.
+      name: Name of the external target.
       srcs: List of src Files.
       deps: List of immediate dependency Targets.
       image: Build image Target used to compile the sources.
@@ -251,10 +256,9 @@ def lisp_compile_srcs(
               lisp_info.fasls if there are srcs)
           - flags: List of args to pass to all compile/binary actions
     """
-    if not order in _compilation_orders:
-        fail("order {} must be one of {}".format(order, _compilation_orders))
+    if not order in _COMPILATION_ORDERS:
+        fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
 
-    name = ctx.label.name
     verbosep = verbose_level > 0
     lisp_info = collect_lisp_info(
         deps = deps,
@@ -324,7 +328,7 @@ def lisp_compile_srcs(
             ),
             progress_message = msg,
             mnemonic = "LispSourceImage",
-            env = BAZEL_LISP_ENV,
+            env = _BAZEL_LISP_ENV,
             arguments = ["binary", build_flags, preload_image_flags],
             executable = build_image,
         )
@@ -369,7 +373,7 @@ def lisp_compile_srcs(
             tools = [compile_image],
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
-            env = BAZEL_LISP_ENV,
+            env = _BAZEL_LISP_ENV,
             arguments = ["compile", build_flags, compile_flags, file_flags],
             executable = compile_image,
         )
@@ -411,6 +415,7 @@ def _lisp_core_impl(ctx):
 
     compile = lisp_compile_srcs(
         ctx = ctx,
+        name = ctx.attr.binary_name,
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         image = ctx.attr.image,
@@ -476,7 +481,7 @@ def _lisp_core_impl(ctx):
         inputs = inputs,
         progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
-        env = BAZEL_LISP_ENV,
+        env = _BAZEL_LISP_ENV,
         arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
     )
@@ -501,32 +506,23 @@ def _lisp_core_impl(ctx):
 
 # Internal rule used to generate action that creates a Lisp binary core.
 # Keep the name to be _lisp_core - Grok depends on this name to find targets.
+_LISP_CORE_ATTRS = dict(_LISP_COMMON_ATTRS)
+_LISP_CORE_ATTRS.update({
+    "main": attr.string(default = "main"),
+    "binary_name": attr.string(mandatory = True),
+    "precompile_generics": attr.bool(),
+    "save_runtime_options": attr.bool(),
+})
+
 _lisp_core = rule(
     implementation = _lisp_core_impl,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
-    attrs = dict(_lisp_common_attrs + [
-        ("main", attr.string(default = "main")),
-        ("precompile_generics", attr.bool()),
-        ("save_runtime_options", attr.bool()),
-    ]),
+    attrs = _LISP_CORE_ATTRS,
 )
 
-# Attributes used by _skylark_wrap_lisp_* rules.
-_skylark_wrap_lisp_attrs = {
-    "binary": attr.label(allow_single_file = True),
-    "data": attr.label_list(allow_files = True),
-    "core": attr.label(providers = [LispInfo]),
-    # TODO(sfreilich): After there's some API for accessing native rule
-    # internals in Skylark rules, rewrite lisp_* macros to be rule functions
-    # instead and remove these additional attributes used in instrumented_files.
-    # (Same for lisp_library below.)
-    "instrumented_srcs": attr.label_list(allow_files = True),
-    "instrumented_deps": attr.label_list(allow_files = True),
-}
-
-def _skylark_wrap_lisp_impl(ctx):
-    """A Skylark rule that provides Lisp-related providers for a cc_binary."""
+def _starlark_wrap_lisp_impl(ctx):
+    """A Starlark rule that provides Lisp-related providers for a cc_binary."""
     out = ctx.actions.declare_file(ctx.label.name)
     ctx.actions.run_shell(
         inputs = [ctx.file.binary],
@@ -554,21 +550,33 @@ def _skylark_wrap_lisp_impl(ctx):
         ),
     ]
 
-# Rule used to wrap an internal cc_binary rule to provide Lisp Skylark
+_STARLARK_WRAP_LISP_ATTRS = {
+    "binary": attr.label(allow_single_file = True),
+    "data": attr.label_list(allow_files = True),
+    "core": attr.label(providers = [LispInfo]),
+    # TODO(sfreilich): After there's some API for accessing native rule
+    # internals in Starlark rules, rewrite lisp_* macros to be rule functions
+    # instead and remove these additional attributes used in instrumented_files.
+    # (Same for lisp_library below.)
+    "instrumented_srcs": attr.label_list(allow_files = True),
+    "instrumented_deps": attr.label_list(allow_files = True),
+}
+
+# Rule used to wrap an internal cc_binary rule to provide Lisp Starlark
 # providers for lisp_binary.
-_skylark_wrap_lisp_binary = rule(
-    implementation = _skylark_wrap_lisp_impl,
+_starlark_wrap_lisp_binary = rule(
+    implementation = _starlark_wrap_lisp_impl,
     executable = True,
-    attrs = _skylark_wrap_lisp_attrs,
+    attrs = _STARLARK_WRAP_LISP_ATTRS,
 )
 
-# Rule used to wrap an internal cc_binary rule to provide Lisp Skylark
+# Rule used to wrap an internal cc_binary rule to provide Lisp Starlark
 # providers for lisp_test.
-_skylark_wrap_lisp_test = rule(
-    implementation = _skylark_wrap_lisp_impl,
+_starlark_wrap_lisp_test = rule(
+    implementation = _starlark_wrap_lisp_impl,
     executable = True,
     test = True,
-    attrs = _skylark_wrap_lisp_attrs,
+    attrs = _STARLARK_WRAP_LISP_ATTRS,
 )
 
 # DEPS file is used to list all the Lisp sources for a target.
@@ -611,7 +619,7 @@ def lisp_binary(
         nowarn = [],
         args = [],
         main = "main",
-        image = BAZEL_LISP,
+        image = _BAZEL_LISP,
         save_runtime_options = True,
         precompile_generics = True,
         allow_save_lisp = False,
@@ -625,7 +633,7 @@ def lisp_binary(
         shard_count = None,
         tags = [],
         stamp = -1,
-        malloc = "@bazel_tools//tools/cpp:malloc",
+        malloc = _DEFAULT_MALLOC,
         verbose = None,
         **kwargs):
     """Bazel rule to create a binary executable from Common Lisp source files.
@@ -670,25 +678,25 @@ def lisp_binary(
       nowarn: a list of suppressed Lisp warning types or warning handlers.
       args: default arguments passed to the binary or test on execution.
       main: specifies the entry point function (default: main).
-      image: the base image used to compile the target (default BAZEL_LISP).
-          The executable generated by this rule needs to run save-lisp-and-die,
-          so if it's a lisp_binary target, it must have the attribute
-          allow_save_lisp set to True.
+      image: The base image used to compile the target (defaults to :bazel in
+          this package). The executable generated by this rule needs to run
+          save-lisp-and-die, so if it's a lisp_binary target, it must have the
+          attribute allow_save_lisp set to True.
       save_runtime_options: save runtime options and prevent those being
           interpreted by the target binary with a main entry point (default True).
           Setting this to False allows SBCL to process following flags:
            --help, --version, --core, --dynamic-space-size, --control-stack-size.
       precompile_generics: precompile generic functions if True (as by default).
-        Must be set to False to allow compiling arbitary amounts of code to
-        memory, so should be set to false for targets intended for use as a
-        compilation image.
+          Must be set to False to allow compiling arbitary amounts of code to
+          memory, so should be set to false for targets intended for use as a
+          compilation image.
       allow_save_lisp: Whether the binary format should be left in the
-        configuration expected by save-lisp-and-die (default False). By
-        default, this rule transforms the binary into a more standard ELF
-        format that is compatible with C debugging tools, to allow easier
-        debugging of Lisp code which interoperates with C/C++ code via a C
-        foreign function interface and to allow easier profiling/debugging of
-        a mix of Lisp and other code with a common toolchain.
+          configuration expected by save-lisp-and-die (default False). By
+          default, this rule transforms the binary into a more standard ELF
+          format that is compatible with C debugging tools, to allow easier
+          debugging of Lisp code which interoperates with C/C++ code via a C
+          foreign function interface and to allow easier profiling/debugging of
+          a mix of Lisp and other code with a common toolchain.
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
       cdeps: this will link the cc dependencies into the image.
@@ -766,9 +774,10 @@ def lisp_binary(
     # the number of sections of Lisp data. In either case, there are other
     # ELF sections which inform the linker how to link Lisp to C code.
 
-    core = name + ".core.target"
+    core = "_{}.core".format(name)
     _lisp_core(
         name = core,
+        binary_name = name,
         # Common lisp attributes.
         srcs = srcs,
         deps = deps,
@@ -817,7 +826,7 @@ def lisp_binary(
     # Either way, we need to link with the cdeps and SBCL C++.
     link_deps = [
         cdeps_library,
-        "@local_sbcl//:c-support",
+        _LIBSBCL,
     ]
 
     if allow_save_lisp:
@@ -825,7 +834,7 @@ def lisp_binary(
         elfinate_outs = [name + "-core.o", name + "-syms.lds"]
         link_srcs = [name + "-core.o"]
         elfinate_cmd_template = (
-            "$(location @local_sbcl//:elfinate) copy " +
+            "$(location {}) copy ".format(_ELFINATE) +
             "$(location {core}) $(location {name}-core.o) && " +
             "nm -p $(location {name}-core.o) | " +
             "awk '" +
@@ -840,13 +849,13 @@ def lisp_binary(
         elfinate_outs = [name + ".s", name + ".core", name + "-core.o"]
         link_srcs = [name + ".s", name + "-core.o"]
         elfinate_cmd_template = (
-            "$(location @local_sbcl//:elfinate) split " +
+            "$(location {}) split ".format(_ELFINATE) +
             "$(location {core}) $(location {name}.s)"
         )
 
     native.genrule(
-        name = name + "-parts",
-        tools = ["@local_sbcl//:elfinate"],
+        name = "_{}.parts".format(name),
+        tools = [_ELFINATE],
         srcs = [core],
         outs = elfinate_outs,
         cmd = elfinate_cmd_template.format(
@@ -858,11 +867,11 @@ def lisp_binary(
         tags = internal_tags,
     )
 
-    # The final executable still needs to be produced by a Skylark rule, so
+    # The final executable still needs to be produced by a Starlark rule, so
     # it can get the LispInfo and instrumented_files_info providers
     # correct. That means the internal rule must be cc_binary, only the
     # outermost rule is a test for lisp_test.
-    binary = name + "-combined"
+    binary = "_{}.combined".format(name)
     native.cc_binary(
         name = binary,
         linkopts = linkopts,
@@ -877,7 +886,7 @@ def lisp_binary(
     )
 
     if test:
-        skylark_wrap_rule = _skylark_wrap_lisp_test
+        starlark_wrap_rule = _starlark_wrap_lisp_test
 
         # TODO(sfreilich): This should object when test_kwargs are set on a
         # non-test rule.
@@ -888,9 +897,9 @@ def lisp_binary(
             shard_count = shard_count,
         )
     else:
-        skylark_wrap_rule = _skylark_wrap_lisp_binary
+        starlark_wrap_rule = _starlark_wrap_lisp_binary
         test_kwargs = {}
-    skylark_wrap_rule(
+    starlark_wrap_rule(
         name = name,
         binary = binary,
         instrumented_srcs = srcs,
@@ -912,7 +921,7 @@ def lisp_binary(
         testonly = testonly,
     )
 
-def lisp_test(name, image = BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
+def lisp_test(name, image = _BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
     """Bazel rule to create a unit test from Common Lisp source files.
 
     Outputs: <name>
@@ -963,6 +972,7 @@ def _lisp_library_impl(ctx):
 
     compile = lisp_compile_srcs(
         ctx = ctx,
+        name = ctx.label.name,
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         image = ctx.attr.image,
@@ -993,17 +1003,20 @@ def _lisp_library_impl(ctx):
         ),
     ]
 
+_LISP_LIBRARY_ATTRS = dict(_LISP_COMMON_ATTRS)
+_LISP_LIBRARY_ATTRS.update({
+    # After there's some API for accessing native rule internals, we can get
+    # rid of this, but while we're implementing this as a macro that
+    # generates native and Starlark rules, this rule needs some additional
+    # attributes in order to get coverage instrumentation correct.
+    "instrumented_deps": attr.label_list(allow_files = True),
+})
+
 # Internal rule that creates a Lisp library FASL file.
 # Keep the _lisp_library rule class name, so Grok can find the targets.
 _lisp_library = rule(
     implementation = _lisp_library_impl,
-    attrs = dict(_lisp_common_attrs + [
-        # After there's some API for accessing native rule internals, we can get
-        # rid of this, but while we're implementing this as a macro that
-        # generates native and Skylark rules, this rule needs some additional
-        # attributes in order to get coverage instrumentation correct.
-        ("instrumented_deps", attr.label_list(allow_files = True)),
-    ]),
+    attrs = _LISP_LIBRARY_ATTRS,
     # Access to the cpp compiler options.
     fragments = ["cpp"],
     outputs = {"fasl": "%{name}.fasl"},
@@ -1079,7 +1092,7 @@ def lisp_library(
         features = [],
         order = "serial",
         nowarn = [],
-        image = BAZEL_LISP,
+        image = _BAZEL_LISP,
         visibility = None,
         testonly = 0,
         cdeps = [],
@@ -1106,15 +1119,13 @@ def lisp_library(
             all sources loaded.
           "parallel" - each source is compiled independently from others.
       nowarn: a list of suppressed Lisp warning types or warning handlers.
-      image: the base image used to compile the target (default BAZEL_LISP).
+      image: the base image used to compile the target (defaults to :bazel in this package).
       visibility: list of labels controlling which other rules can use this one.
       testonly: If 1, only test targets can use this rule.
       cdeps: this will link the cc dependencies into the image.
       verbose: internal numeric level of verbosity for the build rule.
       **kwargs: other common attributes.
     """
-    # This macro calls _make_cdeps_library, _lisp_library, _dump_lisp_deps.
-
     cdeps_library = make_cdeps_library(
         name = name,
         deps = [image] + deps,
