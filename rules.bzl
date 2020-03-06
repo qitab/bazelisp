@@ -185,7 +185,7 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
         variables = cpp_variables,
     )
 
-    if "-fsanitize=memory" in c_options or "-fsanitize=memory" in cpp_options:
+    if "-fsanitize=memory" in c_options:
         lisp_features = depset(["msan"], transitive = [lisp_features])
     flags = ctx.actions.args()
     flags.add(
