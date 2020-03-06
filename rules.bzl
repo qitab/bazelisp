@@ -31,7 +31,6 @@ load(
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 load(
     "@rules_cc//cc:action_names.bzl",
-    "CPP_COMPILE_ACTION_NAME",
     "C_COMPILE_ACTION_NAME",
 )
 
@@ -155,7 +154,6 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
     cpp_fragment = ctx.fragments.cpp
     copts = cpp_fragment.copts
     conlyopts = cpp_fragment.conlyopts
-    cxxopts = cpp_fragment.cxxopts
     cc_toolchain = find_cc_toolchain(ctx)
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
@@ -168,21 +166,10 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
         cc_toolchain = cc_toolchain,
         user_compile_flags = copts + conlyopts,
     )
-    cpp_variables = cc_common.create_compile_variables(
-        feature_configuration = feature_configuration,
-        cc_toolchain = cc_toolchain,
-        user_compile_flags = copts + cxxopts,
-        add_legacy_cxx_options = True,
-    )
     c_options = cc_common.get_memory_inefficient_command_line(
         feature_configuration = feature_configuration,
         action_name = C_COMPILE_ACTION_NAME,
         variables = c_variables,
-    )
-    cpp_options = cc_common.get_memory_inefficient_command_line(
-        feature_configuration = feature_configuration,
-        action_name = CPP_COMPILE_ACTION_NAME,
-        variables = cpp_variables,
     )
 
     if "-fsanitize=memory" in c_options:
@@ -200,12 +187,6 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
 
     if verbose_level > 0:
         flags.add("--verbose", str(verbose_level))
-
-    # TODO(czak): Find out how to simplify passing NDEBUG here.
-    if "-UNDEBUG" in cpp_options:
-        flags.add("--safety", "3")
-    elif "-DNDEBUG" in cpp_options:
-        flags.add("--safety", "0")
 
     if int(ctx.var.get("LISP_BUILD_FORCE", "0")) > 0:
         flags.add("--force")
