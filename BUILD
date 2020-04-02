@@ -22,14 +22,15 @@ bzl_library(
     ],
 )
 
-SBCL = "//third_party/lisp/sbcl/binary-distribution/k8:sbcl"
-
-SBCL_MSAN = "//third_party/lisp/sbcl/binary-distribution/k8-msan:sbcl"
+SBCL = "@local_sbcl//:sbcl_fileset"
 
 # Using "--define=LISPCORE=<something else>" will allow using a different core
 # to build lisp.
 vardef("LISPCORE", "sbcl.core")
 
+# This is not the same as @bazel_tools//tools/cpp:msan_build, but that matches whether the
+# build is run with --config=msan at all, as opposed to whether particular
+# targets are actually compiled in msan (e.g. anything in host config is not).
 config_setting(
     name = "msan",
     flag_values = {"@bazel_tools//tools/cpp:compiler": "msan"},
@@ -44,15 +45,12 @@ genrule(
         "log.lisp",
         "sbcl.lisp",
         "main.lisp",
-    ] + select({
-        ":msan": [SBCL_MSAN],
-        "//conditions:default": [SBCL],
-    }),
+        SBCL,
+    ],
     outs = ["bazel"],
-    cmd = select({
-        ":msan": "$(location %s)/bin/sbcl" % SBCL_MSAN,
-        "//conditions:default": "$(location %s)/bin/sbcl --core $(location %s)/lib/sbcl/$(LISPCORE)" % (SBCL, SBCL),
-    }) + (
+    cmd = (
+        "$(location {})/bin/sbcl".format(SBCL) +
+        " --core $(location {})/lib/sbcl/$(LISPCORE)".format(SBCL) +
         " --noinform" +
         " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
         " --load '$(location utils.lisp)'" +

@@ -29,10 +29,6 @@ load(
     "extend_lisp_info",
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
-load(
-    "@rules_cc//cc:action_names.bzl",
-    "C_COMPILE_ACTION_NAME",
-)
 
 _UNSUPPORTED_FEATURES = [
     "thin_lto",
@@ -151,28 +147,17 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
     Returns:
         Args object to be passed to Lisp build actions.
     """
-    cpp_fragment = ctx.fragments.cpp
-    copts = cpp_fragment.copts
-    conlyopts = cpp_fragment.conlyopts
     cc_toolchain = find_cc_toolchain(ctx)
-    feature_configuration = cc_common.configure_features(
-        ctx = ctx,
-        cc_toolchain = cc_toolchain,
-        requested_features = ctx.features,
-        unsupported_features = ctx.disabled_features + _UNSUPPORTED_FEATURES,
-    )
-    c_variables = cc_common.create_compile_variables(
-        feature_configuration = feature_configuration,
-        cc_toolchain = cc_toolchain,
-        user_compile_flags = copts + conlyopts,
-    )
-    c_options = cc_common.get_memory_inefficient_command_line(
-        feature_configuration = feature_configuration,
-        action_name = C_COMPILE_ACTION_NAME,
-        variables = c_variables,
-    )
 
-    if "-fsanitize=memory" in c_options:
+    # Needs to match logic for the :msan config_setting target. Unfortunately,
+    # config_setting rules don't yet have a Starlark API. Note that this is not
+    # equivalent to looking at ctx.var.get("msan_config"), we want to know if
+    # msan is used in this specific configuration, not if it's an msan build in
+    # general. (It might be better to look at whether msan is enabled in
+    # features with cc_common.configure_features and cc_common.is_enabled,
+    # but the important thing is that the behavior is consistent between
+    # this target, its image attr, and _LIBSBCL.)
+    if cc_toolchain.compiler == "msan":
         lisp_features = depset(["msan"], transitive = [lisp_features])
     flags = ctx.actions.args()
     flags.add(
