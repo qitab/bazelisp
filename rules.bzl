@@ -782,11 +782,16 @@ def lisp_binary(
     internal_tags = list(tags)
     _add_tag("manual", internal_tags)
 
-    # SBCL cannot generate position-independent code, and -pie is becoming the
-    # default. (NOTE: until the SBCL-compiled functions are actually built as
-    # an ELF library, theoretically we could build with -pie by modifying the
-    # build for libsbcl.a, but that'd be basically a lie since most of the code
-    # would still be mapped at a fixed address.)
+    # The support in ELFinator exists for -pie code, and a non-elfinated SBCL binaries
+    # are always position-independent; however, extreme inefficiency is imparted to ELF
+    # binaries that are position-independent. Lisp pointers are all absolute, and a
+    # typical Lisp heap might contain 3 to 5 million pointers to functions, therefore
+    # require that many relocations on each invocation to adjust to wherever the system
+    # moved the text segment. C on the other hand uses function pointers sparingly.
+    # I don't have "typical" numbers of pointers, and it can't be inferred from a binary,
+    # but it's nothing like having 40,000 closures over #<FUNCTION ALWAYS-BOUND {xxxxxx}>
+    # (which is the SLOT-BOUNDP method "fast method function" for every defstruct slot)
+    # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
     linkopts = ["-Wl,-no-pie"]
 
     # Either way, we need to link with the cdeps and SBCL C++.
