@@ -49,6 +49,17 @@ lisp_test(
     deps = [":bar"],
 )
 
+lisp_test(
+    name = "minimal",
+    main = "values",
+)
+
+lisp_test(
+    name = "minimal-allow-save-lisp",
+    allow_save_lisp = True,
+    main = "values",
+)
+
 lisp_library(
     name = "lib1",
     srcs = [
