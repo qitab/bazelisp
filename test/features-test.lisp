@@ -11,5 +11,6 @@
   (assert (null (ignore-errors (bazel.main::to-feature "()"))))
   (assert (null (ignore-errors (bazel.main::to-feature 123))))
 
+  (assert (find :bazel *features*)) ; NOLINT
   (assert (find :features *features*)) ; NOLINT
   (assert (find :features-test *features*))) ; NOLINT

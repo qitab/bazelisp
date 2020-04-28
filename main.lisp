@@ -611,9 +611,11 @@ it will signal an error."
   (assert (not (and (member :opt *features*) (member :dbg *features*))))) ; NOLINT
 
 (defun add-default-features (compilation-mode &optional (safety 1))
-  "Add the default features to *features* including :google3 and COMPILATION-MODE.
+  "Add the default features to *features* including :bazel and COMPILATION-MODE.
  SAFETY level is used to determine if :OPT should be added."
   (declare (type (member :opt :fastbuild :dbg) compilation-mode))
+
+  (add-feature :bazel)
 
   (case compilation-mode
     (:dbg (add-feature :dbg))
