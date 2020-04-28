@@ -361,6 +361,15 @@ def lisp_compile_srcs(
         build_flags = build_flags,
     )
 
+def _lisp_runfiles(ctx):
+    runfiles_deps = ctx.attr.deps + ctx.attr.data + ctx.attr.compile_data
+    if ctx.attr.image:
+        runfiles_deps.append(ctx.attr.image)
+    runfiles = ctx.runfiles(files = ctx.files.data + ctx.files.compile_data)
+    for dep in runfiles_deps:
+        runfiles = runfiles.merge(dep[DefaultInfo].default_runfiles)
+    return runfiles
+
 ################################################################################
 # Lisp Binary and Lisp Test
 ################################################################################
@@ -452,15 +461,10 @@ def _lisp_core_impl(ctx):
         executable = build_image,
     )
 
-    runfiles = ctx.runfiles(collect_default = True)
-    if ctx.attr.image:
-        runfiles = runfiles.merge(ctx.attr.image[DefaultInfo].default_runfiles)
-    for compile_data in ctx.attr.compile_data:
-        runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
         lisp_info,
         DefaultInfo(
-            runfiles = runfiles,
+            runfiles = _lisp_runfiles(ctx),
             files = depset([core]),
         ),
         coverage_common.instrumented_files_info(
@@ -956,15 +960,10 @@ def _lisp_library_impl(ctx):
         preload_image = ctx.attr.preload_image,
     )
 
-    runfiles = ctx.runfiles(collect_default = True)
-    if ctx.attr.image:
-        runfiles = runfiles.merge(ctx.attr.image[DefaultInfo].default_runfiles)
-    for compile_data in ctx.attr.compile_data:
-        runfiles = runfiles.merge(compile_data[DefaultInfo].default_runfiles)
     return [
         compile.lisp_info,
         DefaultInfo(
-            runfiles = runfiles,
+            runfiles = _lisp_runfiles(ctx),
             files = depset([compile.output_fasl]),
         ),
         coverage_common.instrumented_files_info(
