@@ -278,9 +278,10 @@ def lisp_compile_srcs(
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
     compile_flags = ctx.actions.args()
-    if (preload_image > 0 or
-        (preload_image < 0 and
-         (len(srcs) - 1) * len(deps_srcs) > 100)):
+    preload_image_enabled = (preload_image > 0 or
+                             (preload_image < 0 and
+                              (len(srcs) - 1) * len(deps_srcs) > 100))
+    if preload_image_enabled:
         # Generate a SRCS image.
         compile_image = ctx.actions.declare_file(name + ".srcs.image")
         preload_image_flags = ctx.actions.args()
@@ -309,8 +310,12 @@ def lisp_compile_srcs(
 
         # All deps included above. However, we need to keep --deps the same in
         # the command line below for the sake of analysis that uses extra
-        # actions to examine the command-line of LispCompile actions.
-        compile_flags.add("--deps-already-loaded")
+        # actions to examine the command-line of LispCompile actions. (In the
+        # case of multipass compilation, the same goes for the preloaded source
+        # files.)
+        compile_flags.add("--ignore-deps")
+        if multipass:
+            compile_flags.add("--ignore-load")
 
     if multipass:
         nowarn = nowarn + ["redefined-method", "redefined-function"]
@@ -338,8 +343,16 @@ def lisp_compile_srcs(
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
 
         inputs = [src]
-        inputs.extend(deps_srcs)
-        inputs.extend(load_srcs)
+
+        # In the preload_image case, --deps (and --load in the case of
+        # multipass compilation) is ignored with --deps-already-loaded
+        # and --load-already-done, respectively. In that case, the
+        # files don't actually need to be inputs for the action.
+        if not preload_image_enabled:
+            inputs.extend(deps_srcs)
+        if not (preload_image_enabled and multipass):
+            inputs.extend(load_srcs)
+
         inputs = depset(inputs, transitive = [lisp_info.compile_data])
         ctx.actions.run(
             outputs = outs,

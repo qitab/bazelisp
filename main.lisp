@@ -896,7 +896,8 @@ it will signal an error."
                    save-runtime-options
                    coverage
                    emit-cfasl
-                   deps-already-loaded
+                   ignore-deps
+                   ignore-load
                    &allow-other-keys)
   "Main processing function for bazel.main.
  Arguments:
@@ -919,13 +920,19 @@ it will signal an error."
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
   EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
-  DEPS-ALREADY-LOADED - true when files in DEPS are already loaded in the image."
+  IGNORE-DEPS - If true, ignore the --deps flag. When we preload an image with
+     source files from dependencies, this is set so analysis of --deps in the
+     LispCompile command-line is not affected.
+  IGNORE-LOAD - If true, ignore the --load flag. When we preload an
+     image with all source files (done when preloading an image with
+     dependencies in multipass compilation order), this is done so
+     analysis of --load in the LispCompile command-line is not affected."
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
         (parse-specs specs)
         (values (split srcs)
-                (unless deps-already-loaded (split deps))
-                (split load)
+                (unless ignore-deps (split deps))
+                (unless ignore-load (split load))
                 (split warnings)
                 (split hashes))))
 
