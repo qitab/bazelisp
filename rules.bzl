@@ -517,6 +517,7 @@ def _starlark_wrap_lisp_impl(ctx):
     runfiles = runfiles.merge(ctx.attr.core[DefaultInfo].default_runfiles)
     return [
         ctx.attr.core[LispInfo],
+        _lisp_output_group_info(ctx, ctx.attr.core[LispInfo]),
         DefaultInfo(
             runfiles = ctx.attr.core[DefaultInfo].default_runfiles,
             executable = out,
@@ -559,28 +560,23 @@ _starlark_wrap_lisp_test = rule(
 
 # DEPS file is used to list all the Lisp sources for a target.
 # It is a quick hack to make (bazel:load ...) work.
-def _dump_lisp_deps_impl(ctx):
+def _lisp_deps_manifest(ctx, lisp_info):
     """Creates a file that lists all Lisp files needed by the target in order."""
-    lisp_info = ctx.attr.target[LispInfo]
-    out = ctx.actions.declare_file(ctx.attr.target.label.name + ".deps")
+    out = ctx.actions.declare_file(ctx.label.name + ".deps")
+    content = ctx.actions.args()
+    content.set_param_file_format("multiline")
+    content.add_joined(lisp_info.features, join_with = "\n", format_each = "feature: %s")
+    content.add_joined(lisp_info.srcs, join_with = "\n", format_each = "src: %s")
     ctx.actions.write(
         output = out,
-        content = (
-            "\n".join(["feature: " + f for f in lisp_info.features.to_list()] +
-                      ["src: " + f.path for f in lisp_info.srcs.to_list()])
-        ),
+        content = content,
     )
-    return [DefaultInfo(files = depset([out]))]
+    return out
 
-# Internal rule that creates a Lisp library DEPS file.
-# DEPS file is used to list all the Lisp sources for a target.
-# It is a quick hack to make (bazel:load ...) work.
-_dump_lisp_deps = rule(
-    implementation = _dump_lisp_deps_impl,
-    attrs = {
-        "target": attr.label(mandatory = True, providers = [LispInfo]),
-    },
-)
+def _lisp_output_group_info(ctx, lisp_info):
+    return OutputGroupInfo(
+        deps_manifest = [_lisp_deps_manifest(ctx, lisp_info)],
+    )
 
 def _add_tag(tag, tags):
     if tag not in tags:
@@ -896,14 +892,6 @@ def lisp_binary(
         **test_kwargs
     )
 
-    _dump_lisp_deps(
-        name = name + ".deps",
-        target = name,
-        visibility = ["//visibility:private"],
-        tags = ["manual"],
-        testonly = testonly,
-    )
-
 def lisp_test(name, image = _BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
     """Bazel rule to create a unit test from Common Lisp source files.
 
@@ -970,6 +958,7 @@ def _lisp_library_impl(ctx):
 
     return [
         compile.lisp_info,
+        _lisp_output_group_info(ctx, compile.lisp_info),
         DefaultInfo(
             runfiles = _lisp_runfiles(ctx),
             files = depset([compile.output_fasl]),
@@ -1130,12 +1119,4 @@ def lisp_library(
         testonly = testonly,
         verbose = verbose,
         **kwargs
-    )
-
-    _dump_lisp_deps(
-        name = name + ".deps",
-        target = name,
-        visibility = ["//visibility:private"],
-        tags = ["manual"],
-        testonly = testonly,
     )
