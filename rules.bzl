@@ -68,9 +68,9 @@ _LISP_COMMON_ATTRS = {
     ),
     "verbose": attr.int(),
     # For testing coverage.
-    "enable_coverage": attr.bool(),
+    "instrument_coverage": attr.int(values = [-1, 0, 1], default = -1),
     # For testing compilation behavior.
-    "preload_image": attr.bool(),
+    "preload_image": attr.int(values = [-1, 0, 1], default = -1),
     # Do not add references, temporary attribute for find_cc_toolchain.
     # See go/skylark-api-for-cc-toolchain for more details.
     "_cc_toolchain": attr.label(
@@ -132,7 +132,7 @@ def _concat_files(ctx, inputs, output):
         command = cmd,
     )
 
-def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentation):
+def _build_flags(ctx, lisp_features, verbose_level, instrument_coverage):
     """Returns Args for flags for all Lisp build actions.
 
     Args:
@@ -141,8 +141,10 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
          target and its dependencies.
      verbose_level: int indicating level of debugging output. If positive, a
          --verbose flags is added.
-     force_coverage_instrumentation: Whether to unconditionally add code
-         coverage instrumentation.
+     instrument_coverage: Controls coverage instrumentation, with the following values:
+         -1 (default) - Instruments if covearge is enabled for this target.
+         0 - Instruments never.
+         1 - Instruments always (for testing purposes).
 
     Returns:
         Args object to be passed to Lisp build actions.
@@ -167,7 +169,8 @@ def _build_flags(ctx, lisp_features, verbose_level, force_coverage_instrumentati
     flags.add("--bindir", ctx.bin_dir.path)
     flags.add_joined("--features", lisp_features, join_with = " ")
 
-    if ctx.coverage_instrumented() or force_coverage_instrumentation:
+    if (instrument_coverage > 0 or
+        (instrument_coverage < 0 and ctx.coverage_instrumented())):
         flags.add("--coverage")
 
     if verbose_level > 0:
@@ -193,8 +196,8 @@ def lisp_compile_srcs(
         order,
         compile_data,
         verbose_level,
-        force_coverage_instrumentation = False,
-        preload_image = None):
+        instrument_coverage = -1,
+        preload_image = -1):
     """Generate LispCompile actions, return LispInfo and FASL output.
 
     Args:
@@ -209,11 +212,16 @@ def lisp_compile_srcs(
           "multipass".
       compile_data: depset of additional data Files used for compilation.
       verbose_level: int indicating level of debugging output.
-      force_coverage_instrumentation: Whether to unconditionally add code
-         coverage instrumentation.
+      instrument_coverage: Controls coverage instrumentation, with the following values:
+         -1 (default) - Instruments if covearge is enabled for this target.
+         0 - Instruments never.
+         1 - Instruments always (for testing purposes).
       preload_image: Whether to preload all deps into a single image to use for
-         compilation. If None, do this heurisitcally when there are multiple source
-         files and many deps.
+         compilation, with the following values:
+         -1 (default) - Do this heurisitcally when there are multiple source
+             files and many deps. The other values are for testing purposes.
+         0 - Preload never.
+         1 - Preload always.
 
     Returns:
       struct with fields:
@@ -237,7 +245,7 @@ def lisp_compile_srcs(
         ctx = ctx,
         lisp_features = lisp_info.features,
         verbose_level = verbose_level,
-        force_coverage_instrumentation = force_coverage_instrumentation,
+        instrument_coverage = instrument_coverage,
     )
 
     if not srcs:
@@ -270,9 +278,9 @@ def lisp_compile_srcs(
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
     compile_flags = ctx.actions.args()
-    if preload_image == None:
-        preload_image = ((len(srcs) - 1) * len(deps_srcs) > 100)
-    if preload_image:
+    if (preload_image > 0 or
+        (preload_image < 0 and
+         (len(srcs) - 1) * len(deps_srcs) > 100)):
         # Generate a SRCS image.
         compile_image = ctx.actions.declare_file(name + ".srcs.image")
         preload_image_flags = ctx.actions.args()
@@ -399,7 +407,7 @@ def _lisp_core_impl(ctx):
         order = ctx.attr.order,
         compile_data = ctx.files.compile_data,
         verbose_level = verbose_level,
-        force_coverage_instrumentation = ctx.attr.enable_coverage,
+        instrument_coverage = ctx.attr.instrument_coverage,
         preload_image = ctx.attr.preload_image,
     )
 
@@ -770,7 +778,7 @@ def lisp_binary(
 
     # Discard kwargs that are just for _lisp_core.
     kwargs.pop("preload_image", None)
-    kwargs.pop("enable_coverage", None)
+    kwargs.pop("instrument_coverage", None)
 
     # Precompile all C sources in advance, before core symbols are present.
     cdeps_library = make_cdeps_library(
@@ -956,7 +964,7 @@ def _lisp_library_impl(ctx):
         order = ctx.attr.order,
         compile_data = ctx.files.compile_data,
         verbose_level = verbose_level,
-        force_coverage_instrumentation = ctx.attr.enable_coverage,
+        instrument_coverage = ctx.attr.instrument_coverage,
         preload_image = ctx.attr.preload_image,
     )
 
