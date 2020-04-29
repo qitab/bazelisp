@@ -347,10 +347,12 @@ def lisp_compile_srcs(
         # In the preload_image case, --deps (and --load in the case of
         # multipass compilation) is ignored with --deps-already-loaded
         # and --load-already-done, respectively. In that case, the
-        # files don't actually need to be inputs for the action.
-        if not preload_image_enabled:
+        # files don't actually need to be inputs for the action
+        # unless we're actually running the indexer.
+        indexer_build = (ctx.var.get("GROK_ELLIPSIS_BUILD", "0") == "1")
+        if indexer_build or not preload_image_enabled:
             inputs.extend(deps_srcs)
-        if not (preload_image_enabled and multipass):
+        if indexer_build or not (preload_image_enabled and multipass):
             inputs.extend(load_srcs)
 
         inputs = depset(inputs, transitive = [lisp_info.compile_data])
