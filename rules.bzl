@@ -359,7 +359,6 @@ def lisp_compile_srcs(
         ctx.actions.run(
             outputs = outs,
             inputs = inputs,
-            tools = [compile_image],
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_ENV,
@@ -385,9 +384,8 @@ def lisp_compile_srcs(
     )
 
 def _lisp_runfiles(ctx):
-    runfiles_deps = ctx.attr.deps + ctx.attr.data + ctx.attr.compile_data
-    if ctx.attr.image:
-        runfiles_deps.append(ctx.attr.image)
+    runfiles_deps = (ctx.attr.deps + [ctx.attr.image] +
+                     ctx.attr.data + ctx.attr.compile_data)
     runfiles = ctx.runfiles(files = ctx.files.data + ctx.files.compile_data)
     for dep in runfiles_deps:
         runfiles = runfiles.merge(dep[DefaultInfo].default_runfiles)
@@ -409,7 +407,7 @@ def _lisp_core_impl(ctx):
     # buildozer: disable=print
     if verbosep:
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("Executable Core: %s" % core)
+        print("Core: %s" % core)
 
     compile = lisp_compile_srcs(
         ctx = ctx,
