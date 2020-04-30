@@ -58,7 +58,7 @@ _LISP_COMMON_ATTRS = {
     "data": attr.label_list(allow_files = True),
     # compile data - is data available at compile and load time.
     "compile_data": attr.label_list(allow_files = True),
-    "lisp_features": attr.string_list(),
+    "add_features": attr.string_list(),
     "nowarn": attr.string_list(),
     "image": attr.label(
         allow_single_file = True,
@@ -132,12 +132,12 @@ def _concat_files(ctx, inputs, output):
         command = cmd,
     )
 
-def _build_flags(ctx, lisp_features, verbose_level, instrument_coverage):
+def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
     """Returns Args for flags for all Lisp build actions.
 
     Args:
      ctx: The rule context.
-     lisp_features: Depset of transitive Lisp feature strings provided by this
+     add_features: Depset of transitive Lisp feature strings provided by this
          target and its dependencies.
      verbose_level: int indicating level of debugging output. If positive, a
          --verbose flags is added.
@@ -160,14 +160,14 @@ def _build_flags(ctx, lisp_features, verbose_level, instrument_coverage):
     # but the important thing is that the behavior is consistent between
     # this target, its image attr, and _LIBSBCL.)
     if cc_toolchain.compiler == "msan":
-        lisp_features = depset(["msan"], transitive = [lisp_features])
+        add_features = depset(["msan"], transitive = [add_features])
     flags = ctx.actions.args()
     flags.add(
         "--compilation-mode",
         ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
     )
     flags.add("--bindir", ctx.bin_dir.path)
-    flags.add_joined("--features", lisp_features, join_with = " ")
+    flags.add_joined("--features", add_features, join_with = " ")
 
     if (instrument_coverage > 0 or
         (instrument_coverage < 0 and ctx.coverage_instrumented())):
@@ -191,7 +191,7 @@ def lisp_compile_srcs(
         srcs,
         deps,
         image,
-        lisp_features,
+        add_features,
         nowarn,
         order,
         compile_data,
@@ -206,7 +206,7 @@ def lisp_compile_srcs(
       srcs: List of src Files.
       deps: List of immediate dependency Targets.
       image: Build image Target used to compile the sources.
-      lisp_features: List of Lisp feature strings added by this target.
+      add_features: List of Lisp feature strings added by this target.
       nowarn: List of supressed warning type strings.
       order: Order in which to load sources, either "serial", "parallel", or
           "multipass".
@@ -237,13 +237,13 @@ def lisp_compile_srcs(
     lisp_info = collect_lisp_info(
         deps = deps,
         build_image = image,
-        features = lisp_features,
+        features = add_features,
         compile_data = compile_data,
     )
     output_fasl = ctx.actions.declare_file(name + ".fasl")
     build_flags = _build_flags(
         ctx = ctx,
-        lisp_features = lisp_info.features,
+        add_features = lisp_info.features,
         verbose_level = verbose_level,
         instrument_coverage = instrument_coverage,
     )
@@ -415,7 +415,7 @@ def _lisp_core_impl(ctx):
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         image = ctx.attr.image,
-        lisp_features = ctx.attr.lisp_features,
+        add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
         order = ctx.attr.order,
         compile_data = ctx.files.compile_data,
@@ -601,7 +601,7 @@ def lisp_binary(
         deps = [],
         data = [],
         compile_data = [],
-        features = [],
+        add_features = [],
         order = "serial",
         nowarn = [],
         args = [],
@@ -655,7 +655,7 @@ def lisp_binary(
       deps: is a list of dependency labels.
       data: runtime data available to the binary in the runfile directory.
       compile_data: data used at compilation time.
-      features: a list of Common Lisp features applied while building target.
+      add_features: a list of Common Lisp features applied while building target.
       order: takes values:
           "serial" - each source is compiled in an image with
             previous sources loaded (default).
@@ -771,7 +771,7 @@ def lisp_binary(
         order = order,
         data = data,
         compile_data = compile_data,
-        lisp_features = features,
+        add_features = add_features,
         nowarn = nowarn,
         image = image,
         # Binary core attributes.
@@ -960,7 +960,7 @@ def _lisp_library_impl(ctx):
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         image = ctx.attr.image,
-        lisp_features = ctx.attr.lisp_features,
+        add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
         order = ctx.attr.order,
         compile_data = ctx.files.compile_data,
@@ -1069,7 +1069,7 @@ def lisp_library(
         deps = [],
         data = [],
         compile_data = [],
-        features = [],
+        add_features = [],
         order = "serial",
         nowarn = [],
         image = _BAZEL_LISP,
@@ -1091,7 +1091,7 @@ def lisp_library(
       deps: is a list of dependency labels.
       data: runtime data available to the binary in the runfile directory.
       compile_data: data used at compilation time.
-      features: a list of Common Lisp features applied while building target.
+      add_features: a list of Common Lisp features applied while building target.
       order: takes values:
           "serial" - each source is compiled in an image with
             previous sources loaded (default).
@@ -1122,7 +1122,7 @@ def lisp_library(
         order = order,
         data = data,
         compile_data = compile_data,
-        lisp_features = features,
+        add_features = add_features,
         nowarn = nowarn,
         image = image,
         # lisp_library attributes (for coverage instrumentation).

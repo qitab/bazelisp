@@ -170,13 +170,13 @@ lisp_test(
 
 lisp_library(
     name = "features",
-    features = ["features"],
+    add_features = ["features"],
 )
 
 lisp_test(
     name = "features-test",
     srcs = ["features-test.lisp"],
-    features = ["features-test"],
+    add_features = ["features-test"],
     deps = [":features"],
 )
 
