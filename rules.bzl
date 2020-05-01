@@ -197,7 +197,8 @@ def lisp_compile_srcs(
         compile_data,
         verbose_level,
         instrument_coverage = -1,
-        preload_image = -1):
+        preload_image = -1,
+        indexer_metadata = []):
     """Generate LispCompile actions, return LispInfo and FASL output.
 
     Args:
@@ -222,6 +223,9 @@ def lisp_compile_srcs(
              files and many deps. The other values are for testing purposes.
          0 - Preload never.
          1 - Preload always.
+      indexer_metadata: Extra metadata files to be passed to the --deps
+         flag of LispCompile when the indexer is run. Ignored by the build
+         image itself.
 
     Returns:
       struct with fields:
@@ -234,6 +238,8 @@ def lisp_compile_srcs(
         fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
 
     verbosep = verbose_level > 0
+    indexer_build = (ctx.var.get("GROK_ELLIPSIS_BUILD", "0") == "1")
+
     lisp_info = collect_lisp_info(
         deps = deps,
         build_image = image,
@@ -267,6 +273,8 @@ def lisp_compile_srcs(
     deps_srcs = lisp_info.srcs.to_list()
     if LispInfo in image:
         deps_srcs = _list_excluding_depset(deps_srcs, image[LispInfo].srcs)
+    if indexer_build:
+        deps_srcs.extend(indexer_metadata)
 
     # Sources for this target loaded before compilation (after deps), passed to
     # --load. What this contains depends on the compilation order:
@@ -349,7 +357,6 @@ def lisp_compile_srcs(
         # and --load-already-done, respectively. In that case, the
         # files don't actually need to be inputs for the action
         # unless we're actually running the indexer.
-        indexer_build = (ctx.var.get("GROK_ELLIPSIS_BUILD", "0") == "1")
         if indexer_build or not preload_image_enabled:
             inputs.extend(deps_srcs)
         if indexer_build or not (preload_image_enabled and multipass):
@@ -370,6 +377,8 @@ def lisp_compile_srcs(
 
     # Need to concatenate the FASL files into name.fasl.
     _concat_files(ctx, fasls, output_fasl)
+    if indexer_build:
+        srcs = indexer_metadata + srcs
     lisp_info = extend_lisp_info(
         lisp_info,
         srcs = srcs,
