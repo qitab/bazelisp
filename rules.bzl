@@ -228,7 +228,7 @@ def lisp_compile_srcs(
           - lisp_info: LispInfo for the target
           - output_fasl: Combined FASL for this target (which is also included in
               lisp_info.fasls if there are srcs)
-          - flags: List of args to pass to all compile/binary actions
+          - build_flags: Args to pass to all compile/binary actions
     """
     if not order in _COMPILATION_ORDERS:
         fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
