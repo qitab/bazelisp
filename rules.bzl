@@ -69,8 +69,6 @@ _LISP_COMMON_ATTRS = {
     "verbose": attr.int(),
     # For testing coverage.
     "instrument_coverage": attr.int(values = [-1, 0, 1], default = -1),
-    # For testing compilation behavior.
-    "preload_image": attr.int(values = [-1, 0, 1], default = -1),
     # Do not add references, temporary attribute for find_cc_toolchain.
     # See go/skylark-api-for-cc-toolchain for more details.
     "_cc_toolchain": attr.label(
@@ -197,7 +195,6 @@ def lisp_compile_srcs(
         compile_data,
         verbose_level,
         instrument_coverage = -1,
-        preload_image = -1,
         indexer_metadata = []):
     """Generate LispCompile actions, return LispInfo and FASL output.
 
@@ -217,12 +214,6 @@ def lisp_compile_srcs(
          -1 (default) - Instruments if covearge is enabled for this target.
          0 - Instruments never.
          1 - Instruments always (for testing purposes).
-      preload_image: Whether to preload all deps into a single image to use for
-         compilation, with the following values:
-         -1 (default) - Do this heurisitcally when there are multiple source
-             files and many deps. The other values are for testing purposes.
-         0 - Preload never.
-         1 - Preload always.
       indexer_metadata: Extra metadata files to be passed to the --deps
          flag of LispCompile when the indexer is run. Ignored by the build
          image itself.
@@ -286,44 +277,6 @@ def lisp_compile_srcs(
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
     compile_flags = ctx.actions.args()
-    preload_image_enabled = (preload_image > 0 or
-                             (preload_image < 0 and
-                              (len(srcs) - 1) * len(deps_srcs) > 100))
-    if preload_image_enabled:
-        # Generate a SRCS image.
-        compile_image = ctx.actions.declare_file(name + ".srcs.image")
-        preload_image_flags = ctx.actions.args()
-        preload_image_flags.add("--outs", compile_image)
-        preload_image_flags.add_joined("--deps", deps_srcs, join_with = " ")
-        preload_image_flags.add_joined("--load", load_srcs, join_with = " ")
-        preload_image_flags.add_joined("--nowarn", nowarn, join_with = " ")
-
-        msg = "Preparing {} (from {} deps{})".format(
-            compile_image.short_path,
-            len(deps),
-            " and {} srcs".format(len(load_srcs)) if load_srcs else "",
-        )
-        ctx.actions.run(
-            outputs = [compile_image],
-            inputs = depset(
-                load_srcs + deps_srcs,
-                transitive = [lisp_info.compile_data],
-            ),
-            progress_message = msg,
-            mnemonic = "LispSourceImage",
-            env = _BAZEL_LISP_ENV,
-            arguments = ["binary", build_flags, preload_image_flags],
-            executable = build_image,
-        )
-
-        # All deps included above. However, we need to keep --deps the same in
-        # the command line below for the sake of analysis that uses extra
-        # actions to examine the command-line of LispCompile actions. (In the
-        # case of multipass compilation, the same goes for the preloaded source
-        # files.)
-        compile_flags.add("--ignore-deps")
-        if multipass:
-            compile_flags.add("--ignore-load")
 
     if multipass:
         nowarn = nowarn + ["redefined-method", "redefined-function"]
@@ -350,22 +303,12 @@ def lisp_compile_srcs(
         file_flags.add_joined("--load", load_srcs, join_with = " ")
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
 
-        inputs = [src]
-
-        # In the preload_image case, --deps (and --load in the case of
-        # multipass compilation) is ignored with --deps-already-loaded
-        # and --load-already-done, respectively. In that case, the
-        # files don't actually need to be inputs for the action
-        # unless we're actually running the indexer.
-        if indexer_build or not preload_image_enabled:
-            inputs.extend(deps_srcs)
-        if indexer_build or not (preload_image_enabled and multipass):
-            inputs.extend(load_srcs)
-
-        inputs = depset(inputs, transitive = [lisp_info.compile_data])
         ctx.actions.run(
             outputs = outs,
-            inputs = inputs,
+            inputs = depset(
+                [src] + deps_srcs + load_srcs,
+                transitive = [lisp_info.compile_data],
+            ),
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_ENV,
@@ -430,7 +373,6 @@ def _lisp_core_impl(ctx):
         compile_data = ctx.files.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,
-        preload_image = ctx.attr.preload_image,
     )
 
     # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
@@ -711,23 +653,22 @@ def lisp_binary(
 
     # We have essentially three ways to produce a Lisp binary:
     #
-    # (1) Call SAVE-LISP-AND-DIE and use that output (used internally by these
-    #     rules). This is a slightly funny binary file in that it has a (large)
-    #     opaque blob of bytes at the end comprising the whole Lisp heap. But
-    #     that's the garden-variety SBCL executable.
+    # (1) Call SAVE-LISP-AND-DIE with :executable t (not used in these rules):
+    #     This is a slightly funny binary file in that it has a (large) opaque
+    #     blob of bytes at the end comprising the whole Lisp heap. But that's
+    #     the garden-variety SBCL executable.
     #
     #     No C code other than SBCL's support is present in the text file,
     #     as the dump step does not know how to write bytes from any source
     #     other than the SBCL executable and the in-memory heap.
     #
     # (2) Partially ELFinated binary (allow_save_lisp=True): After
-    #     SAVE-LISP-AND-DIE, slurp the Lisp heap back out of the resulting
-    #     file, and turn it into a data section in a proper ELF file, but a
-    #     relatively opaque section with the only C symbols acting to demarcate
-    #     the bounds of the Lisp spaces. Feed that in to a regular link step
-    #     (with C++ libaries and such, and the SBCL main). This binary when
-    #     launched will "parse" the Lisp heap out of the data section and begin
-    #     life as usual.
+    #     SAVE-LISP-AND-DIE, take the resulting core file, and turn it into a
+    #     data section in a proper ELF file, but a relatively opaque section
+    #     with the only C symbols acting to demarcate the bounds of the Lisp
+    #     spaces. Feed that in to a regular link step (with C++ libaries and
+    #     such, and the SBCL main). This binary when launched will "parse" the
+    #     Lisp heap out of the data section and begin life as usual.
     #
     #     The main distinctions between this and the executable generated by
     #     SAVE-LISP-AND-DIE are that:
@@ -795,7 +736,6 @@ def lisp_binary(
     )
 
     # Discard kwargs that are just for _lisp_core.
-    kwargs.pop("preload_image", None)
     kwargs.pop("instrument_coverage", None)
 
     # Precompile all C sources in advance, before core symbols are present.
@@ -975,7 +915,6 @@ def _lisp_library_impl(ctx):
         compile_data = ctx.files.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,
-        preload_image = ctx.attr.preload_image,
     )
 
     return [
