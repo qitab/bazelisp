@@ -38,7 +38,7 @@ config_setting(
 )
 
 genrule(
-    name = "make-bazel",
+    name = "make-image",
     srcs = [
         "utils.lisp",
         "warning.lisp",
@@ -47,7 +47,7 @@ genrule(
         "main.lisp",
         SBCL,
     ],
-    outs = ["bazel"],
+    outs = ["image"],
     cmd = (
         "$(location {})/bin/sbcl".format(SBCL) +
         " --core $(location {})/lib/sbcl/$(LISPCORE)".format(SBCL) +
@@ -66,6 +66,6 @@ genrule(
 )
 
 cc_library(
-    name = "bazel.cdeps",
+    name = "image.cdeps",
     visibility = ["//visibility:public"],
 )

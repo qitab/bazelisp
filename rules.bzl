@@ -38,9 +38,9 @@ _UNSUPPORTED_FEATURES = [
     "fdo_optimize",
 ]
 
-_BAZEL_LISP = "//"
-_BAZEL_LISP_MAIN = "bazel.main:main"
-_BAZEL_LISP_ENV = {"LISP_MAIN": _BAZEL_LISP_MAIN}
+_BAZEL_LISP_IMAGE = "//:image"
+_BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
+_BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
 _ELFINATE = "@local_sbcl//:elfinate"
 _DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
 _LIBSBCL = "@local_sbcl//:c-support"
@@ -64,7 +64,7 @@ _LISP_COMMON_ATTRS = {
         allow_single_file = True,
         executable = True,
         cfg = "target",
-        default = Label(_BAZEL_LISP),
+        default = Label(_BAZEL_LISP_IMAGE),
     ),
     "verbose": attr.int(),
     # For testing coverage.
@@ -311,7 +311,7 @@ def lisp_compile_srcs(
             ),
             progress_message = "Compiling " + src.short_path,
             mnemonic = "LispCompile",
-            env = _BAZEL_LISP_ENV,
+            env = _BAZEL_LISP_IMAGE_ENV,
             arguments = ["compile", build_flags, compile_flags, file_flags],
             executable = compile_image,
         )
@@ -428,7 +428,7 @@ def _lisp_core_impl(ctx):
         inputs = inputs,
         progress_message = "Building lisp core " + core.short_path,
         mnemonic = "LispCore",
-        env = _BAZEL_LISP_ENV,
+        env = _BAZEL_LISP_IMAGE_ENV,
         arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
     )
@@ -557,7 +557,7 @@ def lisp_binary(
         nowarn = [],
         args = [],
         main = "main",
-        image = _BAZEL_LISP,
+        image = _BAZEL_LISP_IMAGE,
         save_runtime_options = True,
         precompile_generics = True,
         allow_save_lisp = False,
@@ -854,7 +854,7 @@ def lisp_binary(
         **test_kwargs
     )
 
-def lisp_test(name, image = _BAZEL_LISP, stamp = 0, testonly = 1, **kwargs):
+def lisp_test(name, image = _BAZEL_LISP_IMAGE, stamp = 0, testonly = 1, **kwargs):
     """Bazel rule to create a unit test from Common Lisp source files.
 
     Outputs: <name>
@@ -1020,7 +1020,7 @@ def lisp_library(
         add_features = [],
         order = "serial",
         nowarn = [],
-        image = _BAZEL_LISP,
+        image = _BAZEL_LISP_IMAGE,
         visibility = None,
         testonly = 0,
         cdeps = [],
