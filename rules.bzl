@@ -43,7 +43,7 @@ _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
 _BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
 _ELFINATE = "@local_sbcl//:elfinate"
 _DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
-_LIBSBCL = "@local_sbcl//:c-support"
+_DEFAULT_LIBSBCL = "@local_sbcl//:c-support"
 
 # Common attributes accepted by the (internal) lisp rules.
 _COMPILATION_ORDERS = ["multipass", "serial", "parallel"]
@@ -571,6 +571,7 @@ def lisp_binary(
         shard_count = None,
         tags = [],
         stamp = -1,
+        runtime = _DEFAULT_LIBSBCL,
         malloc = _DEFAULT_MALLOC,
         verbose = None,
         **kwargs):
@@ -646,6 +647,7 @@ def lisp_binary(
       shard_count: number of shards used for the test.
       tags: list of arbitrary text tags mostly useful for tests. E.g.: "local".
       stamp: C++ build stamp info (0 = no, 1 = yes, default -1 = bazel option).
+      runtime: SBCL C runtime library rule name
       malloc: malloc implementation to be used for linking of cc code.
       verbose: internal numeric level of verbosity for the build rule.
       **kwargs: other common attributes for all targets.
@@ -764,10 +766,10 @@ def lisp_binary(
     # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
     linkopts = ["-Wl,-no-pie"]
 
-    # Either way, we need to link with the cdeps and SBCL C++.
+    # Either way, we need to link with the cdeps and SBCL C code.
     link_deps = [
         cdeps_library,
-        _LIBSBCL,
+        runtime,
     ]
 
     if allow_save_lisp:

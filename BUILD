@@ -69,3 +69,10 @@ cc_library(
     name = "image.cdeps",
     visibility = ["//visibility:public"],
 )
+
+cc_library(
+    name = "sbcl-linkable-runtime",
+    srcs = ["@local_sbcl//:linkable-runtime"],
+    linkopts = ["-ldl"],
+    visibility = ["//visibility:public"],
+)
