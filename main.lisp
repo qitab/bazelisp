@@ -701,27 +701,27 @@ it will signal an error."
   (verbose "~S => ~S (~A)" src (namestring output-file) *default-pathname-defaults*)
   (ensure-directories-exist output-file)
   (with-standard-io-syntax
-    (multiple-value-bind (fasl warnings-p failures-p)
-        (with-compilation-unit (:source-namestring src)
-          (let ((output-file (merge-pathnames output-file))
-                (*default-pathname-defaults* *default-pathname-defaults*)
-                (*readtable* (setup-readtable readtable))
-                (*print-readably* nil)
-                (*print-circle* t))
-            (delete-read-only output-file)
-            (compile-file src :output-file output-file
-                              :emit-cfasl emit-cfasl
-                              :external-format :utf-8)))
-      (unless (and warnings-p failures-p)
-        (vv "File ~S compiled without warnings." src))
-      (when warnings-p
-        (verbose "File ~S compiled with warnings." src))
-      (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
-        (when failures-p
-          (fatal "File ~S failed to compile." src)))
-      (when save-locations
-        (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
-      (values fasl warnings-p failures-p))))
+    (let ((*print-readably* nil))
+      (multiple-value-bind (fasl warnings-p failures-p)
+          (with-compilation-unit (:source-namestring src)
+            (let ((output-file (merge-pathnames output-file))
+                  (*default-pathname-defaults* *default-pathname-defaults*)
+                  (*readtable* (setup-readtable readtable))
+                  (*print-circle* t))
+              (delete-read-only output-file)
+              (compile-file src :output-file output-file
+                                :emit-cfasl emit-cfasl
+                                :external-format :utf-8)))
+        (unless (and warnings-p failures-p)
+          (vv "File ~S compiled without warnings." src))
+        (when warnings-p
+          (verbose "File ~S compiled with warnings." src))
+        (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
+          (when failures-p
+            (fatal "File ~S failed to compile." src)))
+        (when save-locations
+          (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
+        (values fasl warnings-p failures-p)))))
 
 (defun write-file-hash (src hash-file)
   "Compute the hash of the SRC file and write it to the HASH-FILE."
