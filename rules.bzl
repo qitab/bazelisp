@@ -789,7 +789,7 @@ def lisp_binary(
     else:
         # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
         # containing the balance of the original Lisp spaces.
-        elfinate_outs = [name + ".s", name + ".core", name + "-core.o"]
+        elfinate_outs = [name + ".s", name + "-core.o"]
         link_srcs = [name + ".s", name + "-core.o"]
         elfinate_cmd_template = (
             "$(location {}) split ".format(_ELFINATE) +
