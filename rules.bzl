@@ -284,8 +284,8 @@ def lisp_compile_srcs(
     # buildozer: disable=print
     if verbosep:
         print("Target: " + name)
-        print("Build Img: " + build_image.short_path)
-        print("Compile Img: " + compile_image.short_path)
+        print("Build Img: " + build_image.executable.short_path)
+        print("Compile Img: " + compile_image.executable.short_path)
 
     fasls = []
     warnings = []
