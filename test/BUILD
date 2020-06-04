@@ -134,19 +134,6 @@ lisp_test(
     image = ":lisp-test-image",
 )
 
-CIRCULAR_SRCS = [
-    "circular1.lisp",
-    "circular2.lisp",
-    "circular3.lisp",
-    "test-circular.lisp",
-]
-
-lisp_test(
-    name = "circular",
-    srcs = CIRCULAR_SRCS,
-    order = "multipass",
-)
-
 lisp_library(
     name = "undefined-macro-error",
     srcs = [
