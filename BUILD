@@ -74,5 +74,6 @@ cc_library(
     name = "sbcl-linkable-runtime",
     srcs = ["@local_sbcl//:linkable-runtime"],
     linkopts = ["-ldl"],
+    linkstatic = 1,
     visibility = ["//visibility:public"],
 )
