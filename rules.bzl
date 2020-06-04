@@ -30,14 +30,6 @@ load(
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
 
-_UNSUPPORTED_FEATURES = [
-    "thin_lto",
-    "module_maps",
-    "use_header_modules",
-    "fdo_instrument",
-    "fdo_optimize",
-]
-
 _BAZEL_LISP_IMAGE = "//:image"
 _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
 _BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
@@ -139,8 +131,9 @@ def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
          target and its dependencies.
      verbose_level: int indicating level of debugging output. If positive, a
          --verbose flags is added.
-     instrument_coverage: Controls coverage instrumentation, with the following values:
-         -1 (default) - Instruments if covearge is enabled for this target.
+     instrument_coverage: Controls coverage instrumentation, with the following
+         values:
+         -1 (default) - Instruments if coverage is enabled for this target.
          0 - Instruments never.
          1 - Instruments always (for testing purposes).
 
@@ -154,9 +147,10 @@ def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
     # equivalent to looking at ctx.var.get("msan_config"), we want to know if
     # msan is used in this specific configuration, not if it's an msan build in
     # general. (It might be better to look at whether msan is enabled in
-    # features with cc_common.configure_features and cc_common.is_enabled,
-    # but the important thing is that the behavior is consistent between
-    # this target, its image attr, and _LIBSBCL.)
+    # features with cc_common.configure_features (_cc_configure_features) and
+    # cc_common.is_enabled, but the important thing is that the behavior is
+    # consistent between this target and the targets in its image and runtime
+    # attrs.)
     if cc_toolchain.compiler == "msan":
         add_features = depset(["msan"], transitive = [add_features])
     flags = ctx.actions.args()
@@ -335,6 +329,14 @@ def lisp_compile_srcs(
         build_flags = build_flags,
     )
 
+def _cc_configure_features(cc_toolchain, ctx):
+    return cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = ctx.disabled_features,
+    )
+
 def _lisp_runfiles(ctx):
     runfiles_deps = (ctx.attr.deps + [ctx.attr.image] +
                      ctx.attr.data + ctx.attr.compile_data)
@@ -348,8 +350,10 @@ def _lisp_runfiles(ctx):
 ################################################################################
 
 def _lisp_core_impl(ctx):
-    """Lisp specific implementation for lisp_binary and lisp_test rules."""
-    core = ctx.actions.declare_file(ctx.label.name)
+    """Implementation for lisp_binary and lisp_test rules."""
+    name = ctx.label.name
+
+    core = ctx.actions.declare_file(name + ".core")
     verbose_level = max(
         ctx.attr.verbose,
         int(ctx.var.get("VERBOSE_LISP_BUILD", "0")),
@@ -395,7 +399,7 @@ def _lisp_core_impl(ctx):
     if verbosep:
         print("Build image: %s" % build_image.short_path)
 
-    specs = ctx.actions.declare_file(ctx.label.name + ".specs")
+    specs = ctx.actions.declare_file(name + ".specs")
     ctx.actions.write(
         output = specs,
         content = (
@@ -422,22 +426,200 @@ def _lisp_core_impl(ctx):
         core_flags.add("--precompile-generics")
     if ctx.attr.save_runtime_options:
         core_flags.add("--save-runtime-options")
-    outs = [core]
     ctx.actions.run(
-        outputs = outs,
+        outputs = [core],
         inputs = inputs,
-        progress_message = "Building lisp core " + core.short_path,
+        progress_message = "Building Lisp core " + core.short_path,
         mnemonic = "LispCore",
         env = _BAZEL_LISP_IMAGE_ENV,
         arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
     )
 
+    # We have essentially three ways to produce a Lisp binary:
+    #
+    # (1) Call SAVE-LISP-AND-DIE with :executable t (not used in these rules):
+    #     This is a slightly funny binary file in that it has a (large) opaque
+    #     blob of bytes at the end comprising the whole Lisp heap. But that's
+    #     the garden-variety SBCL executable.
+    #
+    #     No C code other than SBCL's support is present in the text file,
+    #     as the dump step does not know how to write bytes from any source
+    #     other than the SBCL executable and the in-memory heap.
+    #
+    # (2) Partially ELFinated binary (allow_save_lisp=True): After
+    #     SAVE-LISP-AND-DIE, take the resulting core file, and turn it into a
+    #     data section in a proper ELF file, but a relatively opaque section
+    #     with the only C symbols acting to demarcate the bounds of the Lisp
+    #     spaces. Feed that in to a regular link step (with C++ libaries and
+    #     such, and the SBCL main). This binary when launched will "parse" the
+    #     Lisp heap out of the data section and begin life as usual.
+    #
+    #     The main distinctions between this and the executable generated by
+    #     SAVE-LISP-AND-DIE are that:
+    #     - the heap is not randomly glued on at the end, but instead a true
+    #       section that survives manipulation by various ELF tools.
+    #     - C++ code other than SBCL's runtime is directly present in the image
+    #     In almost all respects this acts like a garden-variety Lisp binary.
+    #
+    # (3) Fully ELFinated binary (default): Starting with SAVE-LISP-AND-DIE,
+    #     turn the attached Lisp heap into two ELF sections: one comprising
+    #     the '.text' and nothing but, and one containing everything else that
+    #     did not go in the '.text' section. The latter section is akin to what
+    #     goes in one section for partial ELF mode (see below), minus what
+    #     became '.text'.
+    #
+    #     The precise details of how we produce the '.text' section are
+    #     unimportant, but simultaneously it is a proper segment of the final
+    #     file and a GC-managed space. (This is actually an astonishing feat,
+    #     not without drawbacks, namely, that it has to be read/write memory
+    #     "because Lisp".) It gets moved into dynamic space in memory when the
+    #     binary starts up, so there's not a constraint on binaries in this
+    #     format compiling additional codes. However, since the format of the
+    #     image in memory differs from what the implementation expects,
+    #     save-lisp-and-die will not work. Thus, binaries in this format can't
+    #     be used as a build image (for that, set allow_save_lisp=True).
+    #
+    # In truth, there is one other kind of executable which has no Lisp heap
+    # attached, and requires a --core argument, but we seldom if ever use that.
+    #
+    # It is extremely important to understand another limitation as well: in no
+    # scenario does the system linker receive "--export-dynamic" for *all* C
+    # symbols, i.e. literally --export-dynamic as opposed to
+    # --export-dynamic-symbol=something.
+    #
+    # This means that you CAN NOT refer to an arbitrary C symbol from Lisp,
+    # though we do still link with libdl to look up symbols "because reasons".
+    # Any C symbol that the Lisp code has to know about must have its address
+    # in a 'reloc' section of the ELF file whence came the Lisp heap.
+    # Mention of "one" or "two" sections in the above descriptions refers to
+    # the number of sections of Lisp data. In either case, there are other
+    # ELF sections which inform the linker how to link Lisp to C code.
+    cc_toolchain = find_cc_toolchain(ctx)
+    feature_configuration = _cc_configure_features(cc_toolchain, ctx)
+
+    # The support in ELFinator exists for -pie code, and a non-elfinated SBCL binaries
+    # are always position-independent; however, extreme inefficiency is imparted to ELF
+    # binaries that are position-independent. Lisp pointers are all absolute, and a
+    # typical Lisp heap might contain 3 to 5 million pointers to functions, therefore
+    # require that many relocations on each invocation to adjust to wherever the system
+    # moved the text segment. C on the other hand uses function pointers sparingly.
+    # I don't have "typical" numbers of pointers, and it can't be inferred from a binary,
+    # but it's nothing like having 40,000 closures over #<FUNCTION ALWAYS-BOUND {xxxxxx}>
+    # (which is the SLOT-BOUNDP method "fast method function" for every defstruct slot)
+    # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
+    linkopts = ["-Wl,-no-pie"]
+
+    # Transform the .core file into a -core.o file, so that can be linked in
+    # with the C++ dependencies.
+    core_object_file = ctx.actions.declare_file(name + "-core.o")
+    link_additional_inputs = []
+    compilation_outputs = [
+        cc_common.create_compilation_outputs(
+            # This file contains the SBCL core, essentially as '.data' in the
+            # object file, so it can be linked as PIC or not. For the other
+            # dependencies, we still want the link action to choose normally
+            # between PIC and non-PIC outputs.
+            objects = depset([core_object_file]),
+            pic_objects = depset([core_object_file]),
+        ),
+    ]
+    if ctx.attr.allow_save_lisp:
+        # If we want to allow the binary to be used as a compilation image, the
+        # Lisp image has to stay in a form save-lisp-and-die understands. In
+        # this case, copy the entire native SBCL core into a binary blob in a
+        # normal '.o' file.
+        linker_script_file = ctx.actions.declare_file(name + "-syms.lds")
+        link_additional_inputs.append(linker_script_file)
+        elfinate_outs = [core_object_file, linker_script_file]
+        elfinate_cmd = (
+            "{elfinate} copy {core} {core_obj} && nm -p {core_obj} | " +
+            "awk '" +
+            '{{print $2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
+            "' >{linker_script}"
+        ).format(
+            elfinate = ctx.executable._elfinate.path,
+            core = core.path,
+            core_obj = core_object_file.path,
+            linker_script = linker_script_file.path,
+        )
+        linkopts.append(
+            "-Wl,--dynamic-list={}".format(linker_script_file.path),
+        )
+    else:
+        # Otherwise, produce a '.s' file holding only compiled Lisp code and a
+        # '-core.o' containing the balance of the original Lisp spaces.
+        assembly_file = ctx.actions.declare_file(name + ".s")
+        elfinate_outs = [assembly_file, core_object_file]
+        elfinate_cmd = "{elfinate} split {core} {asm}".format(
+            elfinate = ctx.executable._elfinate.path,
+            core = core.path,
+            asm = assembly_file.path,
+        )
+
+        # The .s file will get re-assembled before it's linked into the binary.
+        # Note that this cc_common.compile action is declared before the
+        # action below which runs elfinate to create this input. The elfinate
+        # action still ends up first when the graph of actions is computed.
+        compilation_context, asm_compilation_output = cc_common.compile(
+            name = name,
+            actions = ctx.actions,
+            feature_configuration = feature_configuration,
+            cc_toolchain = cc_toolchain,
+            srcs = [assembly_file],
+        )
+        compilation_outputs.append(asm_compilation_output)
+
+    ctx.actions.run_shell(
+        outputs = elfinate_outs,
+        tools = [ctx.executable._elfinate],
+        inputs = [core],
+        command = elfinate_cmd,
+        progress_message = "Elfinating Lisp core " + core.short_path,
+        mnemonic = "LispElfinate",
+    )
+
+    # The rule's malloc attribute can be overridden by the --custom_malloc flag.
+    malloc = ctx.attr._custom_malloc or ctx.attr.malloc
+    linking_outputs = cc_common.link(
+        name = name,
+        actions = ctx.actions,
+        feature_configuration = feature_configuration,
+        cc_toolchain = cc_toolchain,
+        user_link_flags = linkopts,
+        # compilation_outpus contains all the Lisp code. If allow_save_lisp,
+        # it's all in the -core.o file. Otherwise, the compiled Lisp code was
+        # disassembled and reassembled, and this contains the output from that
+        # plus the remainder of the Lisp core in the -core.o file.
+        compilation_outputs = cc_common.merge_compilation_outputs(
+            compilation_outputs = compilation_outputs,
+        ),
+        # linking_contexts contains all the C++ code to be linked in.
+        linking_contexts = [
+            # C++ code from transitive dependencies (via lisp_*.cdeps).
+            ctx.attr.cdeps_library[CcInfo].linking_context,
+            # SBCL's C++ dependencies.
+            ctx.attr.runtime[CcInfo].linking_context,
+            # A custom malloc library gets linked in like any other library.
+            # It's important that each binary gets a single malloc
+            # implementation, so this does not get propagated to any of the
+            # binary's consumers.
+            malloc[CcInfo].linking_context,
+        ],
+        stamp = ctx.attr.stamp,
+        output_type = "executable",
+        additional_inputs = link_additional_inputs,
+    )
+
+    runfiles = _lisp_runfiles(ctx)
+    runfiles = runfiles.merge(
+        ctx.attr.cdeps_library[DefaultInfo].default_runfiles,
+    )
     return [
         lisp_info,
         DefaultInfo(
-            runfiles = _lisp_runfiles(ctx),
-            files = depset([core]),
+            runfiles = runfiles,
+            files = depset([linking_outputs.executable]),
         ),
         coverage_common.instrumented_files_info(
             ctx,
@@ -450,10 +632,28 @@ def _lisp_core_impl(ctx):
 # Keep the name to be _lisp_core - Grok depends on this name to find targets.
 _LISP_CORE_ATTRS = dict(_LISP_COMMON_ATTRS)
 _LISP_CORE_ATTRS.update({
+    "cdeps_library": attr.label(providers = [CcInfo]),
     "main": attr.string(default = "main"),
+    "malloc": attr.label(default = _DEFAULT_MALLOC, providers = [CcInfo], mandatory = True),
+    "stamp": attr.int(values = [-1, 0, 1], default = -1),
     "binary_name": attr.string(mandatory = True),
+    "allow_save_lisp": attr.bool(default = False),
     "precompile_generics": attr.bool(),
     "save_runtime_options": attr.bool(),
+    "runtime": attr.label(default = Label(_DEFAULT_LIBSBCL), providers = [CcInfo]),
+    "_elfinate": attr.label(
+        default = Label("@local_sbcl//:elfinate"),
+        executable = True,
+        allow_single_file = True,
+        cfg = "target",
+    ),
+    "_custom_malloc": attr.label(
+        default = configuration_field(
+            fragment = "cpp",
+            name = "custom_malloc",
+        ),
+        providers = [CcInfo],
+    ),
 })
 
 _lisp_core = rule(
@@ -574,6 +774,7 @@ def lisp_binary(
         runtime = _DEFAULT_LIBSBCL,
         malloc = _DEFAULT_MALLOC,
         verbose = None,
+        instrument_coverage = -1,
         **kwargs):
     """Bazel rule to create a binary executable from Common Lisp source files.
 
@@ -650,68 +851,23 @@ def lisp_binary(
       runtime: SBCL C runtime library rule name
       malloc: malloc implementation to be used for linking of cc code.
       verbose: internal numeric level of verbosity for the build rule.
+      instrument_coverage: Controls coverage instrumentation, with the following values:
+         -1 (default) - Instruments if covearge is enabled for this target.
+         0 - Instruments never.
+         1 - Instruments always (for testing purposes).
       **kwargs: other common attributes for all targets.
     """
 
-    # We have essentially three ways to produce a Lisp binary:
-    #
-    # (1) Call SAVE-LISP-AND-DIE with :executable t (not used in these rules):
-    #     This is a slightly funny binary file in that it has a (large) opaque
-    #     blob of bytes at the end comprising the whole Lisp heap. But that's
-    #     the garden-variety SBCL executable.
-    #
-    #     No C code other than SBCL's support is present in the text file,
-    #     as the dump step does not know how to write bytes from any source
-    #     other than the SBCL executable and the in-memory heap.
-    #
-    # (2) Partially ELFinated binary (allow_save_lisp=True): After
-    #     SAVE-LISP-AND-DIE, take the resulting core file, and turn it into a
-    #     data section in a proper ELF file, but a relatively opaque section
-    #     with the only C symbols acting to demarcate the bounds of the Lisp
-    #     spaces. Feed that in to a regular link step (with C++ libaries and
-    #     such, and the SBCL main). This binary when launched will "parse" the
-    #     Lisp heap out of the data section and begin life as usual.
-    #
-    #     The main distinctions between this and the executable generated by
-    #     SAVE-LISP-AND-DIE are that:
-    #     - the heap is not randomly glued on at the end, but instead a true
-    #       section that survives manipulation by various ELF tools.
-    #     - C++ code other than SBCL's runtime is directly present in the image
-    #     In almost all respects this acts like a garden-variety Lisp binary.
-    #
-    # (3) Fully ELFinated binary (default): Starting with SAVE-LISP-AND-DIE,
-    #     turn the attached Lisp heap into two ELF sections: one comprising
-    #     the '.text' and nothing but, and one containing everything else that
-    #     did not go in the '.text' section. The latter section is akin to what
-    #     goes in one section for partial ELF mode (see below), minus what
-    #     became '.text'.
-    #
-    #     The precise details of how we produce the '.text' section are
-    #     unimportant, but simultaneously it is a proper segment of the final
-    #     file and a GC-managed space. (This is actually an astonishing feat,
-    #     not without drawbacks, namely, that it has to be read/write memory
-    #     "because Lisp".) It gets moved into dynamic space in memory when the
-    #     binary starts up, so there's not a constraint on binaries in this
-    #     format compiling additional codes. However, since the format of the
-    #     image in memory differs from what the implementation expects,
-    #     save-lisp-and-die will not work. Thus, binaries in this format can't
-    #     be used as a build image (for that, set allow_save_lisp=True).
-    #
-    # In truth, there is one other kind of executable which has no Lisp heap
-    # attached, and requires a --core argument, but we seldom if ever use that.
-    #
-    # It is extremely important to understand another limitation as well: in no
-    # scenario does the system linker receive "--export-dynamic" for *all* C
-    # symbols, i.e. literally --export-dynamic as opposed to
-    # --export-dynamic-symbol=something.
-    #
-    # This means that you CAN NOT refer to an arbitrary C symbol from Lisp,
-    # though we do still link with libdl to look up symbols "because reasons".
-    # Any C symbol that the Lisp code has to know about must have its address
-    # in a 'reloc' section of the ELF file whence came the Lisp heap.
-    # Mention of "one" or "two" sections in the above descriptions refers to
-    # the number of sections of Lisp data. In either case, there are other
-    # ELF sections which inform the linker how to link Lisp to C code.
+    # Precompile all C sources in advance, before core symbols are present.
+    cdeps_library = make_cdeps_library(
+        name = name,
+        deps = [image] + deps,
+        cdeps = cdeps,
+        visibility = visibility,
+        testonly = testonly,
+        tags = tags,
+        **kwargs
+    )
 
     core = "_{}.core".format(name)
     _lisp_core(
@@ -727,105 +883,20 @@ def lisp_binary(
         nowarn = nowarn,
         image = image,
         # Binary core attributes.
+        cdeps_library = cdeps_library,
+        runtime = runtime,
         main = main,
         precompile_generics = precompile_generics,
         save_runtime_options = save_runtime_options,
+        malloc = malloc,
+        stamp = stamp,
+        allow_save_lisp = allow_save_lisp,
+        instrument_coverage = instrument_coverage,
         # Common rule attributes.
         visibility = ["//visibility:private"],
         testonly = testonly,
         verbose = verbose,
         **kwargs
-    )
-
-    # Discard kwargs that are just for _lisp_core.
-    kwargs.pop("instrument_coverage", None)
-
-    # Precompile all C sources in advance, before core symbols are present.
-    cdeps_library = make_cdeps_library(
-        name = name,
-        deps = [image] + deps,
-        cdeps = cdeps,
-        visibility = visibility,
-        testonly = testonly,
-        tags = tags,
-        **kwargs
-    )
-
-    internal_tags = list(tags)
-    _add_tag("manual", internal_tags)
-
-    # The support in ELFinator exists for -pie code, and a non-elfinated SBCL binaries
-    # are always position-independent; however, extreme inefficiency is imparted to ELF
-    # binaries that are position-independent. Lisp pointers are all absolute, and a
-    # typical Lisp heap might contain 3 to 5 million pointers to functions, therefore
-    # require that many relocations on each invocation to adjust to wherever the system
-    # moved the text segment. C on the other hand uses function pointers sparingly.
-    # I don't have "typical" numbers of pointers, and it can't be inferred from a binary,
-    # but it's nothing like having 40,000 closures over #<FUNCTION ALWAYS-BOUND {xxxxxx}>
-    # (which is the SLOT-BOUNDP method "fast method function" for every defstruct slot)
-    # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
-    linkopts = ["-Wl,-no-pie"]
-
-    # Either way, we need to link with the cdeps and SBCL C code.
-    link_deps = [
-        cdeps_library,
-        runtime,
-    ]
-
-    if allow_save_lisp:
-        # Copy entire native SBCL core into a binary blob in a normal '.o' file
-        elfinate_outs = [name + "-core.o", name + "-syms.lds"]
-        link_srcs = [name + "-core.o"]
-        elfinate_cmd_template = (
-            "$(location {}) copy ".format(_ELFINATE) +
-            "$(location {core}) $(location {name}-core.o) && " +
-            "nm -p $(location {name}-core.o) | " +
-            "awk '" +
-            '{{print $$2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
-            "' >$(location {name}-syms.lds)"
-        )
-        linkopts.append("-Wl,--dynamic-list=$(location {}-syms.lds)".format(name))
-        link_deps.append(name + "-syms.lds")
-    else:
-        # Produce a '.s' file holding only compiled Lisp code and a '-core.o'
-        # containing the balance of the original Lisp spaces.
-        elfinate_outs = [name + ".s", name + "-core.o"]
-        link_srcs = [name + ".s", name + "-core.o"]
-        elfinate_cmd_template = (
-            "$(location {}) split ".format(_ELFINATE) +
-            "$(location {core}) $(location {name}.s)"
-        )
-
-    native.genrule(
-        name = "_{}.parts".format(name),
-        tools = [_ELFINATE],
-        srcs = [core],
-        outs = elfinate_outs,
-        cmd = elfinate_cmd_template.format(
-            core = core,
-            name = name,
-        ),
-        visibility = ["//visibility:private"],
-        testonly = testonly,
-        tags = internal_tags,
-    )
-
-    # The final executable still needs to be produced by a Starlark rule, so
-    # it can get the LispInfo and instrumented_files_info providers
-    # correct. That means the internal rule must be cc_binary, only the
-    # outermost rule is a test for lisp_test.
-    binary = "_{}.combined".format(name)
-    native.cc_binary(
-        name = binary,
-        linkopts = linkopts,
-        srcs = link_srcs,
-        deps = link_deps,
-        data = data,
-        visibility = ["//visibility:private"],
-        stamp = stamp,
-        malloc = malloc,
-        testonly = testonly,
-        tags = internal_tags,
     )
 
     if test:
@@ -844,7 +915,7 @@ def lisp_binary(
         test_kwargs = {}
     starlark_wrap_rule(
         name = name,
-        binary = binary,
+        binary = core,
         instrumented_srcs = srcs,
         instrumented_deps = deps + [image, cdeps_library],
         core = core,
