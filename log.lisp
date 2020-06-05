@@ -5,10 +5,14 @@
 (defpackage bazel.log
   (:use :cl)
   (:shadow #:error #:warning)
-  (:export #:message #:info #:error #:warning
+  (:export #:message
+           #:info
+           #:error
+           #:warning
            #:verbose #:vv #:vvv
            #:fatal #:fatal-error #:non-fatal-error
-           #:*verbose*))
+           #:*verbose*
+           #:with-safe-io-syntax))
 
 (in-package #:bazel.log)
 
@@ -40,6 +44,15 @@
     ((:warning)      33)
     (t               32)))
 
+(defmacro with-safe-io-syntax (&body body)
+  "Execute BODY with IO environment set to safe values."
+  `(with-standard-io-syntax
+     (let ((*print-readably* nil)
+           (*print-circle* t)
+           #+sbcl
+           (sb-ext:*suppress-print-errors* t))
+        (locally ,@body))))
+
 (defun message (severity level control &rest args)
   "Format and print a log message.
  The first argument is SEVERITY: :INFO, :WARNING, :ERROR.
@@ -47,9 +60,8 @@
  The ARGS are applied to the CONTROL string to produce the log output."
   (declare (fixnum level))
   (when (>= *verbose* level)
-    (with-standard-io-syntax
-      (let ((*print-readably* nil)
-            (out (if (eq severity :info)
+    (with-safe-io-syntax
+      (let ((out (if (eq severity :info)
                      *standard-output*
                      *error-output*)))
         (if (ttyp out)
@@ -86,4 +98,5 @@
  CONTROL is the format control string that operates on ARGS."
   (apply #'message :fatal 0 control args)
   (with-simple-restart (continue "Continue from the fatal Blaze error.")
-    (cl:error 'fatal-error :message (apply #'format nil control args))))
+    (with-safe-io-syntax
+      (cl:error 'fatal-error :message (apply #'format nil control args)))))

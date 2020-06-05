@@ -12,7 +12,8 @@
   (:import-from #:bazel.log
                 #:verbose #:vv #:vvv #:*verbose*
                 #:info #:message #:fatal
-                #:fatal-error #:non-fatal-error)
+                #:fatal-error #:non-fatal-error
+                #:with-safe-io-syntax)
   (:export #:save-image
            ;; Main entry point for blaze-lisp
            #:main
@@ -432,7 +433,7 @@ package context. This allows for the user to specify their own handlers as a str
            for (src type condition) in conditions
            nconc (list
                   (unless (equal src prev-src) (strip-prefix bindir src))
-                  type (with-standard-io-syntax
+                  type (with-safe-io-syntax
                          (or (ignore-errors (format nil "~S" condition))
                              (format nil "~A" condition))))))))
 
@@ -646,15 +647,13 @@ it will signal an error."
     (unless (plusp (file-length in))
       (bazel.log:verbose "Not loading an empty file: ~S." name)
       (return-from load-file)))
-  (with-standard-io-syntax
+  (with-safe-io-syntax
     (handler-bind ((non-fatal-error #'handle-error))
       (with-compilation-unit (:source-namestring name)
         (let* ((name (namestring name))
                (*default-pathname-defaults* *default-pathname-defaults*)
                (*current-source-file* name)
                (*readtable* (setup-readtable readtable))
-               (*print-readably* nil)
-               (*print-circle* t)
                (*action* action))
           (set-compilation-mode load-mode)
           (cond (muffle-warnings
@@ -700,28 +699,26 @@ it will signal an error."
   READTABLE is the readtable to be used for compiling the SRC file."
   (verbose "~S => ~S (~A)" src (namestring output-file) *default-pathname-defaults*)
   (ensure-directories-exist output-file)
-  (with-standard-io-syntax
-    (let ((*print-readably* nil))
-      (multiple-value-bind (fasl warnings-p failures-p)
-          (with-compilation-unit (:source-namestring src)
-            (let ((output-file (merge-pathnames output-file))
-                  (*default-pathname-defaults* *default-pathname-defaults*)
-                  (*readtable* (setup-readtable readtable))
-                  (*print-circle* t))
-              (delete-read-only output-file)
-              (compile-file src :output-file output-file
-                                :emit-cfasl emit-cfasl
-                                :external-format :utf-8)))
-        (unless (and warnings-p failures-p)
-          (vv "File ~S compiled without warnings." src))
-        (when warnings-p
-          (verbose "File ~S compiled with warnings." src))
-        (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
-          (when failures-p
-            (fatal "File ~S failed to compile." src)))
-        (when save-locations
-          (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
-        (values fasl warnings-p failures-p)))))
+  (multiple-value-bind (fasl warnings-p failures-p)
+    (with-compilation-unit (:source-namestring src)
+      (with-safe-io-syntax
+          (let ((output-file (merge-pathnames output-file))
+                (*default-pathname-defaults* *default-pathname-defaults*)
+                (*readtable* (setup-readtable readtable)))
+            (delete-read-only output-file)
+            (compile-file src :output-file output-file
+                              :emit-cfasl emit-cfasl
+                              :external-format :utf-8))))
+    (unless (and warnings-p failures-p)
+      (vv "File ~S compiled without warnings." src))
+    (when warnings-p
+      (verbose "File ~S compiled with warnings." src))
+    (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
+      (when failures-p
+        (fatal "File ~S failed to compile." src)))
+    (when save-locations
+      (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
+    (values fasl warnings-p failures-p)))
 
 (defun write-file-hash (src hash-file)
   "Compute the hash of the SRC file and write it to the HASH-FILE."
