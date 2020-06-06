@@ -38,7 +38,7 @@ _DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
 _DEFAULT_LIBSBCL = "@local_sbcl//:c-support"
 
 # Common attributes accepted by the (internal) lisp rules.
-_COMPILATION_ORDERS = ["serial", "parallel"]
+_COMPILATION_ORDERS = ["multipass", "serial", "parallel"]
 _LISP_COMMON_ATTRS = {
     "srcs": attr.label_list(allow_files = [".lisp", ".lsp"]),
     "deps": attr.label_list(providers = [LispInfo]),
@@ -200,7 +200,8 @@ def lisp_compile_srcs(
       image: Build image Target used to compile the sources.
       add_features: List of Lisp feature strings added by this target.
       nowarn: List of supressed warning type strings.
-      order: Order in which to load sources, either "serial" or "parallel".
+      order: Order in which to load sources, either "serial", "parallel", or
+          "multipass".
       compile_data: depset of additional data Files used for compilation.
       verbose_level: int indicating level of debugging output.
       instrument_coverage: Controls coverage instrumentation, with the following values:
@@ -246,6 +247,7 @@ def lisp_compile_srcs(
             build_flags = build_flags,
         )
 
+    multipass = (order == "multipass")
     serial = (order == "serial")
 
     build_image = image[DefaultInfo].files_to_run
@@ -261,13 +263,17 @@ def lisp_compile_srcs(
 
     # Sources for this target loaded before compilation (after deps), passed to
     # --load. What this contains depends on the compilation order:
+    # multipass: Contains everything
     # parallel: Contains nothing
     # serial: Contains previous entries in srcs (accumulated below)
-    load_srcs = []
+    load_srcs = srcs if multipass else []
 
     # Arbitrary heuristic to reduce load on the build system by bundling
     # FASL and source files load into one compile-image binary.
     compile_flags = ctx.actions.args()
+
+    if multipass:
+        nowarn = nowarn + ["redefined-method", "redefined-function"]
 
     # buildozer: disable=print
     if verbosep:
@@ -806,6 +812,8 @@ def lisp_binary(
       order: takes values:
           "serial" - each source is compiled in an image with
             previous sources loaded (default).
+          "multipass" - each source is compiled in an image with
+            all sources loaded.
           "parallel" - each source is compiled independently from others.
       nowarn: a list of suppressed Lisp warning types or warning handlers.
       args: default arguments passed to the binary or test on execution.
@@ -1108,6 +1116,8 @@ def lisp_library(
       order: takes values:
           "serial" - each source is compiled in an image with
             previous sources loaded (default).
+          "multipass" - each source is compiled in an image with
+            all sources loaded.
           "parallel" - each source is compiled independently from others.
       nowarn: a list of suppressed Lisp warning types or warning handlers.
       image: the base image used to compile the target (defaults to :bazel in this package).
