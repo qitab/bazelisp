@@ -1,12 +1,13 @@
 # Copyright 2015 Google Inc.  All rights reserved.
 # Author: andrzejwalczak@google.com (Andrzej Walczak)
 # Description:
-# The package implements the Lisp plugin to the Bazel.
-# This BUILD file describes a Lisp side driver used
-# with the Skylark rules which are defined in rules.bzl
-# See README.md for more info about this package.
+# The package implements the Common Lisp build extension for Bazel.
+# This BUILD file describes a Lisp compilation image used with the
+# Starlark rules which are defined in rules.bzl. See README.md for
+# more info about this package.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
 
 licenses(["unencumbered"])
 
@@ -19,6 +20,24 @@ bzl_library(
     deps = [
         "@rules_cc//cc:action_names.bzl",
         "@rules_cc//cc:find_cc_toolchain.bzl",
+    ],
+)
+
+stardoc(
+    name = "rules_stardoc",
+    out = "rules.md",
+    header_template = "stardoc_header.vm",
+    input = "rules.bzl",
+    visibility = ["//:__subpackages__"],
+    deps = [":build_rules"],
+)
+
+sh_test(
+    name = "rules_stardoc_test",
+    srcs = ["rules_stardoc_test.sh"],
+    data = [
+        "doc/rules.md",
+        "//:rules.md",
     ],
 )
 
@@ -62,11 +81,6 @@ genrule(
     ),
     executable = 1,
     output_to_bindir = 1,
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "image.cdeps",
     visibility = ["//visibility:public"],
 )
 

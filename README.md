@@ -12,4 +12,4 @@ released.
 google3-specific wrappers for these rules live in google3/lisp/devtools/bazel/.
 Basic usage documentation can be found in go/lisp. Full documentation of the
 parameters of `lisp_library`, `lisp_binary`, and `lisp_test` can be found in
-google3/third_party/lisp/bazel/rules.bzl.
+doc/third_party/lisp/bazel/doc/rules.md.
