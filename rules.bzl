@@ -506,10 +506,11 @@ def _lisp_dynamic_library(ctx, lisp_info):
     )
     return linking_outputs.library_to_link.dynamic_library
 
-def _lisp_output_group_info(ctx, lisp_info):
+def _lisp_output_group_info(ctx, lisp_info, fasl):
     return OutputGroupInfo(
         deps_manifest = [_lisp_deps_manifest(ctx, lisp_info)],
         dynamic_library = [_lisp_dynamic_library(ctx, lisp_info)],
+        fasl = [fasl],
     )
 
 def _lisp_instrumented_files_info(ctx):
@@ -535,7 +536,7 @@ def _lisp_providers(ctx, lisp_info, fasl, executable = None):
             executable = executable,
         ),
         lisp_info,
-        _lisp_output_group_info(ctx, lisp_info),
+        _lisp_output_group_info(ctx, lisp_info, fasl),
         _lisp_instrumented_files_info(ctx),
     ]
 
@@ -850,7 +851,6 @@ lisp_library = rule(
     toolchains = [
         "@rules_cc//cc:toolchain_type",
     ],
-    outputs = {"fasl": "%{name}.fasl"},
     doc = """
 The basic compilation unit for Lisp code. Can have Lisp dependencies
 ([`deps`](#lisp_library-deps)) and C/C++ dependencies
