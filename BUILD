@@ -7,6 +7,7 @@
 # more info about this package.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
 
 licenses(["unencumbered"])
@@ -18,8 +19,8 @@ bzl_library(
     srcs = glob(["*.bzl"]),
     visibility = ["//visibility:public"],
     deps = [
-        "@rules_cc//cc:action_names.bzl",
         "@rules_cc//cc:find_cc_toolchain.bzl",
+        "@bazel_skylib//rules:common_settings",
     ],
 )
 
@@ -89,5 +90,11 @@ cc_library(
     srcs = ["@local_sbcl//:linkable-runtime"],
     linkopts = ["-ldl"],
     linkstatic = 1,
+    visibility = ["//visibility:public"],
+)
+
+bool_flag(
+    name = "additional_dynamic_load_outputs",
+    build_setting_default = False,
     visibility = ["//visibility:public"],
 )

@@ -13,6 +13,7 @@ load(
     "extend_lisp_info",
 )
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 
 _BAZEL_LISP_IMAGE = "//:image"
 _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
@@ -116,6 +117,12 @@ _LISP_LIBRARY_ATTRS = {
             "(https://docs.bazel.build/versions/master/" +
             "command-line-reference.html#flag--instrumentation_filter).`"
         ),
+    ),
+    "_additional_dynamic_load_outputs": attr.label(
+        default = Label(
+            "//:additional_dynamic_load_outputs",
+        ),
+        providers = [BuildSettingInfo],
     ),
     # Do not add references, temporary attribute for find_cc_toolchain.
     "_cc_toolchain": attr.label(
@@ -507,11 +514,20 @@ def _lisp_dynamic_library(ctx, lisp_info):
     return linking_outputs.library_to_link.dynamic_library
 
 def _lisp_output_group_info(ctx, lisp_info, fasl):
-    return OutputGroupInfo(
-        deps_manifest = [_lisp_deps_manifest(ctx, lisp_info)],
-        dynamic_library = [_lisp_dynamic_library(ctx, lisp_info)],
-        fasl = [fasl],
+    outputs = {"fasl": [fasl]}
+
+    # Additional outputs for dynamic loading. These should only be used when
+    # explicitly requested, so condition the generation of the extra actions
+    # on a flag. (It might be better to just condition this on --output_groups,
+    # but that's not readable from Starlark.)
+    generate_dynamic_load_outputs = (
+        ctx.attr._additional_dynamic_load_outputs[BuildSettingInfo].value
     )
+    if generate_dynamic_load_outputs:
+        outputs["deps_manifest"] = [_lisp_deps_manifest(ctx, lisp_info)]
+        outputs["dynamic_library"] = [_lisp_dynamic_library(ctx, lisp_info)]
+
+    return OutputGroupInfo(**outputs)
 
 def _lisp_instrumented_files_info(ctx):
     return coverage_common.instrumented_files_info(
