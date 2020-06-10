@@ -232,7 +232,7 @@ def _spec(spec, files):
     """
     return '(:{}\n "{}")\n'.format(spec, _paths(files, sep = '"\n "'))
 
-def _concat_files(ctx, inputs, output):
+def _concat_fasls(ctx, inputs, output):
     """Concatenates several FASLs into a combined FASL.
 
     Args:
@@ -241,22 +241,24 @@ def _concat_files(ctx, inputs, output):
       output: File output for the concatenated contents.
     """
     if not inputs:
-        cmd = "touch " + output.path
-        msg = "Linking {} (as empty FASL)".format(output.short_path)
+        return None
     elif len(inputs) == 1:
-        cmd = "mv {} {}".format(inputs[0].path, output.path)
-        msg = "Linking {} (from 1 source)".format(output.short_path)
+        return inputs[0]
     else:
-        cmd = "cat {} > {}".format(_paths(inputs), output.path)
-        msg = "Linking {} (from {} sources)".format(output.short_path, len(inputs))
-
-    ctx.actions.run_shell(
-        inputs = inputs,
-        outputs = [output],
-        progress_message = msg,
-        mnemonic = "LispConcatFASLs",
-        command = cmd,
-    )
+        ctx.actions.run_shell(
+            inputs = inputs,
+            outputs = [output],
+            progress_message = "Combining {} (from {} sources)".format(
+                output.short_path,
+                len(inputs),
+            ),
+            mnemonic = "LispConcatFASLs",
+            command = ("cat {inputs} > {output}").format(
+                inputs = _paths(inputs),
+                output = output.path,
+            ),
+        )
+        return output
 
 def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
     """Returns Args for flags for all Lisp build actions.
@@ -371,7 +373,6 @@ def lisp_compile_srcs(
         features = add_features,
         compile_data = compile_data,
     )
-    output_fasl = ctx.actions.declare_file(name + ".fasl")
     build_flags = _build_flags(
         ctx = ctx,
         add_features = lisp_info.features,
@@ -380,10 +381,9 @@ def lisp_compile_srcs(
     )
 
     if not srcs:
-        _concat_files(ctx, [], output_fasl)
         return struct(
             lisp_info = lisp_info,
-            output_fasl = output_fasl,
+            output_fasl = None,
             build_flags = build_flags,
         )
 
@@ -424,11 +424,16 @@ def lisp_compile_srcs(
     fasls = []
     warnings = []
     hashes = []
+    output_fasl = ctx.actions.declare_file(name + ".fasl")
     for src in srcs:
-        stem = src.short_path[:-len(src.extension) - 1]
-        fasls.append(ctx.actions.declare_file(stem + "~.fasl"))
-        hashes.append(ctx.actions.declare_file(stem + "~.hash"))
-        warnings.append(ctx.actions.declare_file(stem + "~.warnings"))
+        stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
+        if len(srcs) == 1:
+            fasl = output_fasl
+        else:
+            fasl = ctx.actions.declare_file(stem + ".fasl")
+        fasls.append(fasl)
+        hashes.append(ctx.actions.declare_file(stem + ".hash"))
+        warnings.append(ctx.actions.declare_file(stem + ".warnings"))
         outs = [fasls[-1], hashes[-1], warnings[-1]]
         file_flags = ctx.actions.args()
         file_flags.add_joined("--outs", outs, join_with = " ")
@@ -452,8 +457,6 @@ def lisp_compile_srcs(
         if serial:
             load_srcs.append(src)
 
-    # Need to concatenate the FASL files into name.fasl.
-    _concat_files(ctx, fasls, output_fasl)
     if indexer_build:
         srcs = indexer_metadata + srcs
     lisp_info = extend_lisp_info(
@@ -465,7 +468,7 @@ def lisp_compile_srcs(
     )
     return struct(
         lisp_info = lisp_info,
-        output_fasl = output_fasl,
+        output_fasl = _concat_fasls(ctx, fasls, output_fasl),
         build_flags = build_flags,
     )
 
@@ -513,8 +516,8 @@ def _lisp_dynamic_library(ctx, lisp_info):
     )
     return linking_outputs.library_to_link.dynamic_library
 
-def _lisp_output_group_info(ctx, lisp_info, fasl):
-    outputs = {"fasl": [fasl]}
+def _lisp_output_group_info(ctx, lisp_info, fasl_list):
+    outputs = {"fasl": fasl_list}
 
     # Additional outputs for dynamic loading. These should only be used when
     # explicitly requested, so condition the generation of the extra actions
@@ -545,14 +548,16 @@ def _lisp_runfiles(ctx):
     return runfiles
 
 def _lisp_providers(ctx, lisp_info, fasl, executable = None):
+    executable_list = [executable] if executable != None else []
+    fasl_list = [fasl] if fasl != None else []
     return [
         DefaultInfo(
             runfiles = _lisp_runfiles(ctx),
-            files = depset([executable or fasl]),
+            files = depset(executable_list or fasl_list),
             executable = executable,
         ),
         lisp_info,
-        _lisp_output_group_info(ctx, lisp_info, fasl),
+        _lisp_output_group_info(ctx, lisp_info, fasl_list),
         _lisp_instrumented_files_info(ctx),
     ]
 
