@@ -10,6 +10,6 @@ TODO(b/24678256): Get this released again, and ensure changes are regularly
 released.
 
 google3-specific wrappers for these rules live in google3/lisp/devtools/bazel/.
-Basic usage documentation can be found in go/lisp. Full documentation of the
-parameters of `lisp_library`, `lisp_binary`, and `lisp_test` can be found in
-doc/third_party/lisp/bazel/doc/rules.md.
+Basic usage documentation can be found in go/lisp. See also the full
+[Stardoc generated documentation](http://doc/third_party/lisp/bazel/doc/rules.md)
+for `lisp_library`, `lisp_binary`, and `lisp_test`.
