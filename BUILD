@@ -1,4 +1,9 @@
-# Copyright 2015 Google Inc.  All rights reserved.
+# Copyright 2015-2020 Google LLC
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 # Author: andrzejwalczak@google.com (Andrzej Walczak)
 # Description:
 # The package implements the Common Lisp build extension for Bazel.
@@ -10,7 +15,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
 
-licenses(["unencumbered"])
+licenses(["notice"])
 
 exports_files(["LICENSE"])
 

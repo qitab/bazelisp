@@ -1,3 +1,9 @@
+# Copyright 2015-2020 Google LLC
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
 # Copyright 2015 Google Inc.  All rights reserved.
 # Author: andrzejwalczak@google.com (Andrzej Walczak)
 # Description:
@@ -10,7 +16,7 @@ load(
     "lisp_test",
 )
 
-licenses(["unencumbered"])  # New BSD, Google-authored
+licenses(["notice"])
 
 exports_files(["LICENSE"])
 
