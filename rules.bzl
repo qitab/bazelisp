@@ -197,6 +197,12 @@ _LISP_BINARY_ATTRS.update({
         ),
         providers = [CcInfo],
     ),
+    "_grep_includes": attr.label(
+        allow_single_file = True,
+        executable = True,
+        cfg = "host",
+        default = Label("@bazel_tools//tools/cpp:grep-includes"),
+    ),
 })
 
 _LISP_TEST_ATTRS = dict(_LISP_BINARY_ATTRS)
@@ -771,6 +777,7 @@ def _lisp_binary_impl(ctx):
         stamp = ctx.attr.stamp,
         output_type = "executable",
         additional_inputs = link_additional_inputs,
+        grep_includes = ctx.file._grep_includes,
     )
 
     return _lisp_providers(
