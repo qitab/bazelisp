@@ -134,6 +134,12 @@ _LISP_LIBRARY_ATTRS = {
     "_cc_toolchain": attr.label(
         default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
     ),
+    "_grep_includes": attr.label(
+        allow_single_file = True,
+        executable = True,
+        cfg = "host",
+        default = Label("@bazel_tools//tools/cpp:grep-includes"),
+    ),
 }
 
 _LISP_BINARY_ATTRS = dict(_LISP_LIBRARY_ATTRS)
@@ -196,12 +202,6 @@ _LISP_BINARY_ATTRS.update({
             name = "custom_malloc",
         ),
         providers = [CcInfo],
-    ),
-    "_grep_includes": attr.label(
-        allow_single_file = True,
-        executable = True,
-        cfg = "host",
-        default = Label("@bazel_tools//tools/cpp:grep-includes"),
     ),
 })
 
@@ -525,6 +525,7 @@ def _lisp_dynamic_library(ctx, lisp_info):
         cc_toolchain = cc_toolchain,
         linking_contexts = [lisp_info.cc_info.linking_context],
         output_type = "dynamic_library",
+        grep_includes = ctx.executable._grep_includes,
     )
     return linking_outputs.library_to_link.dynamic_library
 
@@ -777,7 +778,7 @@ def _lisp_binary_impl(ctx):
         stamp = ctx.attr.stamp,
         output_type = "executable",
         additional_inputs = link_additional_inputs,
-        grep_includes = ctx.file._grep_includes,
+        grep_includes = ctx.executable._grep_includes,
     )
 
     return _lisp_providers(
