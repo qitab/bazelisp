@@ -549,7 +549,7 @@ def _lisp_instrumented_files_info(ctx):
     return coverage_common.instrumented_files_info(
         ctx,
         source_attributes = ["srcs"],
-        dependency_attributes = ["deps", "cdeps", "image"],
+        dependency_attributes = ["deps", "cdeps", "image", "data", "compile_data"],
     )
 
 def _lisp_runfiles(ctx):
