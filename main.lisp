@@ -754,8 +754,10 @@ it will signal an error."
 
 (defmethod process-file ((action action) (file string) type)
   "Skips the given file for which there is no other handler."
-  ;; TODO(sfreilich): Maybe this should error instead of skip. In that case, we still may need to
-  ;; ingore certain types of files, like the .meta files forwarded to the indexer.
+  ;; Maybe this should error instead of skip, but it's possible for files to be included in the
+  ;; build command-line just to forward those to things analyzing the compilation with extra
+  ;; actions (i.e. .meta files forwarded to the Kythe indexer):
+  ;; https://docs.bazel.build/versions/master/be/extra-actions.html
   (verbose "File skipped: ~S [~A]" file type))
 
 (defmethod process-file ((action action) (file string) (type (eql :lisp)))
