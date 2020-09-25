@@ -34,7 +34,6 @@ stardoc(
     out = "rules.md",
     header_template = "stardoc_header.vm",
     input = "rules.bzl",
-    visibility = ["//:__subpackages__"],
     deps = [":build_rules"],
 )
 
