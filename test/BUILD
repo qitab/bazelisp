@@ -18,8 +18,6 @@ load(
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 lisp_library(
     name = "foo",
     srcs = ["foo.lisp"],
