@@ -178,10 +178,10 @@ This is the core functionality shared by the Lisp build rules.
 | <a id="lisp_compile_srcs-image"></a>image |  Build image Target used to compile the sources.   |  none |
 | <a id="lisp_compile_srcs-add_features"></a>add_features |  List of Lisp feature strings added by this target.   |  none |
 | <a id="lisp_compile_srcs-nowarn"></a>nowarn |  List of suppressed warning type strings.   |  none |
-| <a id="lisp_compile_srcs-order"></a>order |  Order in which to load sources, either "serial", "parallel", or     "multipass".   |  none |
+| <a id="lisp_compile_srcs-order"></a>order |  Order in which to load sources, either "serial", "parallel", or "multipass".   |  none |
 | <a id="lisp_compile_srcs-compile_data"></a>compile_data |  depset of additional data Files used for compilation.   |  none |
 | <a id="lisp_compile_srcs-verbose_level"></a>verbose_level |  int indicating level of debugging output.   |  none |
-| <a id="lisp_compile_srcs-instrument_coverage"></a>instrument_coverage |  Controls coverage instrumentation, with the following values:    -1 (default) - Instruments if coverage is enabled for this target.    0 - Instruments never.    1 - Instruments always (for testing purposes).   |  <code>-1</code> |
-| <a id="lisp_compile_srcs-indexer_metadata"></a>indexer_metadata |  Extra metadata files to be passed to the --deps    flag of LispCompile when the indexer is run. Ignored by the build    image itself.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-instrument_coverage"></a>instrument_coverage |  Controls coverage instrumentation, with the following values: -1 (default) - Instruments if coverage is enabled for this target. 0 - Instruments never. 1 - Instruments always (for testing purposes).   |  <code>-1</code> |
+| <a id="lisp_compile_srcs-indexer_metadata"></a>indexer_metadata |  Extra metadata files to be passed to the --deps flag of LispCompile when the indexer is run. Ignored by the build image itself.   |  <code>[]</code> |
 
 
