@@ -553,8 +553,8 @@ def _lisp_instrumented_files_info(ctx):
     )
 
 def _lisp_runfiles(ctx):
-    runfiles_deps = (ctx.attr.deps + ctx.attr.cdeps + [ctx.attr.image] +
-                     ctx.attr.data + ctx.attr.compile_data)
+    runfiles_deps = (ctx.attr.srcs + ctx.attr.deps + ctx.attr.cdeps +
+                     [ctx.attr.image] + ctx.attr.data + ctx.attr.compile_data)
     runfiles = ctx.runfiles(files = ctx.files.data + ctx.files.compile_data)
     for dep in runfiles_deps:
         runfiles = runfiles.merge(dep[DefaultInfo].default_runfiles)
