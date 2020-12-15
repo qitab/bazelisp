@@ -1,0 +1,13 @@
+exports_files([
+    "sbcl",
+    "sbcl.core",
+    "elfinate",
+])
+
+cc_library(
+    name = "c-support",
+    srcs = [":libsbcl.a"],
+    linkopts = ["-ldl"],
+    linkstatic = 1,
+    visibility = ["//visibility:public"],
+)

@@ -46,11 +46,8 @@ sh_test(
     ],
 )
 
-SBCL = "@local_sbcl//:sbcl_fileset"
-
-# Using "--define=LISPCORE=<something else>" will allow using a different core
-# to build lisp.
-vardef("LISPCORE", "sbcl.core")
+SBCL = "//lisp/sbcl"
+CORE = "//lisp/sbcl:sbcl.core"
 
 # This is not the same as @bazel_tools//tools/cpp:msan_build, but that matches whether the
 # build is run with --config=msan at all, as opposed to whether particular
@@ -70,11 +67,12 @@ genrule(
         "sbcl.lisp",
         "main.lisp",
         SBCL,
+        CORE,
     ],
     outs = ["image"],
     cmd = (
-        "$(location {})/bin/sbcl".format(SBCL) +
-        " --core $(location {})/lib/sbcl/$(LISPCORE)".format(SBCL) +
+        "$(location {})".format(SBCL) +
+        "--core $(location {})".format(CORE) +
         " --noinform" +
         " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
         " --load '$(location utils.lisp)'" +
@@ -86,14 +84,6 @@ genrule(
     ),
     executable = 1,
     output_to_bindir = 1,
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "sbcl-linkable-runtime",
-    srcs = ["@local_sbcl//:linkable-runtime"],
-    linkopts = ["-ldl"],
-    linkstatic = 1,
     visibility = ["//visibility:public"],
 )
 

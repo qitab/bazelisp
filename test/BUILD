@@ -24,7 +24,8 @@ lisp_library(
     cdeps = [":foo-ci"],
     compile_data = ["foo.data"],
     data = ["foo.data"],
-    deps = ["@local_sbcl//:contrib/sb-posix"],
+    deps = [
+    ],
 )
 
 lisp_library(
