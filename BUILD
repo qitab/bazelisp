@@ -37,18 +37,6 @@ stardoc(
     deps = [":build_rules"],
 )
 
-sh_test(
-    name = "rules_stardoc_test",
-    srcs = ["rules_stardoc_test.sh"],
-    data = [
-        "doc/rules.md",
-        "//:rules.md",
-    ],
-)
-
-SBCL = "//lisp/sbcl"
-CORE = "//lisp/sbcl:sbcl.core"
-
 # This is not the same as @bazel_tools//tools/cpp:msan_build, but that matches whether the
 # build is run with --config=msan at all, as opposed to whether particular
 # targets are actually compiled in msan (e.g. anything in host config is not).
@@ -66,13 +54,14 @@ genrule(
         "log.lisp",
         "sbcl.lisp",
         "main.lisp",
-        SBCL,
-        CORE,
+        "@local_sbcl//:contrib/sb-md5",
+        "@local_sbcl//:contrib/sb-rotate-byte",
+        "@local_sbcl//:core",
+        "@local_sbcl//:sbcl",
     ],
     outs = ["image"],
     cmd = (
-        "$(location {})".format(SBCL) +
-        "--core $(location {})".format(CORE) +
+        "$(location @local_sbcl//:sbcl)" +
         " --noinform" +
         " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
         " --load '$(location utils.lisp)'" +
@@ -84,6 +73,36 @@ genrule(
     ),
     executable = 1,
     output_to_bindir = 1,
+    visibility = ["//visibility:public"],
+)
+
+# Elfinator reads an SBCL-native core file and produces two outputs:
+# (1) an assembly-language file with a '.text' section whose contents
+#     are the code components from the input core file.
+#     This file is fully relocatable at link time.
+# (2) a '.o' file containing all other Lisp objects.
+# The assembly file is compiled, and then the resulting '.o' as well
+# as the '.o' from elfinator can both be used as srcs to a cc_binary
+# which depends on ":c-support". The SBCL runtime auto-detects
+# presence of text-in-ELF and data-in-ELF.
+genrule(
+    name = "elfinator",
+    srcs = [
+        "@sbcl//:tools-for-build/editcore.lisp",
+        "@sbcl//:tools-for-build/corefile.lisp",
+    ],
+    outs = ["elfinate"],
+    cmd = "$(location @local_sbcl//:sbcl) --noinform" +
+          " --load $(location @local_sbcl//:contrib/sb-posix)" +
+          " --eval '(setq sb-ext:*evaluator-mode* :compile)'" +
+          " --load $(location @sbcl//:tools-for-build/editcore.lisp)" +
+          " --eval '(save-lisp-and-die \"$(@)\" :executable t :toplevel (function elfinate))'",
+    output_to_bindir = 1,
+    tools = [
+        "@local_sbcl//:contrib/sb-posix",
+        "@local_sbcl//:core",
+        "@local_sbcl//:sbcl",
+    ],
     visibility = ["//visibility:public"],
 )
 

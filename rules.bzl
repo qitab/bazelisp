@@ -13,7 +13,7 @@ The three rules defined here are:
 """
 
 load(
-    "//:provider.bzl",
+    ":provider.bzl",
     "LispInfo",
     "collect_lisp_info",
     "extend_lisp_info",
@@ -24,7 +24,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 _BAZEL_LISP_IMAGE = "//:image"
 _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
 _BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
-_ELFINATE = "@local_sbcl//:elfinate"
+_ELFINATE = "//:elfinate"
 _DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
 _DEFAULT_LIBSBCL = "@local_sbcl//:c-support"
 
@@ -191,7 +191,7 @@ _LISP_BINARY_ATTRS.update({
                "attr and use the default value."),
     ),
     "_elfinate": attr.label(
-        default = Label("@local_sbcl//:elfinate"),
+        default = Label(_ELFINATE),
         executable = True,
         allow_single_file = True,
         cfg = "target",

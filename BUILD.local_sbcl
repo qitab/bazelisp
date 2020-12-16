@@ -1,0 +1,33 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "c-support",
+    srcs = ["lib/sbcl/sbcl.o"],
+    linkopts = ["-ldl"],
+    linkstatic = 1,
+)
+
+alias(
+    name = "core",
+    actual = "lib/sbcl/sbcl.core",
+)
+
+alias(
+    name = "sbcl",
+    actual = "bin/sbcl",
+)
+
+alias(
+    name = "contrib/sb-md5",
+    actual = "lib/sbcl/contrib/sb-md5.fasl",
+)
+
+alias(
+    name = "contrib/sb-posix",
+    actual = "lib/sbcl/contrib/sb-posix.fasl",
+)
+
+alias(
+    name = "contrib/sb-rotate-byte",
+    actual = "lib/sbcl/contrib/sb-rotate-byte.fasl",
+)

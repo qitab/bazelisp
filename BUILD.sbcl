@@ -1,0 +1,4 @@
+exports_files([
+    "tools-for-build/corefile.lisp",
+    "tools-for-build/editcore.lisp",
+])
