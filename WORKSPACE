@@ -29,8 +29,8 @@ git_repository(
     shallow_since = "1605101351 -0800",
 )
 
-# Installed SBCL in /usr/bin/sbcl and /usr/lib/sbcl/*. See the "sbcl_fileset"
-# target in BUILD.local_sbcl for specific contents.
+# Installed SBCL in /usr/bin/sbcl and /usr/lib/sbcl/*. See BUILD.local_sbcl for
+# specific files referenced.
 new_local_repository(
     name = "local_sbcl",
     path = "/usr/",
