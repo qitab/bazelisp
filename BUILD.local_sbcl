@@ -3,7 +3,12 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "c-support",
     srcs = ["lib/sbcl/sbcl.o"],
-    linkopts = ["-ldl"],
+    linkopts = [
+        "-ldl",
+        "-lpthread",
+        "-lz",
+        "-rdynamic",
+    ],
     linkstatic = 1,
 )
 
