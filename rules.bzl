@@ -47,7 +47,7 @@ _LISP_LIBRARY_ATTRS = {
         providers = [CcInfo],
         doc = ("C++ dependencies (generally [`cc_library`]" +
                "(https://docs.bazel.build/versions/master/be/c-cpp.html" +
-               "#cc_library))"),
+               "#cc_library))."),
     ),
     "order": attr.string(
         default = "serial",
@@ -86,7 +86,7 @@ _LISP_LIBRARY_ATTRS = {
                "versions/master/be/common-definitions.html#common.features) " +
                "attribute common to all build rules which controls " +
                "[toolchain](https://docs.bazel.build/versions/master/" +
-               "toolchains.html) features)"),
+               "toolchains.html) features."),
     ),
     "nowarn": attr.string_list(
         doc = "Suppressed Lisp warning types or warning handlers.",
@@ -96,9 +96,11 @@ _LISP_LIBRARY_ATTRS = {
         executable = True,
         cfg = "target",
         default = Label(_BAZEL_LISP_IMAGE),
-        # TODO(sfreilich): More about how to extend the image could be
-        # documented and enforced.
-        doc = "Lisp binary used as Bazel compilation image.",
+        doc = (
+            "Lisp binary used as Bazel compilation image. This should be a " +
+            "binary with the main function `#'bazel:main` defined in " +
+            "`main.lisp`."
+        ),
     ),
     "verbose": attr.int(
         default = 0,
