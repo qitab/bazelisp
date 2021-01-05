@@ -24,8 +24,8 @@ bzl_library(
     srcs = glob(["*.bzl"]),
     visibility = ["//visibility:public"],
     deps = [
-        "@rules_cc//cc:find_cc_toolchain.bzl",
         "@bazel_skylib//rules:common_settings",
+        "@rules_cc//cc:find_cc_toolchain.bzl",
     ],
 )
 
