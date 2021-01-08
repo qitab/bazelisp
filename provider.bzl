@@ -6,15 +6,18 @@
 
 """Functions generating or modifying the LispInfo provider struct."""
 
-LispInfo = provider(fields = {
-    "fasls": "Depset of FASLs for transitive dependencies",
-    "srcs": "Depset of transitive sources",
-    "hashes": "Depset of md5 hash files for transitive sources",
-    "warnings": "Depset of files of warnings checked at link time (FASL load) for transitive sources",
-    "features": "Depset of transitive declared Lisp features",
-    "compile_data": "Depset of data used at load/compile time for all dependencies",
-    "cc_info": "CcInfo representing transitive C++ dependencies for linking",
-})
+LispInfo = provider(
+    doc = "Information about a lisp_* target and its transitive dependencies.",
+    fields = {
+        "fasls": "Depset of FASLs for transitive dependencies",
+        "srcs": "Depset of transitive sources",
+        "hashes": "Depset of md5 hash files for transitive sources",
+        "warnings": "Depset of files of warnings checked at link time (FASL load) for transitive sources",
+        "features": "Depset of transitive declared Lisp features",
+        "compile_data": "Depset of data used at load/compile time for all dependencies",
+        "cc_info": "CcInfo representing transitive C++ dependencies for linking",
+    },
+)
 
 def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], compile_data = []):
     """Create a LispInfo collecting the data needed for Lisp compilation.

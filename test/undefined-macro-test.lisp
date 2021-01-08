@@ -30,7 +30,7 @@
   (setf *undefined-function-signaled-p* t)
   (setf (bazel.main:action-deferred-warnings action) nil))
 
-;; This MAIN function runs at the blaze test run time.
+;; This MAIN function runs at the bazel test run time.
 ;; Since the UNDEFINED-MACRO-REFERENCE has been compiled as undefined function,
 ;; the call to it will result in the UNDEFINED-FUNCTION warning.
 ;; The above generic that runs before the FINISH-ACTION takes care that this code compiles.

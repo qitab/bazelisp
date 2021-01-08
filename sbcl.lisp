@@ -4,7 +4,7 @@
 ;;; license that can be found in the LICENSE file or at
 ;;; https://opensource.org/licenses/MIT.
 
-;;; Utilities for Blaze Lisp and their implementation in SBCL.
+;;; Utilities for bazel Lisp and their implementation in SBCL.
 ;;;
 
 ;; Default optimization settings.

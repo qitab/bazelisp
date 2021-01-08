@@ -363,8 +363,9 @@ def lisp_compile_srcs(
          0 - Instruments never.
          1 - Instruments always (for testing purposes).
       indexer_metadata: Extra metadata files to be passed to the --deps
-         flag of LispCompile when the indexer is run. Ignored by the build
-         image itself.
+         flag of LispCompile when the Kythe indexer is run. Ignored by the
+         build image itself, but this appears in the command-line for the
+         LispCompile action which can be inspected by action_listener.
 
     Returns:
       struct with fields:

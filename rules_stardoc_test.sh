@@ -22,8 +22,8 @@ if [[ "$diff_status" -ne 0 ]]; then
    echo "Generated ${newly_generated} does not match checked-in ${pending}"
    echo
    echo "Run this to update:"
-   echo "blaze build //third_party/lisp/bazel:rules_stardoc"
-   echo "cp blaze-bin/third_party/lisp/bazel/rules.md third_party/lisp/bazel/g3doc/"
+   echo "bazel build //third_party/lisp/bazel:rules_stardoc"
+   echo "cp bazel-bin/third_party/lisp/bazel/rules.md third_party/lisp/bazel/g3doc/"
    echo
    echo "Diff:"
    echo

@@ -7,10 +7,10 @@
 ;; A simple utility for blazing lisp.
 ;;;
 ;;; Command line invocation:
-;;; blaze-lisp compile -v 2 -W "optional-and-key" "test.lisp" test.fasl
+;;; bazel-lisp compile -v 2 -W "optional-and-key" "test.lisp" test.fasl
 ;;;
 
-;; Default compilation settings for blaze-lisp.
+;; Default compilation settings for bazel-lisp.
 #-dbg (declaim (optimize (speed 3) (safety 1)))
 
 (defpackage #:bazel.main
@@ -21,7 +21,7 @@
                 #:fatal-error #:non-fatal-error
                 #:with-safe-io-syntax)
   (:export #:save-image
-           ;; Main entry point for blaze-lisp
+           ;; Main entry point for bazel-lisp
            #:main
            ;; Splits a string by space.
            ;; List of all files compiled into the image with src hashes.
@@ -38,7 +38,7 @@
            #:init-action
            #:finish-action
            #:load-file
-           ;; blaze-lisp warning handler.
+           ;; bazel-lisp warning handler.
            #:handle-warning
            ;; Post entry generic handler for each command.
            #:execute-command
@@ -109,7 +109,7 @@
 (deftype compile-load-mode () '(member :opt :fastbuild :dbg :load))
 
 (defstruct action
-  "The blaze-lisp action contains the input parameters and
+  "The bazel-lisp action contains the input parameters and
   the state of the current BUILD action."
   (command nil :type keyword)
   ;; The arguments passed to the program.
@@ -173,11 +173,11 @@
             (action-muffled-infos-count action))))
 
 (declaim (type (or null action) *action*))
-;; All of the state of the current blaze-lisp BUILD action.
+;; All of the state of the current bazel-lisp BUILD action.
 ;; The action is shared among threads.
 (defvar *action* nil)
 (declaim (type mutex *action-mutex*))
-(defvar *action-mutex* (make-mutex :name "blaze-lisp-action-mutex")
+(defvar *action-mutex* (make-mutex :name "bazel-lisp-action-mutex")
   "Action mutex guards *action* global variable.")
 
 (defun print-action-full (&key
@@ -451,13 +451,13 @@ package context. This allows for the user to specify their own handlers as a str
            (action-muffled-infos-count action))
 
   (when (action-failures action)
-    ;; Terminate with error. Blaze will clean up for us.
+    ;; Terminate with error. bazel will clean up for us.
     (print-warning-conditions "Failures" (action-failures action) (action-bindir action))
     (unless (action-force-compilation-p action)
-      (fatal "Blaze lisp build failed"))))
+      (fatal "bazel lisp build failed"))))
 
 ;;;
-;;; Blaze-Lisp specific utilities
+;;; bazel-Lisp specific utilities
 ;;;
 
 (defun delete-doc-strings ()
@@ -554,10 +554,10 @@ package context. This allows for the user to specify their own handlers as a str
 
   (destructuring-bind (spEed Debug %saFety space Compilation-speed)
       (ecase compilation-mode ; E D F   C
-        (:opt                 '(3 0 0 1 1))
+        (:load                '(1 1 1 1 3))
         ((:fastbuild nil)     '(1 2 3 1 1))
-        (:dbg                 '(1 3 3 1 1))
-        (:load                '(1 1 1 1 3)))
+        (:opt                 '(3 0 0 1 1))
+        (:dbg                 '(1 3 3 1 1)))
 
     (set-interpret-mode compilation-mode)
     (unless safety (setf safety %saFety))
@@ -642,7 +642,7 @@ it will signal an error."
  Arguments:
   NAME - the name of the file to load,
   FASL - if non-nil, the FASL will be loaded in place of the Lisp file.
-  ACTION - the current blaze action object,
+  ACTION - the current bazel action object,
   LOAD-MODE - the load mode used to load the file.
   MUFFLE-WARNINGS - if true, as in the case of deps, no warnings will be printed.
   READTABLE - is the readtable to be used while loading."
@@ -915,7 +915,7 @@ it will signal an error."
   BINDIR - the directory for the output files (for debug),
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
-  COMPILATION-MODE - from blaze -c <compilation-mode>,
+  COMPILATION-MODE - from bazel -c <compilation-mode>,
   SAFETY - determines the safety level to be used for compilation.
   FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
