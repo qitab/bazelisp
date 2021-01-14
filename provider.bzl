@@ -43,8 +43,8 @@ def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], 
         cc_infos.append(cdep[CcInfo])
 
     return LispInfo(
-        fasls = depset(transitive = [li.fasls for li in lisp_infos]),
-        srcs = depset(transitive = [li.srcs for li in lisp_infos]),
+        fasls = depset(transitive = [li.fasls for li in lisp_infos], order = "postorder"),
+        srcs = depset(transitive = [li.srcs for li in lisp_infos], order = "postorder"),
         hashes = depset(transitive = [li.hashes for li in lisp_infos]),
         warnings = depset(transitive = [li.warnings for li in lisp_infos]),
         features = depset(features, transitive = [li.features for li in lisp_infos]),
@@ -68,8 +68,8 @@ def extend_lisp_info(
       warnings: Warnings files for each file in srcs.
     """
     return LispInfo(
-        fasls = depset(fasls, transitive = [base.fasls]),
-        srcs = depset(srcs, transitive = [base.srcs]),
+        fasls = depset(fasls, transitive = [base.fasls], order = "postorder"),
+        srcs = depset(srcs, transitive = [base.srcs], order = "postorder"),
         hashes = depset(hashes, transitive = [base.hashes]),
         warnings = depset(warnings, transitive = [base.warnings]),
         features = base.features,
