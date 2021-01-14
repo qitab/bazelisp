@@ -331,15 +331,15 @@ def _list_excluding_depset(items, exclude):
 
 def lisp_compile_srcs(
         ctx,
-        srcs,
-        deps,
-        cdeps,
-        image,
-        add_features,
-        nowarn,
-        order,
-        compile_data,
-        verbose_level,
+        srcs = [],
+        deps = [],
+        cdeps = [],
+        image = None,
+        add_features = [],
+        nowarn = [],
+        order = "serial",
+        compile_data = [],
+        verbose_level = 0,
         instrument_coverage = -1,
         indexer_metadata = []):
     """Generate LispCompile actions, return LispInfo and FASL output.
@@ -348,15 +348,15 @@ def lisp_compile_srcs(
 
     Args:
       ctx: The rule context.
-      srcs: List of src Files.
-      deps: List of immediate Lisp dependency Targets.
-      cdeps: List of immediate C++ dependency Targets.
+      srcs: list of src Files.
+      deps: list of immediate Lisp dependency Targets.
+      cdeps: list of immediate C++ dependency Targets.
       image: Build image Target used to compile the sources.
-      add_features: List of Lisp feature strings added by this target.
+      add_features: list of Lisp feature strings added by this target.
       nowarn: List of suppressed warning type strings.
       order: Order in which to load sources, either "serial", "parallel", or
           "multipass".
-      compile_data: depset of additional data Files used for compilation.
+      compile_data: list of additional data Files used for compilation.
       verbose_level: int indicating level of debugging output.
       instrument_coverage: Controls coverage instrumentation, with the following values:
          -1 (default) - Instruments if coverage is enabled for this target.

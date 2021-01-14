@@ -172,15 +172,15 @@ This is the core functionality shared by the Lisp build rules.
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
 | <a id="lisp_compile_srcs-ctx"></a>ctx |  The rule context.   |  none |
-| <a id="lisp_compile_srcs-srcs"></a>srcs |  List of src Files.   |  none |
-| <a id="lisp_compile_srcs-deps"></a>deps |  List of immediate Lisp dependency Targets.   |  none |
-| <a id="lisp_compile_srcs-cdeps"></a>cdeps |  List of immediate C++ dependency Targets.   |  none |
-| <a id="lisp_compile_srcs-image"></a>image |  Build image Target used to compile the sources.   |  none |
-| <a id="lisp_compile_srcs-add_features"></a>add_features |  List of Lisp feature strings added by this target.   |  none |
-| <a id="lisp_compile_srcs-nowarn"></a>nowarn |  List of suppressed warning type strings.   |  none |
-| <a id="lisp_compile_srcs-order"></a>order |  Order in which to load sources, either "serial", "parallel", or "multipass".   |  none |
-| <a id="lisp_compile_srcs-compile_data"></a>compile_data |  depset of additional data Files used for compilation.   |  none |
-| <a id="lisp_compile_srcs-verbose_level"></a>verbose_level |  int indicating level of debugging output.   |  none |
+| <a id="lisp_compile_srcs-srcs"></a>srcs |  list of src Files.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-deps"></a>deps |  list of immediate Lisp dependency Targets.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-cdeps"></a>cdeps |  list of immediate C++ dependency Targets.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-image"></a>image |  Build image Target used to compile the sources.   |  <code>None</code> |
+| <a id="lisp_compile_srcs-add_features"></a>add_features |  list of Lisp feature strings added by this target.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-nowarn"></a>nowarn |  List of suppressed warning type strings.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-order"></a>order |  Order in which to load sources, either "serial", "parallel", or "multipass".   |  <code>"serial"</code> |
+| <a id="lisp_compile_srcs-compile_data"></a>compile_data |  list of additional data Files used for compilation.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-verbose_level"></a>verbose_level |  int indicating level of debugging output.   |  <code>0</code> |
 | <a id="lisp_compile_srcs-instrument_coverage"></a>instrument_coverage |  Controls coverage instrumentation, with the following values: -1 (default) - Instruments if coverage is enabled for this target. 0 - Instruments never. 1 - Instruments always (for testing purposes).   |  <code>-1</code> |
 | <a id="lisp_compile_srcs-indexer_metadata"></a>indexer_metadata |  Extra metadata files to be passed to the --deps flag of LispCompile when the Kythe indexer is run. Ignored by the build image itself, but this appears in the command-line for the LispCompile action which can be inspected by action_listener.   |  <code>[]</code> |
 
