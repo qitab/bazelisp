@@ -439,9 +439,9 @@ package context. This allows for the user to specify their own handlers as a str
            for (src type condition) in conditions
            nconc (list
                   (unless (equal src prev-src) (strip-prefix bindir src))
-                  type (with-safe-io-syntax
-                         (or (ignore-errors (format nil "~S" condition))
-                             (format nil "~A" condition))))))))
+                  type
+                  (with-safe-io-syntax
+                    (ignore-errors (format nil "~A" condition))))))))
 
 (defun check-failures (action)
   "Checks for compilation failures stored in ACTION."
