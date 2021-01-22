@@ -183,8 +183,8 @@ _LISP_BINARY_ATTRS.update({
     ),
     "save_runtime_options": attr.bool(
         default = True,
-        doc = ("If `False`, process SBCL runtime options at the command-line" +
-               "on binary startup."),
+        doc = ("If `False`, process SBCL runtime options at the " +
+               "command-line on binary startup."),
     ),
     "runtime": attr.label(
         default = Label(_DEFAULT_LIBSBCL),
