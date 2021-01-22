@@ -37,6 +37,15 @@ Note that "parallel", "serial", and "multipass" describe *dependency structure*,
 not the parallelization of `LispCompile` actions. In all cases, the compilation
 actions for the file in `srcs` can be performed in parallel.
 
+Prior to loading dependencies, symbols are added to `*features*` to represent
+some things about the build:
+
+*   `:bazel` to distinguish this from other build systems
+*   `:opt` if `--compilation_mode` (`-c`) is set to `opt`
+*   `:dbg` if `--compilation_mode` is set to `dbg`
+*   Features specified by the `add_features` attribute of the target and its
+    Lisp dependencies
+
 Depenencies are loaded with `#'load-file` with the *optimize qualities*:
 
 `speed` | `debug` | `safety` | `space` | `compilation-speed`
