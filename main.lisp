@@ -140,9 +140,6 @@
   (warning-handlers nil :type list)
   ;; The compile mode. One of :dbg, :opt, :fastbuild or :load.
   (compilation-mode nil :type compilation-mode)
-  ;; The safety level to be used for compilation.
-  ;; Default is determined by the compilation mode.
-  (safety nil :type (or null fixnum))
   ;; The mode used to load the .lisp or .srcs files.
   (lisp-load-mode nil :type (or null compile-load-mode))
   ;; The mode used to load the .fasl and .deps files.
@@ -546,13 +543,12 @@ package context. This allows for the user to specify their own handlers as a str
    :executable executable
    :verbose (plusp *verbose*)))
 
-(defun set-compilation-mode (compilation-mode &key safety)
-  "Proclaim the optimization settings based on the COMPILATION-MODE.
- SAFETY is the safety used to override defaults."
+(defun set-compilation-mode (compilation-mode)
+  "Proclaim the optimization settings based on the COMPILATION-MODE."
 
   (vvv "Set compilation mode: ~S" compilation-mode)
 
-  (destructuring-bind (spEed Debug %saFety space Compilation-speed)
+  (destructuring-bind (spEed Debug saFety space Compilation-speed)
       (ecase compilation-mode ; E D F   C
         (:load                '(1 1 1 1 3))
         ((:fastbuild nil)     '(1 2 3 1 1))
@@ -560,7 +556,6 @@ package context. This allows for the user to specify their own handlers as a str
         (:dbg                 '(1 3 3 1 1)))
 
     (set-interpret-mode compilation-mode)
-    (unless safety (setf safety %saFety))
 
     ;; Cause bodies of macroexpanders, including MACROLET and DEFINE-COMPILER-MACRO,
     ;; to be compiled in a policy in which these qualities override the global policy.
@@ -617,7 +612,7 @@ it will signal an error."
   "Checks that build features are in good shape."
   (assert (not (and (member :opt *features*) (member :dbg *features*))))) ; NOLINT
 
-(defun add-default-features (compilation-mode &optional (safety 1))
+(defun add-default-features (compilation-mode)
   "Add the default features to *features* including :bazel and COMPILATION-MODE.
  SAFETY level is used to determine if :OPT should be added."
   (declare (type (member :opt :fastbuild :dbg) compilation-mode))
@@ -626,8 +621,7 @@ it will signal an error."
 
   (case compilation-mode
     (:dbg (add-feature :dbg))
-    (:opt (unless (and safety (>= safety 3))
-            (add-feature :opt))))
+    (:opt (add-feature :opt)))
 
   (check-features))
 
@@ -897,7 +891,7 @@ it will signal an error."
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
-                   safety force
+                   force
                    main features nowarn
                    precompile-generics
                    save-runtime-options
@@ -915,8 +909,7 @@ it will signal an error."
   BINDIR - the directory for the output files (for debug),
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
-  COMPILATION-MODE - from bazel -c <compilation-mode>,
-  SAFETY - determines the safety level to be used for compilation.
+  COMPILATION-MODE - from bazel -c <compilation-mode>
   FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
@@ -936,7 +929,6 @@ it will signal an error."
 
   (let* ((command (to-keyword command))
          (outs (split outs))
-         (safety (if (stringp safety) (parse-integer safety) safety))
          (compilation-mode (to-keyword compilation-mode))
          (action
            (make-action :args args
@@ -944,7 +936,6 @@ it will signal an error."
                         :output-files outs
                         :bindir bindir
                         :compilation-mode compilation-mode
-                        :safety safety
                         :main-function main
                         :force-compilation-p force
                         :precompile-generics-p precompile-generics
@@ -981,7 +972,7 @@ it will signal an error."
     (init-action action command)
 
     (add-features features)
-    (add-default-features compilation-mode safety)
+    (add-default-features compilation-mode)
 
     (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
 
@@ -1015,8 +1006,7 @@ it will signal an error."
       (mapc #'process-file* warnings)
 
       (verbose "Finalizing the ~A action..." command)
-      (set-compilation-mode
-       (action-compilation-mode action) :safety (action-safety action))
+      (set-compilation-mode (action-compilation-mode action))
       (finish-action action command))))
 
 (defmethod execute-command ((command (eql :compile)) &rest args)
