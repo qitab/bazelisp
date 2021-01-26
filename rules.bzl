@@ -69,14 +69,14 @@ _LISP_LIBRARY_ATTRS = {
     ),
     "data": attr.label_list(
         allow_files = True,
-        doc = ("Data available to this target's consumers in the runfiles " +
-               "directory at runtime."),
+        doc = ("Data available to this target and its consumers in the " +
+               "runfiles directory at runtime."),
     ),
     "compile_data": attr.label_list(
         allow_files = True,
-        doc = ("Similar to `data`, except it is also made available in the " +
-               "runfiles of the build image of this target's consumers at " +
-               "compile time."),
+        doc = ("Data available to this target and its consumers at build " +
+               "time, added to the inputs of LispCompile and LispCore " +
+               "actions."),
     ),
     "add_features": attr.string_list(
         doc = ("Names of symbols (by default in the keyword package) to be " +
@@ -552,13 +552,13 @@ def _lisp_instrumented_files_info(ctx):
     return coverage_common.instrumented_files_info(
         ctx,
         source_attributes = ["srcs"],
-        dependency_attributes = ["deps", "cdeps", "image", "data", "compile_data"],
+        dependency_attributes = ["deps", "cdeps", "image", "data"],
     )
 
 def _lisp_runfiles(ctx):
     runfiles_deps = (ctx.attr.srcs + ctx.attr.deps + ctx.attr.cdeps +
-                     [ctx.attr.image] + ctx.attr.data + ctx.attr.compile_data)
-    runfiles = ctx.runfiles(files = ctx.files.data + ctx.files.compile_data)
+                     [ctx.attr.image] + ctx.attr.data)
+    runfiles = ctx.runfiles(files = ctx.files.data)
     for dep in runfiles_deps:
         runfiles = runfiles.merge(dep[DefaultInfo].default_runfiles)
     return runfiles
