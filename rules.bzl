@@ -356,7 +356,9 @@ def lisp_compile_srcs(
       nowarn: List of suppressed warning type strings.
       order: Order in which to load sources, either "serial", "parallel", or
           "multipass".
-      compile_data: list of additional data Files used for compilation.
+      compile_data: list of data dependency Targets whose outputs and runfiles
+         are made available at load/compile time for this target and its
+         consumers.
       verbose_level: int indicating level of debugging output.
       instrument_coverage: Controls coverage instrumentation, with the following values:
          -1 (default) - Instruments if coverage is enabled for this target.
@@ -605,7 +607,7 @@ def _lisp_binary_impl(ctx):
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
         order = ctx.attr.order,
-        compile_data = ctx.files.compile_data,
+        compile_data = ctx.attr.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,
     )
@@ -871,7 +873,7 @@ def _lisp_library_impl(ctx):
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
         order = ctx.attr.order,
-        compile_data = ctx.files.compile_data,
+        compile_data = ctx.attr.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,
     )

@@ -65,8 +65,9 @@ on the setting of `--compilation_mode` (`-c`), which defaults to `fastbuild`:
 When run with the `coverage` command (or `--collect_code_coverage`), the
 optimize quality `sb-c:store-coverage-data` is also set to 3.
 
-Default outputs from a target's `compile_data` and that of its Lisp dependencies
-are provided as additional imputs to the `LispCompile` action.
+Default outputs and runfiles from a target's `compile_data` and the
+`compile_data` of its transitive Lisp dependencies are provided as additional
+inputs to the `LispCompile` action.
 
 If there is at least one file in `srcs`, the FASLs are concatenated into
 `[name].fasl`, which is the default output for `lisp_library`. If there are

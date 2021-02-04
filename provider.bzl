@@ -12,9 +12,15 @@ LispInfo = provider(
         "fasls": "Depset of FASLs for transitive dependencies",
         "srcs": "Depset of transitive sources",
         "hashes": "Depset of md5 hash files for transitive sources",
-        "warnings": "Depset of files of warnings checked at link time (FASL load) for transitive sources",
+        "warnings": (
+            "Depset of files of warnings checked at link time (FASL load) " +
+            "for transitive sources"
+        ),
         "features": "Depset of transitive declared Lisp features",
-        "compile_data": "Depset of data used at load/compile time for all dependencies",
+        "compile_data": (
+            "Depset of files from transitive compile_data, made available " +
+            "at build time as well as runtime."
+        ),
         "cc_info": "CcInfo representing transitive C++ dependencies for linking",
     },
 )
@@ -29,7 +35,9 @@ def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], 
             dependencies. May be unset if this target just propagates LispInfo
             from its dependencies.
         features: Lisp features added by this target.
-        compile_data: Data available at compile time added by this target.
+        compile_data: Data dependency Targets of this target, which are made
+            available to this target and its consumers' at build time as well
+            as runtime.
 
     Returns:
         LispInfo
@@ -42,13 +50,30 @@ def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], 
     for cdep in cdeps:
         cc_infos.append(cdep[CcInfo])
 
+    transitive_compile_data = [li.compile_data for li in lisp_infos]
+    for compile_data_target in compile_data:
+        default_info = compile_data_target[DefaultInfo]
+        if default_info.files:
+            transitive_compile_data.append(default_info.files)
+        if default_info.default_runfiles:
+            transitive_compile_data.append(default_info.default_runfiles.files)
+
     return LispInfo(
-        fasls = depset(transitive = [li.fasls for li in lisp_infos], order = "postorder"),
-        srcs = depset(transitive = [li.srcs for li in lisp_infos], order = "postorder"),
+        fasls = depset(
+            transitive = [li.fasls for li in lisp_infos],
+            order = "postorder",
+        ),
+        srcs = depset(
+            transitive = [li.srcs for li in lisp_infos],
+            order = "postorder",
+        ),
         hashes = depset(transitive = [li.hashes for li in lisp_infos]),
         warnings = depset(transitive = [li.warnings for li in lisp_infos]),
-        features = depset(features, transitive = [li.features for li in lisp_infos]),
-        compile_data = depset(compile_data, transitive = [li.compile_data for li in lisp_infos]),
+        features = depset(
+            features,
+            transitive = [li.features for li in lisp_infos],
+        ),
+        compile_data = depset(transitive = transitive_compile_data),
         cc_info = cc_common.merge_cc_infos(cc_infos = cc_infos),
     )
 
