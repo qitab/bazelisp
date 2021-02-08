@@ -1,5 +1,7 @@
 # Bazel Common Lisp Build Rules
 
+[![Gitter](https://badges.gitter.im/qitab/community.svg)](https://gitter.im/qitab/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
 This project contains build rules and toolchin for building Common Lisp code
 with SBCL using bazel.
 
