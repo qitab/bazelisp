@@ -798,9 +798,8 @@ lisp_binary = rule(
     executable = True,
     attrs = _LISP_BINARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = [
-        "@rules_cc//cc:toolchain_type",
-    ],
+    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    incompatible_use_toolchain_transition = True,
     doc = """
 Supports all of the same attributes as [`lisp_library`](#lisp_library), plus
 additional attributes governing the behavior of the completed binary. The
@@ -824,9 +823,8 @@ lisp_test = rule(
     test = True,
     attrs = _LISP_TEST_ATTRS,
     fragments = ["cpp"],
-    toolchains = [
-        "@rules_cc//cc:toolchain_type",
-    ],
+    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    incompatible_use_toolchain_transition = True,
     doc = """
 Like [`lisp_binary`](#lisp_binary), for defining tests to be run with the
 [`test`](https://docs.bazel.build/versions/master/user-manual.html#test)
@@ -888,9 +886,8 @@ lisp_library = rule(
     implementation = _lisp_library_impl,
     attrs = _LISP_LIBRARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = [
-        "@rules_cc//cc:toolchain_type",
-    ],
+    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    incompatible_use_toolchain_transition = True,
     doc = """
 The basic compilation unit for Lisp code. Can have Lisp dependencies
 ([`deps`](#lisp_library-deps)) and C/C++ dependencies
