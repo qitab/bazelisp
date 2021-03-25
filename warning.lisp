@@ -232,7 +232,8 @@ This returns two values: a boolean and a name symbol of the function."
 
 (deftype optional-and-key ()
   "Type of a style warning with optional and key parameters."
-  '(and warning (satisfies optional-and-key-p)))
+  #+sbcl 'sb-kernel:&optional-and-&key-in-lambda-list
+  #-sbcl '(and warning (satisfies optional-and-key-p)))
 
 (defun deleted-code-p (warning)
   "Is WARNING a deleted/unreachable code warning?"
