@@ -448,13 +448,13 @@ package context. This allows for the user to specify their own handlers as a str
            (action-muffled-infos-count action))
 
   (when (action-failures action)
-    ;; Terminate with error. bazel will clean up for us.
+    ;; Terminate with error. Bazel will clean up for us.
     (print-warning-conditions "Failures" (action-failures action) (action-bindir action))
     (unless (action-force-compilation-p action)
-      (fatal "bazel lisp build failed"))))
+      (fatal "Bazel lisp build failed"))))
 
 ;;;
-;;; bazel-Lisp specific utilities
+;;; Bazel-Lisp specific utilities
 ;;;
 
 (defun delete-doc-strings ()

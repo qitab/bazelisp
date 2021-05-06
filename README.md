@@ -2,8 +2,8 @@
 
 [![Gitter](https://badges.gitter.im/qitab/community.svg)](https://gitter.im/qitab/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-This project contains build rules and toolchin for building Common Lisp code
-with SBCL using bazel.
+This project contains build rules and toolchain for building Common Lisp code
+with SBCL using Bazel.
 
 See also the full
 [Stardoc generated documentation](doc/rules.md)
@@ -26,7 +26,7 @@ loaded, depending on the value of `order`:
 
 *   `"serial"` (the default): Previous files in `srcs` are loaded in order. If
     multiple files must be loaded in order, it is recommended to add a comment
-    noting this to the top of the target's `srcs` in the BUILD file, so that
+    noting this to the top of the target's `srcs` in the BUILD file, so that the
     order is not inadvertently changed by editors or automatic formatters. If
     files in `srcs` do not depend on one another, setting `order` to
     `"parallel"` avoids unnecessary work.
@@ -37,7 +37,7 @@ loaded, depending on the value of `order`:
 
 Note that "parallel", "serial", and "multipass" describe *dependency structure*,
 not the parallelization of `LispCompile` actions. In all cases, the compilation
-actions for the file in `srcs` can be performed in parallel.
+actions for the files in `srcs` can be performed in parallel.
 
 Prior to loading dependencies, symbols are added to `*features*` to represent
 some things about the build:
@@ -101,7 +101,7 @@ human-readable stacktraces for combined C++ and Lisp code. While this obviously
 won't let a C++ debugger step through Lisp code, it's useful for CPU profiling
 and crash analysis.
 
-The disadvantage of that approach is that altered binary format is not
+The disadvantage of this approach is that the altered binary format is not
 understood by `save-lisp-and-die`. Thus, if the `allow_save_lisp` attribute is
 set to `True`, `LispElfinate` instead transforms the entire Lisp core into a
 binary blob in a `.o` file plus a linker script informing the `CppLink` action
@@ -121,8 +121,8 @@ and `LispCore` actions. For example, `-c opt
 except the `LispCompile` and `LispCore` actions would behave as they would in
 `fastbuild` mode.
 
-`LISP_BUILD_FORCE` runs `LispCompile` and `LispCore` actions that tries to
-proceed despite errors to the greatest extent possible.
+`LISP_BUILD_FORCE` runs `LispCompile` and `LispCore` actions that try to proceed
+despite errors to the greatest extent possible.
 
 ## Providers and outputs
 

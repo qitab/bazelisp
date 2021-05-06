@@ -103,6 +103,6 @@
   "Format an print a fail message then exit.
  CONTROL is the format control string that operates on ARGS."
   (apply #'message :fatal 0 control args)
-  (with-simple-restart (continue "Continue from the fatal bazel error.")
+  (with-simple-restart (continue "Continue from the fatal Bazel error.")
     (with-safe-io-syntax
       (cl:error 'fatal-error :message (apply #'format nil control args)))))
