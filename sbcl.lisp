@@ -386,31 +386,3 @@
   "Executes body in an environment where FIND-PACKAGE will not signal an unknown package error.
  Instead it will return the DEFAULT package."
   `(call-with-augmented-find-package (lambda () ,@body) :default ,default))
-
-;;;
-;;; Overrides.
-;;;
-
-(in-package "SB-C")
-
-(sb-ext:without-package-locks
-  (locally (declare (sb-ext:muffle-conditions sb-kernel:redefinition-with-defun))
-    (handler-bind ((sb-kernel:redefinition-with-defun #'muffle-warning))
-      ;; Override this to remove traces of absolute paths in forge.
-      (defun make-file-source-info (file external-format &optional form-tracking-p)
-        "Override the SB-C::MAKE-FILE-SOURCE-INFO.
- FILE is the file name.
- EXTERNAL-FORMAT is the external format for the file.
- FORM-TRACKING-P is passed down in our copy'n'paste the same way SBCL does."
-        (declare (pathname file))
-        (truename file)
-        (make-source-info
-         :file-info (make-file-info
-                     :name file
-                     :untruename file
-                     :external-format external-format
-                     ;; this copy'n'paste business in QPX has to stop
-                     :subforms
-                     (if form-tracking-p
-                                  (make-array 100 :fill-pointer 0 :adjustable t))
-                     :write-date (file-write-date file)))))))
