@@ -41,8 +41,24 @@ stardoc(
 # build is run with --config=msan at all, as opposed to whether particular
 # targets are actually compiled in msan (e.g. anything in host config is not).
 config_setting(
-    name = "msan",
+    name = "msan_compiler",
     flag_values = {"@bazel_tools//tools/cpp:compiler": "msan"},
+    visibility = ["//visibility:private"],
+)
+
+config_setting(
+    name = "msan-track-origins_compiler",
+    flag_values = {"@bazel_tools//tools/cpp:compiler": "msan-track-origins"},
+    visibility = ["//visibility:private"],
+)
+
+alias(
+    name = "msan",
+    actual = select({
+        ":msan_compiler": ":msan_compiler",
+        ":msan-track-origins_compiler": ":msan-track-origins_compiler",
+        "//conditions:default": ":msan_compiler",  # arbitrary non-matching choice
+    }),
     visibility = ["//visibility:public"],
 )
 

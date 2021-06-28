@@ -303,7 +303,7 @@ def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
     # cc_common.is_enabled, but the important thing is that the behavior is
     # consistent between this target and the targets in its image and runtime
     # attrs.)
-    if cc_toolchain.compiler == "msan":
+    if cc_toolchain.compiler in ["msan", "msan-track-origins"]:
         add_features = depset(["msan"], transitive = [add_features])
     flags = ctx.actions.args()
     flags.add(
