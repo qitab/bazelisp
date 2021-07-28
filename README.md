@@ -11,6 +11,40 @@ for `lisp_library`, `lisp_binary`, and `lisp_test`.
 
 ## Build structure
 
+```dot
+digraph {
+  stylesheet = "https://g3doc.corp.google.com/frameworks/g3doc/includes/graphviz-style.css"
+  LispCompile1 [label="LispCompile 1"];
+  LispCompileMore [label="LispCompile ..."];
+  LispCompileN [label="LispCompile N"];
+  SBCLRuntime [label="SBCL C++ Runtime", shape="box"];
+  CDeps [label="C++ Dependencies", shape="box"];
+  LispCompile1 -> LispCore
+  LispCompileMore -> LispCore
+  LispCompileN -> LispCore
+  LispCore -> LispElfinate
+  LispElfinate -> CppCompile
+  LispElfinate -> CppLink
+  SBCLRuntime -> CppLink
+  CDeps -> CppLink
+  CppCompile -> CppLink
+}
+```
+
+The general structure of the actions for these build rules is:
+
+*   `LispCompile`: All libraries are built in parallel, loading transitive Lisp
+    source files (*not* FASL outputs) for their dependencies, producing a single
+    combined FASL for each target's `srcs`.
+*   `LispCore`: All the FASLs are loaded and a core file is written with
+    `save-lisp-and-die`.
+*   `LispElfinate`: The core is split into a file containing assembly code
+    representing the compiled Lisp code and an object file containing the
+    remainder of the Lisp image.
+*   `CppCompile`: The assembly code is reassembled.
+*   `CppLink`: Everything is linked together with any C++ dependencies (from
+    `lisp_*.cdeps`) and the SBCL runtime to produce an ELF-format binary.
+
 ### Compilation
 
 `lisp_library`, `lisp_binary`, and `lisp_test` generate `LispCompile` actions
