@@ -11,26 +11,6 @@ for `lisp_library`, `lisp_binary`, and `lisp_test`.
 
 ## Build structure
 
-```dot
-digraph {
-  stylesheet = "https://g3doc.corp.google.com/frameworks/g3doc/includes/graphviz-style.css"
-  LispCompile1 [label="LispCompile 1"];
-  LispCompileMore [label="LispCompile ..."];
-  LispCompileN [label="LispCompile N"];
-  SBCLRuntime [label="SBCL C++ Runtime", shape="box"];
-  CDeps [label="C++ Dependencies", shape="box"];
-  LispCompile1 -> LispCore
-  LispCompileMore -> LispCore
-  LispCompileN -> LispCore
-  LispCore -> LispElfinate
-  LispElfinate -> CppCompile
-  LispElfinate -> CppLink
-  SBCLRuntime -> CppLink
-  CDeps -> CppLink
-  CppCompile -> CppLink
-}
-```
-
 The general structure of the actions for these build rules is:
 
 *   `LispCompile`: All libraries are built in parallel, loading transitive Lisp
@@ -46,6 +26,35 @@ The general structure of the actions for these build rules is:
     `lisp_*.cdeps`) and the SBCL runtime to produce an ELF-format binary.
 
 ### Compilation
+
+```dot
+digraph {
+  subgraph cluster_dep {
+    LispDep [label="dep.lisp", shape="box"]
+    LispCompileDep [label="LispCompile", group="dep"]
+    DepFasl [label="dep.fasl", shape="box"]
+  }
+  subgraph cluster_consumer {
+    LispConsumer1 [label="consumer1.lisp", shape="box"]
+    LispConsumer2 [label="consumer2.lisp", shape="box"]
+    LispCompileConsumer1 [label="LispCompile"]
+    LispCompileConsumer2 [label="LispCompile"]
+    LispConcatFASLsConsumer [label="LispConcatFASLs"]
+    ConsumerFasl [label="consumer.fasl", shape="box"]
+  }
+  LispDep -> LispCompileDep
+  LispDep -> LispCompileConsumer1
+  LispDep -> LispCompileConsumer2
+  LispConsumer1 -> LispCompileConsumer1
+  LispConsumer2 -> LispCompileConsumer2
+  LispCompileConsumer1 -> LispConcatFASLsConsumer
+  LispCompileConsumer2 -> LispConcatFASLsConsumer
+  LispCompileDep -> DepFasl
+  LispConcatFASLsConsumer -> ConsumerFasl
+  DepFasl -> LispCore
+  ConsumerFasl -> LispCore
+}
+```
 
 `lisp_library`, `lisp_binary`, and `lisp_test` generate `LispCompile` actions
 for each file in `srcs`.
@@ -111,6 +120,25 @@ multiple files in `srcs`, this requires an additional `LispConcatFASLs` action.
 A `lisp_library` with no `srcs` has no default outputs.
 
 ### Executable generation
+
+```dot
+digraph {
+  LispCompile1 [label="LispCompile 1"];
+  LispCompileMore [label="LispCompile ..."];
+  LispCompileN [label="LispCompile N"];
+  SBCLRuntime [label="SBCL C++ Runtime", shape="box"];
+  CDeps [label="C++ Dependencies", shape="box"];
+  LispCompile1 -> LispCore
+  LispCompileMore -> LispCore
+  LispCompileN -> LispCore
+  LispCore -> LispElfinate
+  LispElfinate -> CppCompile
+  LispElfinate -> CppLink
+  SBCLRuntime -> CppLink
+  CDeps -> CppLink
+  CppCompile -> CppLink
+}
+```
 
 For `lisp_binary` and `lisp_test` rules, the rule also genenerates an executable
 output, which is the default output for those rules. That executable runs the
