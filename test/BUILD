@@ -108,6 +108,7 @@ sh_test(
     name = "check_symbols",
     srcs = ["check_symbols.sh"],
     data = ["test"],
+    tags = ["nozapfhahn"],
 )
 
 sh_test(
