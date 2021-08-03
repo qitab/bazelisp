@@ -700,15 +700,445 @@ it will signal an error."
   (verbose "~S => ~S (~A)" src (namestring output-file) *default-pathname-defaults*)
   (ensure-directories-exist output-file)
   (multiple-value-bind (fasl warnings-p failures-p)
-    (with-compilation-unit (:source-namestring src)
-      (with-safe-io-syntax
-          (let ((output-file (merge-pathnames output-file))
-                (*default-pathname-defaults* *default-pathname-defaults*)
-                (*readtable* (setup-readtable readtable)))
-            (delete-read-only output-file)
-            (compile-file src :output-file output-file
-                              :emit-cfasl emit-cfasl
-                              :external-format :utf-8))))
+      (with-compilation-unit (:source-namestring src)
+        (with-safe-io-syntax
+            (let ((output-file (merge-pathnames output-file))
+                  (*default-pathname-defaults* *default-pathname-defaults*)
+                  (*readtable* (setup-readtable readtable))
+                  (sb-regalloc:*register-allocation-method* :iterative))
+              (delete-read-only output-file)
+              (compile-file
+               src :output-file output-file
+               :emit-cfasl emit-cfasl
+               :external-format :utf-8
+               :block-compile
+               (not
+                (or
+                 (string= (pathname-name src) "api")
+                 ;; cl-ppcre, quote-meta-chars
+                 (string= (pathname-name src) "lisp-deps")
+                 ;; failed AVER: (EQ SB-C::PHYSENV (SB-C::LAMBDA-PHYSENV (SB-C::LAMBDA-VAR-HOME
+                 ;; SB-C::THING)))
+                 (string= (pathname-name src) "c-tableau")
+                 ;; qpx/shared/ failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "define-proto")
+                 ;; loop-analyze NIL is not of REAL
+                 (string= (pathname-name src) "log")
+                 ;; regalloc error on pack-load-tn even with :iterative *register-allocation-method*
+                 (string= (pathname-name src) "sbcl")
+                 ;; qpx/lisp_lib/sbcl ir2-convert-enclose entry-info is NIL
+                 (string= (pathname-name src) "sparse-sets")
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "rejected-fare-reasons")
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "bit-array")
+                 ;; failed AVER: (NULL (SB-C::COMPONENT-NEW-FUNCTIONALS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "general-booking-codes")
+                 ;; qpx/shared failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "preconditions")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/preconditions.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "ATPCO-logic")
+                 ;; qpx/shared/ FAIL: SB-INT:CONSTANT-MODIFIED 'Destructive function (SETF SVREF)
+                 ;; called on constant data: #(0 0 0 -- lots of 0s
+                 (string= (pathname-name src) "context")
+                 ;; qpx/shared failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "faring-markets")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/shared/structs/faring-markets.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+
+                 ;; (string= (pathname-name src) "pos-set-tracker")
+                 (string= (pathname-name src) "macro")
+                 ;; ace/core/macro UNBOUND-VARIABLE: The variable ACE.CORE.MACRO::+NUM-TO-STR+ is
+                 ;; unbound. while executing: CORE
+                 (string= (pathname-name src) "journey-consistency")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/journey-consistency.lisp"
+                 ;; ' failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "swank-presentation-streams")
+                 ;; third_party/slime/contrib failed AVER: (EQ SB-C::PHYSENV (SB-C::LAMBDA-PHYSENV
+                 ;; (SB-C::LAMBDA-VAR-HOME SB-C::THING)))
+                 (string= (pathname-name src) "taxes")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/itineraries/taxes.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "faring-atom-construction")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/shared/faring-atom-construction.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "fare-list")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/fare-list.lisp" ' failed
+                 ;; AVER: (EQ (SB-C::COMPONENT-KIND SB-C::NEW) (SB-C::COMPONENT-KIND SB-C::OLD))
+                 (string= (pathname-name src) "fares")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/fares.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+
+                 ;; (string= (pathname-name src) "api-threads")
+                 (string= (pathname-name src) "global-indicator")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/global-indicator.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "c-flightmanager2")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/entities/c-flightmanager2.lisp"
+                 ;; ' failed AVER: (NULL (SB-C::COMPONENT-NEW-FUNCTIONALS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cabins")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/cabins.lisp" ' failed
+                 ;; AVER: (NULL (SB-C::COMPONENT-NEW-FUNCTIONALS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cat-169")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/rules/record-3/cat-169.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cat-6")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/cat-6.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "xslt")
+                 ;; ace/core/ ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/xslt/xslt.fasl" 'The variable
+                 ;; QPX.XSLT::+%VALIDATION-MODE-KEYWORD-NUMERAL-MAP%+ is unbound.'
+                 (string= (pathname-name src) "cat-17")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/cat-17.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "types")
+                 ;; cffi/ UNDEFINED-FOREIGN-TYPE-ERROR: Unknown CFFI type :BOOLEAN while executing:
+                 ;; CORE (string= (pathname-name src) "cat-12-surcharge-data-info")
+                 (string= (pathname-name src) "faresets")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/faresets.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (search "uiop" (namestring src))
+                 ;; package errors
+                 (search "asdf" (namestring src))
+                 ;; package errors
+                 (search "proto" (namestring src))
+                 ;; I don't actually know why this is required, but without it, package errors
+                 ;; follow
+                 (search "rpc2" (namestring src))
+                 (search "google/type" (namestring src))
+                 ;; seems like compiling .proto files is bad
+                 (search "swank-" (namestring src))
+                 ;; swank seems to have some weird packaging stuff, so just get rid of them all
+                 (search "cflag" (namestring src))
+                 ;; idk in what file this is in ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/lisp/cflag/cflag.fasl" 'The variable
+                 ;; GOOGLE.CFLAG::+%TYPE-KEYWORD-NUMERAL-MAP%+ is unbound.'
+                 (string= (pathname-name src) "reissue-methods")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/shared/reissues/reissue-methods.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "routings")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/routings.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "record-checkers")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/shared/record-checkers.lisp" '
+                 ;;  failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;;  (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "tableau-tracker")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/tableau-tracker.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "mfp-evaluation")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/rules/optional-services/mfp-evaluation.lisp" ' failed AVER:
+                 ;; SB-C::SUCC
+                 (string= (pathname-name src) "tsis")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/tsis.lisp" ' failed AVER:
+                 ;; (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cat-12")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/shared/cat-12.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cat-5")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/shared/cat-5.lisp" ' failed
+                 ;;  AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;;  SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "hash-set")
+                 ;; ERROR: SB-INT:BUG while processing: "lisp/container/hash-set.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "booking-logic-memo")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/shared/booking-logic-memo.lisp"
+                 ;;  ' failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;;  (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "record-s1")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/structs/record-s1.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "baggage")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/farecomplex/baggage.lisp" '
+                 ;;  failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;;  (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "record-2c")
+                 ;;  pERROR: SB-INT:BUG while processing: "travel/qpx/fares/record-2c.lisp" ' failed
+                 ;;  AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;;  SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "baggage-travel")
+                 ;;  ERROR: SB-INT:BUG while processing:
+                 ;;  "travel/qpx/rules/optional-services/baggage-travel.lisp" ' failed AVER: (MEMBER
+                 ;;  SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "service-fee-pruning")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/rules/surcharges/service-fee-pruning.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "new")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/farecomplex/new.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "directionality")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fmsets/directionality.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "combinability-checker")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/fares/combinability-checker.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "restrictions")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/availability/restrictions.lisp"
+                 ;;  ' failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;;  (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "faring-atom-graph")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/faring-atom-graph.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "write-database")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/availability/write-database.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "logic")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/availability/logic.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "combinability")
+                 ;;  ERROR: SB-INT:BUG while processing: "travel/qpx/fares/combinability.lisp" '
+                 ;;  failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;;  (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "availability-based-pruning")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/itineraries/availability-based-pruning.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "cat-8")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/rules/record-3/cat-8.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "hips")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/iata-checks/hips.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "yqyr-conditional-amounts")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/rules/surcharges/yqyr-conditional-amounts.lisp" ' failed AVER: (NULL
+                 ;; (SB-C::COMPONENT-NEW-FUNCTIONALS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "usca-taxes")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/tax/usca-taxes.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "refactor")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fmsets/refactor.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "fare-query")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/fare-query.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "multislice")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/multislice.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "yqyr-estimates")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/rules/surcharges/yqyr-estimates.lisp" ' failed AVER: (MEMBER
+                 ;; SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "rate-tax-recomputation")
+                 ;; ERROR: SB-INT:BUG while processing:
+                 ;; "travel/qpx/pricing-solutions/rate-tax-recomputation.lisp" ' failed AVER:
+                 ;; (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "fmsets")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fmsets/fmsets.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "build")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/pricing-graph/build.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "fxs-and-fcs-plans")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/fxs-and-fcs-plans.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "fmset-graph")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/links/fmset-graph.lisp" '
+                 ;; failed AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS
+                 ;; (SB-C::LAMBDA-COMPONENT SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "links")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/fares/links/links.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "replutils")
+                 ;; ERROR: SB-INT:BUG while processing: "travel/qpx/repl/replutils.lisp" ' failed
+                 ;; AVER: (MEMBER SB-C::CLAMBDA (SB-C::COMPONENT-LAMBDAS (SB-C::LAMBDA-COMPONENT
+                 ;; SB-C::CLAMBDA)))
+                 (string= (pathname-name src) "proto-defs")
+                 ;;  LOL it ran out of memory (Forge action was terminated due to Out of Memory
+                 ;;  (action used 12884901888 bytes). See http://go/forge-oom for more detail.)
+                 (string= (pathname-name src) "shared-cl-pb")
+                 ;;  oom
+                 (string= (pathname-name src) "integer-utils")
+                 ;; /qpx/lisp_lib/integer-utils UNBOUND-VARIABLE: The variable
+                 ;; QPX.INTEGER-UTILS::+UNPADDED-INTEGER-STRINGS+ is unbound. while executing: CORE
+                 (string= (pathname-name src) "times-and-dates")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-opt-exec-A570EE19/bin/travel/qpx/lisp_lib/times-and-dates/times-and-dates.fasl"
+                 ;; 'The function QPX.TIMES-AND-DATES:MAKE-DURATION is undefined.'
+
+                 ;; (string= (pathname-name src) "profiler") ;;
+                 ;; SB-KERNEL::UNDEFINED-ALIEN-FUNCTION-ERROR: The alien function
+                 ;; "ProfilingIsEnabledForAllThreads" is undefined.
+                 (string= (pathname-name src) "three-letter-acronyms")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/tlas/tlas.fasl" 'The function
+                 ;; QPX.TLAS:DESIGNATOR2TCA is undefined.'
+                 (string= (pathname-name src) "qpx_api-cl-pb")
+                 ;;  oom
+                 (string= (pathname-name src) "x1-taxes")
+                 ;; oom
+                 (string= (pathname-name src) "trace-context")
+                 ;; ERROR: CFFI::UNDEFINED-FOREIGN-TYPE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/lisp/rpc2/trace-context/trace-context.fasl" 'Unknown
+                 ;; CFFI type GOOGLE.RPC2.TRACE-CONTEXT::INITIALIZER'ERROR:
+                 ;; CFFI::UNDEFINED-FOREIGN-TYPE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/lisp/rpc2/trace-context/trace-context.fasl" 'Unknown
+                 ;; CFFI type GOOGLE.RPC2.TRACE-CONTEXT::INITIALIZER'
+                 (string= (pathname-name src) "rpc2-service")
+                 ;; ERROR: CFFI::UNDEFINED-FOREIGN-TYPE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/lisp/rpc2/rpc2.fasl" 'Unknown CFFI type
+                 ;; RPC2:STREAM-RESPONSE'
+                 (string= (pathname-name src) "trace-context")
+                 ;; ERROR: CFFI::UNDEFINED-FOREIGN-TYPE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/lisp/rpc2/rpc2.fasl" 'Unknown CFFI type
+                 ;; RPC2:STREAM-RESPONSE'
+                 (string= (pathname-name src) "with-time-logging")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/time-logging/with-time-logging.fasl"
+                 ;; 'The function QPX.WITH-TIME-LOGGING:TIME-LOG-ARRAY-FROM-PAIRS is undefined.'
+                 (string= (pathname-name src) "time-log-metadata")
+                 ;;  ERROR: UNDEFINED-FUNCTION while processing:
+                 ;;  "bazel-out/k8-fastbuild/bin/travel/qpx/shared/time-logging/with-time-logging.fasl"
+                 ;;  'The function QPX.WITH-TIME-LOGGING:TIME-LOG-ARRAY-FROM-PAIRS is undefined.'
+                 (string= (pathname-name src) "c-places")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/c-places.fasl" 'The
+                 ;; variable QPX.STRUCTS.C-PLACES:+AIRCRAFT-CATEGORY-VECTOR+ is unbound.'
+                 (string= (pathname-name src) "fare-lookup-key")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/fare-lookup-key.fasl" 'The
+                 ;; variable QPX.STRUCTS.FARE-LOOKUP-KEY:+QPXMASTER-FOOTNOTE-PRUNING-ALL-CATS+ is
+                 ;; unbound.'
+                 (string= (pathname-name src) "locations")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/locations.fasl" 'The
+                 ;; function QPX.STRUCTS.LOCATIONS:MAKE-LOCATION-REGION-DATA is undefined.'
+                 (string= (pathname-name src) "point-of-sale")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/point-of-sale.fasl" 'The
+                 ;; function QPX.STRUCTS.POINT-OF-SALE:MAKE-ACCOUNT-CODE is undefined.'
+                 (string= (pathname-name src) "qryparam-shared-struct")
+                 ;; ERROR: SB-PCL:CLASS-NOT-FOUND-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/qryparams.fasl" 'There is
+                 ;; no class named QPX.SQP:SHARED-QUERY-PARAMS.'
+                 (string= (pathname-name src) "precondition-tags")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/precondition-tags.fasl" 'The
+                 ;; variable QPX.PRECONDITION-TAGS::+PRECONDITION-TAG-ALL-SET-MASK+ is unbound.'
+                 (string= (pathname-name src) "legs2")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/flights/flights.fasl" 'The
+                 ;; function QPX.FLIGHTS::AIRCRAFT-CONFIG-CABIN-BV is undefined.'
+                 (string= (pathname-name src) "fees")
+                 ;; ERROR: SIMPLE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/structs/fees.fasl" 'Unknown
+                 ;; pseudotype QPX.STRUCTS.FEES:FEE-BITS.'
+                 (string= (pathname-name src) "currencies")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/currencies.fasl" 'The variable
+                 ;; QPX.CURRENCIES::+SHIFT-DECIMAL-PLACES-SHIFTS+ is unbound.'
+                 (string= (pathname-name src) "qryparam-struct")
+                 ;; ERROR: SB-PCL:CLASS-NOT-FOUND-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/structs/query-parameters.fasl" 'There is
+                 ;; no class named QPX.QP:QUERY-PARAMETERS.'
+                 (string= (pathname-name src) "markers")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/markers.fasl" 'The function
+                 ;; QPX.MARKERS:GET-MARKER is undefined.'
+                 (string= (pathname-name src) "condition-bits")
+                 ;; ERROR: SIMPLE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/condition-bits.fasl" 'Unknown
+                 ;; pseudotype QPX.CONDITION-BITS::SLICE-BC-BINS.'
+                 (string= (pathname-name src) "e2e-restriction")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/structs/e2e-restriction.fasl" 'The
+                 ;; variable QPX.STRUCTS.E2E-RESTRICTION:+NULL-E2E-RESTRICTION+ is unbound.'
+                 (string= (pathname-name src) "itinerary-condition")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/pricing/itinerary-condition.fasl" 'The
+                 ;; function QPX.ITINERARY-CONDITION:MAKE-SLICE-CONDITION-CONSTANT is undefined.'
+                 (string= (pathname-name src) "queries")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/query-handling/queries.fasl" 'The
+                 ;; variable QPX.RQL.QUERIES::+%QUERY-PRINTING-KEYWORD-NUMERAL-MAP%+ is unbound.'
+                 (string= (pathname-name src) "qryparam-process-market-struct")
+                 ;; Another struct is unbound
+                 (string= (pathname-name src) "qryparam-process-market-client-struct")
+                 ;; another struct is unbound
+                 (string= (pathname-name src) "qpx-logwriter")
+                 ;; ERROR: SB-SYS:MEMORY-FAULT-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/shared/qpx-logwriter.fasl" 'Unhandled
+                 ;; memory fault at #x0.'
+                 (string= (pathname-name src) "baggage-services")
+                 ;; ERROR: UNDEFINED-FUNCTION while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/rules/optional-services/baggage-services.fasl"
+                 ;; 'The function QPX.BAGGAGE-SERVICES::MAKE-BAGGAGE-SERVICE-TYPE is undefined.'
+                 (string= (pathname-name src) "s1-tree")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/rules/surcharges/s1-tree.fasl" 'The
+                 ;; variable QPX.S1-TREE:+S1-NODE-EMPTY-SEG-IDX+ is unbound.'
+                 (string= (pathname-name src) "peak-heap")
+                 ;; ERROR: SB-PCL:CLASS-NOT-FOUND-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/query-handling/peak-heap.fasl" 'There is
+                 ;; no class named QPX.PEAK-HEAP::QUERY-PARAMETERS.'
+                 (string= (pathname-name src) "compression")
+                 ;; ERROR: CFFI::UNDEFINED-FOREIGN-TYPE-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/lisp_lib/compression/compression.fasl"
+                 ;; 'Unknown CFFI type (:STRUCT COMPRESSION::C-BYTES-AND-LEN)'
+                 (string= (pathname-name src) "qryparam-preprocess-slice-struct")
+                 ;; ERROR: SB-PCL:CLASS-NOT-FOUND-ERROR while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/preprocess-slice/structs/qryparams.fasl"
+                 ;; 'There is no class named QPX.PPSQP:PREPROCESS-SLICE-QUERY-PARAMS.'
+                 (string= (pathname-name src) "pc-b-or-defer-array")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/rules/surcharges/pc-b-or-defer-array.fasl"
+                 ;; 'The variable QPX.PC-B-OR-DEFER-ARRAY::+POD-ARRAY-INITIAL-ELEMENT+ is unbound.'
+                 (string= (pathname-name src) "rql-parse-utils")
+                 ;; ERROR: UNBOUND-VARIABLE while processing:
+                 ;; "bazel-out/k8-fastbuild/bin/travel/qpx/query-handling/rql-parse-utils.fasl" 'The
+                 ;; variable QPX.RQL-PARSE-UTILS::+RQL-BACKSLASH-CONVERSIONS+ is unbound.'
+                 (string= (pathname-name src) "heapz")
+                 ;; unbound variable
+                 (string= (pathname-name src) "") ;;
+                 ))))))
     (unless (and warnings-p failures-p)
       (vv "File ~S compiled without warnings." src))
     (when warnings-p
@@ -978,7 +1408,8 @@ it will signal an error."
 
     ;; Compiler-note failures must precede uninteresting-condition.
     (action-add-nowarn #'bazel.warning:fail-inline-expansion-limit)
-    (action-add-nowarn #'bazel.warning:fail-stack-allocate-notes)
+    ;; (action-add-nowarn #'bazel.warning:fail-stack-allocate-notes)
+    ;; (action-add-nowarn #'bazel.warning:stack-allocate-note)
     ;; All notes are discarded here.
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
