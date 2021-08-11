@@ -262,10 +262,7 @@ def _concat_fasls(ctx, inputs, output):
         ctx.actions.run_shell(
             inputs = inputs,
             outputs = [output],
-            progress_message = "Combining {} (from {} sources)".format(
-                output.short_path,
-                len(inputs),
-            ),
+            progress_message = "Combining %{output}",
             mnemonic = "LispConcatFASLs",
             command = ("cat {inputs} > {output}").format(
                 inputs = _paths(inputs),
@@ -464,8 +461,9 @@ def lisp_compile_srcs(
             inputs = depset(
                 [src] + deps_srcs + load_srcs,
                 transitive = [lisp_info.compile_data],
+                order = "preorder",
             ),
-            progress_message = "Compiling " + src.short_path,
+            progress_message = "Compiling %{input}",
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = ["compile", build_flags, compile_flags, file_flags],
@@ -662,7 +660,7 @@ def _lisp_binary_impl(ctx):
     ctx.actions.run(
         outputs = [core],
         inputs = inputs,
-        progress_message = "Building Lisp core " + core.short_path,
+        progress_message = "Building Lisp core %{output}",
         mnemonic = "LispCore",
         env = _BAZEL_LISP_IMAGE_ENV,
         arguments = ["core", compile.build_flags, core_flags],
@@ -749,7 +747,7 @@ def _lisp_binary_impl(ctx):
         tools = [ctx.executable._elfinate],
         inputs = [core],
         command = elfinate_cmd,
-        progress_message = "Elfinating Lisp core " + core.short_path,
+        progress_message = "Elfinating Lisp core %{output}",
         mnemonic = "LispElfinate",
     )
 
