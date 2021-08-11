@@ -456,10 +456,13 @@ def lisp_compile_srcs(
         file_flags.add_joined("--load", load_srcs, join_with = " ")
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
 
+        direct_inputs = [src]
+        direct_inputs.extend(deps_srcs)
+        direct_inputs.extend(load_srcs)
         ctx.actions.run(
             outputs = outs,
             inputs = depset(
-                [src] + deps_srcs + load_srcs,
+                direct_inputs,
                 transitive = [lisp_info.compile_data],
                 order = "preorder",
             ),
@@ -556,12 +559,18 @@ def _lisp_instrumented_files_info(ctx):
     )
 
 def _lisp_runfiles(ctx):
-    runfiles_deps = (ctx.attr.srcs + ctx.attr.deps + ctx.attr.cdeps +
-                     [ctx.attr.image] + ctx.attr.data)
     runfiles = ctx.runfiles(files = ctx.files.data)
-    return runfiles.merge_all(
-        [dep[DefaultInfo].default_runfiles for dep in runfiles_deps],
-    )
+    transitive_runfiles = []
+    for runfiles_attr in (
+        ctx.attr.srcs,
+        ctx.attr.deps,
+        ctx.attr.cdeps,
+        ctx.attr.data,
+    ):
+        for target in runfiles_attr:
+            transitive_runfiles.append(target[DefaultInfo].default_runfiles)
+    transitive_runfiles.append(ctx.attr.image[DefaultInfo].default_runfiles)
+    return runfiles.merge_all(transitive_runfiles)
 
 def _lisp_providers(ctx, lisp_info, fasl, executable = None):
     executable_list = [executable] if executable != None else []
