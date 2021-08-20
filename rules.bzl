@@ -50,7 +50,7 @@ _LISP_LIBRARY_ATTRS = {
                "#cc_library))."),
     ),
     "experimental_block_compile": attr.bool(
-        default = False,
+        default = True,
         doc = ("Whether to block-compile the sources. If True, the " +
                "sources will be block-compiled with " +
                "SB-C:COMPILE-MULTIPLE-FILES as a single block, with " +
