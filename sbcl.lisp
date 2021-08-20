@@ -17,7 +17,7 @@
 
 (defpackage #:bazel.sbcl
   (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
-  (:import-from #:sb-md5 #:md5sum-file)
+  (:import-from #:sb-md5 #:md5sum-file #:md5sum-sequence)
   (:export #:exit
            #:run
            #:inline-function-p
@@ -32,6 +32,7 @@
            #:dump-dynamic-list-lds
            #:combine-run-time-and-core
            #:md5sum-file
+           #:md5sum-sequence
            #:set-interpret-mode
            #:set-interactive-mode
            #:setup-readtable

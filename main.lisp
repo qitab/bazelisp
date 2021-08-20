@@ -55,6 +55,7 @@
            #:action-compilation-mode
            #:action-lisp-load-mode
            #:action-fasl-load-mode
+           #:action-source-file
            #:action-source-files
            #:action-find-output-file
            #:action-failures
@@ -123,6 +124,8 @@
   (processing-sources-p nil :type boolean)
   ;; The source file to be compiled.
   (source-file nil :type (or null string))
+  ;; A list of source files to be compiled (used when block-compiling).
+  (source-files nil :type list)
   ;; Flag indicating that the cfasl needs to be generated.
   (emit-cfasl-p nil :type boolean)
   ;; Flag indicating that the compilation should commence even with errors.
@@ -136,6 +139,8 @@
   (record-path-location-p nil :type boolean)
   ;; The main function for a binary.
   (main-function nil :type (or null symbol string))
+  ;; The entry points if block compiling with them.
+  (entry-points nil :type list)
   ;; A list warning handlers.
   (warning-handlers nil :type list)
   ;; The compile mode. One of :dbg, :opt, :fastbuild or :load.
@@ -254,6 +259,15 @@
   "Searches in the ACTION output files for a file ending with the string TYPE."
   (declare (type action action) (string type))
   (find type (action-output-files action) :key #'pathname-type :test #'equalp))
+
+(defun action-find-output-file-with-name (action name type)
+  "Searches in the ACTION output files for a file ending with
+   the string TYPE and starting with the string NAME."
+  (declare (type action action) (string name type))
+  (find-if #'(lambda (pathname)
+                    (and (string= (pathname-name pathname) name)
+                         (string= (pathname-type pathname) type)))
+           (action-output-files action)))
 
 ;;;
 ;;; Functions dealing with compiler warnings and deferred warnings.
@@ -680,44 +694,86 @@ it will signal an error."
 ;;; Main compile/build loop
 ;;;
 
-(defgeneric compile-source (src output-file &key emit-cfasl save-locations readtable)
-  (:documentation "Compile the source to a FASL output-file.
+(defgeneric compile-source (src output-file &key emit-cfasl save-locations
+                                              readtable block-compile entry-points)
+  (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
  EMIT-CFASL unless nil causes the compilation process to emit the CFASL file.
  SAVE-LOCATIONS unless nil causes the compilation process to record
  line and column numbers for all forms read from SRC.
- READTABLE is the readtable to be used for compilation."))
+ READTABLE is the readtable to be used for compilation.
+ BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
+ ENTRY-POINTS is a list of entry points which are used when block-compiling."))
 
-(defmethod compile-source (src output-file &key
-                                           emit-cfasl
-                                           save-locations
-                                           (readtable (copy-readtable)))
+(defmethod compile-source (src output-file
+                           &rest key-args &key
+                                          emit-cfasl
+                                          save-locations
+                                          (readtable (copy-readtable))
+                                          block-compile
+                                          entry-points)
   "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
   EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
   SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
-  READTABLE is the readtable to be used for compiling the SRC file."
-  (verbose "~S => ~S (~A)" src (namestring output-file) *default-pathname-defaults*)
+  READTABLE is the readtable to be used for compiling the SRC file.
+  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
+  ENTRY-POINTS is a list of entry points which are used when block-compiling."
+  (apply #'%compile-sources (list src) output-file key-args))
+
+
+(defun %compile-sources (srcs output-file &key
+                                          emit-cfasl
+                                          save-locations
+                                          (readtable (copy-readtable))
+                                          block-compile
+                                          entry-points)
+  "Compiles the list of SRCS files into the OUTPUT-FILE. A corresponding FASL will be created.
+ Returns (values FASL WARNINGS-P FAILURES-P).
+ Parameters:
+  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
+  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
+  READTABLE is the readtable to be used for compiling the SRC file.
+  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
+  ENTRY-POINTS is a list of entry points which are used when block-compiling."
+  (verbose "~{~A ~} => ~S (~A)" srcs (namestring output-file) *default-pathname-defaults*)
   (ensure-directories-exist output-file)
   (multiple-value-bind (fasl warnings-p failures-p)
-    (with-compilation-unit (:source-namestring src)
+    (with-compilation-unit (:source-namestring (car srcs))
       (with-safe-io-syntax
           (let ((output-file (merge-pathnames output-file))
                 (*default-pathname-defaults* *default-pathname-defaults*)
                 (*readtable* (setup-readtable readtable)))
             (delete-read-only output-file)
-            (compile-file src :output-file output-file
-                              :emit-cfasl emit-cfasl
-                              :external-format :utf-8))))
+            (if block-compile
+                (sb-c:compile-files srcs :output-file output-file
+                                         :emit-cfasl emit-cfasl
+                                         :external-format :utf-8
+                                         :block-compile block-compile
+                                         :entry-points entry-points)
+                (prog2
+                    ;; This is just a sanity check because in the current build rules, only one
+                    ;; source is supposed to be compiled here
+                    (assert (= (length srcs) 1))
+                    (mapc #'(lambda (src)
+                              (compile-file src :output-file output-file
+                                                :emit-cfasl emit-cfasl
+                                                :external-format :utf-8
+                                                :block-compile block-compile
+                                                :entry-points entry-points))
+                          srcs))))))
     (unless (and warnings-p failures-p)
-      (vv "File ~S compiled without warnings." src))
+      (vv "Files ~A compiled without warnings." srcs))
     (when warnings-p
-      (verbose "File ~S compiled with warnings." src))
-    (with-simple-restart (continue "Ignore compilation failure for ~A and continue." src)
+      (verbose "Files ~A compiled with warnings." srcs))
+    (with-simple-restart (continue "Ignore compilation failure for ~A and continue." srcs)
       (when failures-p
-        (fatal "File ~S failed to compile." src)))
+        (fatal "Files ~A failed to compile." srcs)))
     (when save-locations
-      (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS" src output-file :readtable readtable))
+      (mapc #'(lambda (src)
+                (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS"
+                                src output-file :readtable readtable))
+            srcs))
     (values fasl warnings-p failures-p)))
 
 (defun write-file-hash (src hash-file)
@@ -847,10 +903,25 @@ it will signal an error."
   (check-and-save-image action command))
 (defmethod finish-action ((action action) (command (eql :core)))
   (check-and-save-image action command))
+(defmethod finish-action ((action action) (command (eql :block-compile)))
+  (%compile-sources (action-source-files action) (action-find-output-file action "fasl")
+                  :emit-cfasl (action-emit-cfasl-p action)
+                  :save-locations (action-record-path-location-p action)
+                  :block-compile t
+                  :entry-points (action-entry-points action)
+                  :readtable (action-readtable action))
+  (mapc #'(lambda (source-file)
+            (write-file-hash source-file
+                             (action-find-output-file-with-name
+                              action (pathname-name source-file) "hash")))
+        (action-source-files action))
+  (check-failures action)
+    (save-deferred-warnings
+     (action-find-output-file action "warnings")
+     (action-deferred-warnings action)))
 
 (defmethod finish-action ((action action) (command (eql :compile)))
   "Compiles the last source file."
-  ;; TODO(czak): Design a valid model for this action with more than 1 source file.
   (assert (action-source-file action) nil ; NOLINT
           "Exactly one Lisp source file needed for the COMPILE action.")
   (let* ((source-file (action-source-file action))
@@ -891,6 +962,7 @@ it will signal an error."
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
+                   entry-points
                    force
                    main features nowarn
                    precompile-generics
@@ -901,7 +973,7 @@ it will signal an error."
   "Main processing function for bazel.main.
  Arguments:
   ARGS - all the arguments,
-  COMMAND - one of :core, :binary, or :compile,
+  COMMAND - one of :core, :binary, :compile, or :block-compile,
   DEPS - dependencies,
   LOAD - files to be loaded after dependencies.
   SRCS - sources for a binary core or for compilation,
@@ -910,6 +982,7 @@ it will signal an error."
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from bazel -c <compilation-mode>
+  ENTRY-POINTS - entry points to use when block-compiling,
   FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
@@ -943,10 +1016,13 @@ it will signal an error."
                         :emit-cfasl-p emit-cfasl
                         :record-path-location-p (and coverage t)
                         ;; Load lisp dependencies when compiling or making srcs image
-                        :lisp-load-mode (when (member command '(:binary :core :compile)) :load)
+                        :lisp-load-mode
+                        (when (member command '(:binary :core :compile :block-compile))
+                          :load)
                         ;; Load fasl dependencies when compiling or creating a binary image.
                         :fasl-load-mode
-                        (when (member command '(:binary :core :compile)) compilation-mode)))
+                        (when (member command '(:binary :core :compile :block-compile))
+                          compilation-mode)))
 
          (*compile-verbose* (>= *verbose* 1))
          (*compile-print* (>= *verbose* 3))
@@ -996,11 +1072,19 @@ it will signal an error."
                    (non-fatal-error #'handle-error))
       (verbose "Loading ~D source file~:P..." (length load))
       (mapc #'process-file* load)
+      (setf (action-entry-points action)
+            (when entry-points
+              (with-input-from-string (s entry-points)
+                (loop with curr = nil
+                      while (setf curr (read s nil nil))
+                      collect curr))))
 
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
       (mapc #'process-file* srcs)
+      (when (eql command :block-compile)
+        (setf (action-source-files action) srcs))
 
       (verbose "Processing ~D deferred warning file~:P..." (length warnings))
       (mapc #'process-file* warnings)
@@ -1010,6 +1094,8 @@ it will signal an error."
       (finish-action action command))))
 
 (defmethod execute-command ((command (eql :compile)) &rest args)
+  (apply #'process command args))
+(defmethod execute-command ((command (eql :block-compile)) &rest args)
   (apply #'process command args))
 (defmethod execute-command ((command (eql :binary)) &rest args)
   (apply #'process command args))

@@ -8,7 +8,8 @@
 ## lisp_binary
 
 <pre>
-lisp_binary(<a href="#lisp_binary-name">name</a>, <a href="#lisp_binary-add_features">add_features</a>, <a href="#lisp_binary-allow_save_lisp">allow_save_lisp</a>, <a href="#lisp_binary-cdeps">cdeps</a>, <a href="#lisp_binary-compile_data">compile_data</a>, <a href="#lisp_binary-data">data</a>, <a href="#lisp_binary-deps">deps</a>, <a href="#lisp_binary-image">image</a>,
+lisp_binary(<a href="#lisp_binary-name">name</a>, <a href="#lisp_binary-add_features">add_features</a>, <a href="#lisp_binary-allow_save_lisp">allow_save_lisp</a>, <a href="#lisp_binary-cdeps">cdeps</a>, <a href="#lisp_binary-compile_data">compile_data</a>, <a href="#lisp_binary-data">data</a>, <a href="#lisp_binary-deps">deps</a>, <a href="#lisp_binary-entry_points">entry_points</a>,
+            <a href="#lisp_binary-experimental_block_compile">experimental_block_compile</a>, <a href="#lisp_binary-experimental_block_compile_specified">experimental_block_compile_specified</a>, <a href="#lisp_binary-image">image</a>,
             <a href="#lisp_binary-instrument_coverage">instrument_coverage</a>, <a href="#lisp_binary-main">main</a>, <a href="#lisp_binary-malloc">malloc</a>, <a href="#lisp_binary-nowarn">nowarn</a>, <a href="#lisp_binary-order">order</a>, <a href="#lisp_binary-precompile_generics">precompile_generics</a>, <a href="#lisp_binary-runtime">runtime</a>,
             <a href="#lisp_binary-save_runtime_options">save_runtime_options</a>, <a href="#lisp_binary-srcs">srcs</a>, <a href="#lisp_binary-stamp">stamp</a>, <a href="#lisp_binary-verbose">verbose</a>)
 </pre>
@@ -41,6 +42,9 @@ Example:
 | <a id="lisp_binary-compile_data"></a>compile_data |  Data available to this target and its consumers at build time, added to the inputs of LispCompile and LispCore actions.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_binary-data"></a>data |  Data available to this target and its consumers in the runfiles directory at runtime.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_binary-deps"></a>deps |  Common Lisp dependencies (generally [<code>lisp_library</code>](#lisp-library), but you can put [<code>lisp_binary</code>](#lisp-binary) in deps for testing).   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
+| <a id="lisp_binary-entry_points"></a>entry_points |  If block-compiling, this is the list of entry points passed to SB-C:COMPILE-FILES (or if using the experimental_block_compile_specified feature, to COMPILE-FILE)   | List of strings | optional | [] |
+| <a id="lisp_binary-experimental_block_compile"></a>experimental_block_compile |  Whether to block-compile the sources. If True, the sources will be block-compiled with SB-C:COMPILE-MULTIPLE-FILES as a single block, with :BLOCK-COMPILE T.<br><br>It should be noted that block compilation in SBCL currently has compiler crashes that prevent this feature from being enabled on all source code, and so this feature should be used with caution.   | Boolean | optional | False |
+| <a id="lisp_binary-experimental_block_compile_specified"></a>experimental_block_compile_specified |  Whether to pass :SPECIFIED to :BLOCK-COMPILE in :COMPILE-FILE. This causes SBCL to respect (START-BLOCK) and (END-BLOCK) declarations on a sub-file basis.   | Boolean | optional | False |
 | <a id="lisp_binary-image"></a>image |  Lisp binary used as Bazel compilation image. This should be a binary with the main function <code>#'bazel:main</code> defined in <code>main.lisp</code>.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | optional | //third_party/lisp/bazel:image |
 | <a id="lisp_binary-instrument_coverage"></a>instrument_coverage |  Force coverage instrumentation. Possible values:<br><br><code>0</code>: Never instrument this target. Should be used if thetarget compiles generated source files or does not compilewith coverage instrumentation.<br><br><code>1</code>: Always instrument this target. Generally should not be used outside of tests for the coverage implementation.<br><br><code>-1</code> (default): If coverage data collection is enabled, instrument this target per [<code>--instrumentation_filter](https://docs.bazel.build/versions/master/command-line-reference.html#flag--instrumentation_filter).</code>   | Integer | optional | -1 |
 | <a id="lisp_binary-main"></a>main |  Name of function (by default in the <code>cl-user</code> package) or snippet of Lisp code to run when starting the binary. <code>"nil"</code> to start the default REPL. Can be overridden at runtime with the <code>LISP_MAIN</code> environment variable.   | String | optional | "main" |
@@ -60,8 +64,9 @@ Example:
 ## lisp_library
 
 <pre>
-lisp_library(<a href="#lisp_library-name">name</a>, <a href="#lisp_library-add_features">add_features</a>, <a href="#lisp_library-cdeps">cdeps</a>, <a href="#lisp_library-compile_data">compile_data</a>, <a href="#lisp_library-data">data</a>, <a href="#lisp_library-deps">deps</a>, <a href="#lisp_library-image">image</a>, <a href="#lisp_library-instrument_coverage">instrument_coverage</a>,
-             <a href="#lisp_library-nowarn">nowarn</a>, <a href="#lisp_library-order">order</a>, <a href="#lisp_library-srcs">srcs</a>, <a href="#lisp_library-verbose">verbose</a>)
+lisp_library(<a href="#lisp_library-name">name</a>, <a href="#lisp_library-add_features">add_features</a>, <a href="#lisp_library-cdeps">cdeps</a>, <a href="#lisp_library-compile_data">compile_data</a>, <a href="#lisp_library-data">data</a>, <a href="#lisp_library-deps">deps</a>, <a href="#lisp_library-entry_points">entry_points</a>,
+             <a href="#lisp_library-experimental_block_compile">experimental_block_compile</a>, <a href="#lisp_library-experimental_block_compile_specified">experimental_block_compile_specified</a>, <a href="#lisp_library-image">image</a>,
+             <a href="#lisp_library-instrument_coverage">instrument_coverage</a>, <a href="#lisp_library-nowarn">nowarn</a>, <a href="#lisp_library-order">order</a>, <a href="#lisp_library-srcs">srcs</a>, <a href="#lisp_library-verbose">verbose</a>)
 </pre>
 
 
@@ -89,6 +94,9 @@ Example:
 | <a id="lisp_library-compile_data"></a>compile_data |  Data available to this target and its consumers at build time, added to the inputs of LispCompile and LispCore actions.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_library-data"></a>data |  Data available to this target and its consumers in the runfiles directory at runtime.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_library-deps"></a>deps |  Common Lisp dependencies (generally [<code>lisp_library</code>](#lisp-library), but you can put [<code>lisp_binary</code>](#lisp-binary) in deps for testing).   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
+| <a id="lisp_library-entry_points"></a>entry_points |  If block-compiling, this is the list of entry points passed to SB-C:COMPILE-FILES (or if using the experimental_block_compile_specified feature, to COMPILE-FILE)   | List of strings | optional | [] |
+| <a id="lisp_library-experimental_block_compile"></a>experimental_block_compile |  Whether to block-compile the sources. If True, the sources will be block-compiled with SB-C:COMPILE-MULTIPLE-FILES as a single block, with :BLOCK-COMPILE T.<br><br>It should be noted that block compilation in SBCL currently has compiler crashes that prevent this feature from being enabled on all source code, and so this feature should be used with caution.   | Boolean | optional | False |
+| <a id="lisp_library-experimental_block_compile_specified"></a>experimental_block_compile_specified |  Whether to pass :SPECIFIED to :BLOCK-COMPILE in :COMPILE-FILE. This causes SBCL to respect (START-BLOCK) and (END-BLOCK) declarations on a sub-file basis.   | Boolean | optional | False |
 | <a id="lisp_library-image"></a>image |  Lisp binary used as Bazel compilation image. This should be a binary with the main function <code>#'bazel:main</code> defined in <code>main.lisp</code>.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | optional | //third_party/lisp/bazel:image |
 | <a id="lisp_library-instrument_coverage"></a>instrument_coverage |  Force coverage instrumentation. Possible values:<br><br><code>0</code>: Never instrument this target. Should be used if thetarget compiles generated source files or does not compilewith coverage instrumentation.<br><br><code>1</code>: Always instrument this target. Generally should not be used outside of tests for the coverage implementation.<br><br><code>-1</code> (default): If coverage data collection is enabled, instrument this target per [<code>--instrumentation_filter](https://docs.bazel.build/versions/master/command-line-reference.html#flag--instrumentation_filter).</code>   | Integer | optional | -1 |
 | <a id="lisp_library-nowarn"></a>nowarn |  Suppressed Lisp warning types or warning handlers.   | List of strings | optional | [] |
@@ -102,7 +110,8 @@ Example:
 ## lisp_test
 
 <pre>
-lisp_test(<a href="#lisp_test-name">name</a>, <a href="#lisp_test-add_features">add_features</a>, <a href="#lisp_test-allow_save_lisp">allow_save_lisp</a>, <a href="#lisp_test-cdeps">cdeps</a>, <a href="#lisp_test-compile_data">compile_data</a>, <a href="#lisp_test-data">data</a>, <a href="#lisp_test-deps">deps</a>, <a href="#lisp_test-image">image</a>,
+lisp_test(<a href="#lisp_test-name">name</a>, <a href="#lisp_test-add_features">add_features</a>, <a href="#lisp_test-allow_save_lisp">allow_save_lisp</a>, <a href="#lisp_test-cdeps">cdeps</a>, <a href="#lisp_test-compile_data">compile_data</a>, <a href="#lisp_test-data">data</a>, <a href="#lisp_test-deps">deps</a>, <a href="#lisp_test-entry_points">entry_points</a>,
+          <a href="#lisp_test-experimental_block_compile">experimental_block_compile</a>, <a href="#lisp_test-experimental_block_compile_specified">experimental_block_compile_specified</a>, <a href="#lisp_test-image">image</a>,
           <a href="#lisp_test-instrument_coverage">instrument_coverage</a>, <a href="#lisp_test-main">main</a>, <a href="#lisp_test-malloc">malloc</a>, <a href="#lisp_test-nowarn">nowarn</a>, <a href="#lisp_test-order">order</a>, <a href="#lisp_test-precompile_generics">precompile_generics</a>, <a href="#lisp_test-runtime">runtime</a>,
           <a href="#lisp_test-save_runtime_options">save_runtime_options</a>, <a href="#lisp_test-srcs">srcs</a>, <a href="#lisp_test-stamp">stamp</a>, <a href="#lisp_test-verbose">verbose</a>)
 </pre>
@@ -138,6 +147,9 @@ Example:
 | <a id="lisp_test-compile_data"></a>compile_data |  Data available to this target and its consumers at build time, added to the inputs of LispCompile and LispCore actions.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_test-data"></a>data |  Data available to this target and its consumers in the runfiles directory at runtime.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="lisp_test-deps"></a>deps |  Common Lisp dependencies (generally [<code>lisp_library</code>](#lisp-library), but you can put [<code>lisp_binary</code>](#lisp-binary) in deps for testing).   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
+| <a id="lisp_test-entry_points"></a>entry_points |  If block-compiling, this is the list of entry points passed to SB-C:COMPILE-FILES (or if using the experimental_block_compile_specified feature, to COMPILE-FILE)   | List of strings | optional | [] |
+| <a id="lisp_test-experimental_block_compile"></a>experimental_block_compile |  Whether to block-compile the sources. If True, the sources will be block-compiled with SB-C:COMPILE-MULTIPLE-FILES as a single block, with :BLOCK-COMPILE T.<br><br>It should be noted that block compilation in SBCL currently has compiler crashes that prevent this feature from being enabled on all source code, and so this feature should be used with caution.   | Boolean | optional | False |
+| <a id="lisp_test-experimental_block_compile_specified"></a>experimental_block_compile_specified |  Whether to pass :SPECIFIED to :BLOCK-COMPILE in :COMPILE-FILE. This causes SBCL to respect (START-BLOCK) and (END-BLOCK) declarations on a sub-file basis.   | Boolean | optional | False |
 | <a id="lisp_test-image"></a>image |  Lisp binary used as Bazel compilation image. This should be a binary with the main function <code>#'bazel:main</code> defined in <code>main.lisp</code>.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | optional | //third_party/lisp/bazel:image |
 | <a id="lisp_test-instrument_coverage"></a>instrument_coverage |  Force coverage instrumentation. Possible values:<br><br><code>0</code>: Never instrument this target. Should be used if thetarget compiles generated source files or does not compilewith coverage instrumentation.<br><br><code>1</code>: Always instrument this target. Generally should not be used outside of tests for the coverage implementation.<br><br><code>-1</code> (default): If coverage data collection is enabled, instrument this target per [<code>--instrumentation_filter](https://docs.bazel.build/versions/master/command-line-reference.html#flag--instrumentation_filter).</code>   | Integer | optional | -1 |
 | <a id="lisp_test-main"></a>main |  Name of function (by default in the <code>cl-user</code> package) or snippet of Lisp code to run when starting the binary. <code>"nil"</code> to start the default REPL. Can be overridden at runtime with the <code>LISP_MAIN</code> environment variable.   | String | optional | "main" |
@@ -157,8 +169,9 @@ Example:
 ## lisp_compile_srcs
 
 <pre>
-lisp_compile_srcs(<a href="#lisp_compile_srcs-ctx">ctx</a>, <a href="#lisp_compile_srcs-srcs">srcs</a>, <a href="#lisp_compile_srcs-deps">deps</a>, <a href="#lisp_compile_srcs-cdeps">cdeps</a>, <a href="#lisp_compile_srcs-image">image</a>, <a href="#lisp_compile_srcs-add_features">add_features</a>, <a href="#lisp_compile_srcs-nowarn">nowarn</a>, <a href="#lisp_compile_srcs-order">order</a>, <a href="#lisp_compile_srcs-compile_data">compile_data</a>,
-                  <a href="#lisp_compile_srcs-verbose_level">verbose_level</a>, <a href="#lisp_compile_srcs-instrument_coverage">instrument_coverage</a>, <a href="#lisp_compile_srcs-indexer_metadata">indexer_metadata</a>)
+lisp_compile_srcs(<a href="#lisp_compile_srcs-ctx">ctx</a>, <a href="#lisp_compile_srcs-srcs">srcs</a>, <a href="#lisp_compile_srcs-deps">deps</a>, <a href="#lisp_compile_srcs-cdeps">cdeps</a>, <a href="#lisp_compile_srcs-block_compile">block_compile</a>, <a href="#lisp_compile_srcs-block_compile_specified">block_compile_specified</a>, <a href="#lisp_compile_srcs-entry_points">entry_points</a>,
+                  <a href="#lisp_compile_srcs-image">image</a>, <a href="#lisp_compile_srcs-add_features">add_features</a>, <a href="#lisp_compile_srcs-nowarn">nowarn</a>, <a href="#lisp_compile_srcs-order">order</a>, <a href="#lisp_compile_srcs-compile_data">compile_data</a>, <a href="#lisp_compile_srcs-verbose_level">verbose_level</a>,
+                  <a href="#lisp_compile_srcs-instrument_coverage">instrument_coverage</a>, <a href="#lisp_compile_srcs-indexer_metadata">indexer_metadata</a>)
 </pre>
 
 Generate LispCompile actions, return LispInfo and FASL output.
@@ -175,6 +188,9 @@ This is the core functionality shared by the Lisp build rules.
 | <a id="lisp_compile_srcs-srcs"></a>srcs |  list of src Files.   |  <code>[]</code> |
 | <a id="lisp_compile_srcs-deps"></a>deps |  list of immediate Lisp dependency Targets.   |  <code>[]</code> |
 | <a id="lisp_compile_srcs-cdeps"></a>cdeps |  list of immediate C++ dependency Targets.   |  <code>[]</code> |
+| <a id="lisp_compile_srcs-block_compile"></a>block_compile |  <p align="center"> - </p>   |  <code>False</code> |
+| <a id="lisp_compile_srcs-block_compile_specified"></a>block_compile_specified |  <p align="center"> - </p>   |  <code>False</code> |
+| <a id="lisp_compile_srcs-entry_points"></a>entry_points |  <p align="center"> - </p>   |  <code>[]</code> |
 | <a id="lisp_compile_srcs-image"></a>image |  Build image Target used to compile the sources.   |  <code>None</code> |
 | <a id="lisp_compile_srcs-add_features"></a>add_features |  list of Lisp feature strings added by this target.   |  <code>[]</code> |
 | <a id="lisp_compile_srcs-nowarn"></a>nowarn |  List of suppressed warning type strings.   |  <code>[]</code> |

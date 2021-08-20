@@ -49,6 +49,29 @@ _LISP_LIBRARY_ATTRS = {
                "(https://docs.bazel.build/versions/master/be/c-cpp.html" +
                "#cc_library))."),
     ),
+    "experimental_block_compile": attr.bool(
+        default = False,
+        doc = ("Whether to block-compile the sources. If True, the " +
+               "sources will be block-compiled with " +
+               "SB-C:COMPILE-MULTIPLE-FILES as a single block, with " +
+               ":BLOCK-COMPILE T.\n\n" +
+               "It should be noted that block compilation in SBCL " +
+               "currently has compiler crashes that prevent this feature " +
+               "from being enabled on all source code, and so this feature " +
+               "should be used with caution."),
+    ),
+    "entry_points": attr.string_list(
+        default = [],
+        doc = ("If block-compiling, this is the list of entry points passed " +
+               "to SB-C:COMPILE-FILES (or if using the " +
+               "experimental_block_compile_specified feature, to COMPILE-FILE)"),
+    ),
+    "experimental_block_compile_specified": attr.bool(
+        default = False,
+        doc = ("Whether to pass :SPECIFIED to :BLOCK-COMPILE in " +
+               ":COMPILE-FILE. This causes SBCL to respect (START-BLOCK) " +
+               "and (END-BLOCK) declarations on a sub-file basis."),
+    ),
     "order": attr.string(
         default = "serial",
         values = _COMPILATION_ORDERS,
@@ -331,6 +354,9 @@ def lisp_compile_srcs(
         srcs = [],
         deps = [],
         cdeps = [],
+        block_compile = False,
+        block_compile_specified = False,
+        entry_points = [],
         image = None,
         add_features = [],
         nowarn = [],
@@ -376,6 +402,11 @@ def lisp_compile_srcs(
     if not order in _COMPILATION_ORDERS:
         fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
 
+    if block_compile and block_compile_specified:
+        fail("cannot block-compile while block-compiling with :specified")
+    if entry_points and not block_compile:
+        fail("cannot use entry points without block-compiling")
+
     name = ctx.label.name
     verbosep = verbose_level > 0
     indexer_build = (ctx.var.get("GROK_ELLIPSIS_BUILD", "0") == "1")
@@ -401,8 +432,8 @@ def lisp_compile_srcs(
             build_flags = build_flags,
         )
 
-    multipass = (order == "multipass")
-    serial = (order == "serial")
+    multipass = (order == "multipass") or block_compile
+    serial = (order == "serial") and not multipass
 
     build_image = image[DefaultInfo].files_to_run
     compile_image = build_image
@@ -439,24 +470,60 @@ def lisp_compile_srcs(
     warnings = []
     hashes = []
     output_fasl = ctx.actions.declare_file(name + ".fasl")
-    for src in srcs:
-        stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
-        if len(srcs) == 1:
-            fasl = output_fasl
-        else:
-            fasl = ctx.actions.declare_file(stem + ".fasl")
-        fasls.append(fasl)
-        hashes.append(ctx.actions.declare_file(stem + ".hash"))
-        warnings.append(ctx.actions.declare_file(stem + ".warnings"))
-        outs = [fasls[-1], hashes[-1], warnings[-1]]
+    if not block_compile:
+        for src in srcs:
+            stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
+            if len(srcs) == 1:
+                fasl = output_fasl
+            else:
+                fasl = ctx.actions.declare_file(stem + ".fasl")
+            fasls.append(fasl)
+            hashes.append(ctx.actions.declare_file(stem + ".hash"))
+            warnings.append(ctx.actions.declare_file(stem + ".warnings"))
+            outs = [fasls[-1], hashes[-1], warnings[-1]]
+            file_flags = ctx.actions.args()
+            file_flags.add_joined("--outs", outs, join_with = " ")
+            file_flags.add("--srcs", src)
+            file_flags.add_joined("--deps", deps_srcs, join_with = " ")
+            file_flags.add_joined("--load", load_srcs, join_with = " ")
+            file_flags.add_joined("--nowarn", nowarn, join_with = " ")
+            if block_compile_specified:
+                file_flags.add("--block-compile-specified")
+
+            direct_inputs = [src]
+            direct_inputs.extend(deps_srcs)
+            direct_inputs.extend(load_srcs)
+            ctx.actions.run(
+                outputs = outs,
+                inputs = depset(
+                    direct_inputs,
+                    transitive = [lisp_info.compile_data],
+                    order = "preorder",
+                ),
+                progress_message = "Compiling %{input}",
+                mnemonic = "LispCompile",
+                env = _BAZEL_LISP_IMAGE_ENV,
+                arguments = ["compile", build_flags, compile_flags, file_flags],
+                executable = compile_image,
+            )
+            if serial:
+                load_srcs.append(src)
+    else:
+        stem = "{}~/".format(name)
+        fasls.append(output_fasl)
+        hashes.extend([ctx.actions.declare_file(stem + src.short_path[:-len(src.extension) - 1] + ".hash") for src in srcs])
+        warnings.append(ctx.actions.declare_file(stem + name + ".warnings"))
+        outs = [fasls[0], warnings[0]] + hashes
         file_flags = ctx.actions.args()
         file_flags.add_joined("--outs", outs, join_with = " ")
-        file_flags.add("--srcs", src)
+        file_flags.add_joined("--srcs", srcs, join_with = " ")
         file_flags.add_joined("--deps", deps_srcs, join_with = " ")
         file_flags.add_joined("--load", load_srcs, join_with = " ")
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
+        if entry_points:
+            file_flags.add_joined("--entry-points", entry_points, join_with = " ")
 
-        direct_inputs = [src]
+        direct_inputs = [s for s in srcs]
         direct_inputs.extend(deps_srcs)
         direct_inputs.extend(load_srcs)
         ctx.actions.run(
@@ -464,16 +531,13 @@ def lisp_compile_srcs(
             inputs = depset(
                 direct_inputs,
                 transitive = [lisp_info.compile_data],
-                order = "preorder",
             ),
-            progress_message = "Compiling %{input}",
+            progress_message = "Compiling " + str([x.short_path for x in srcs]),
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
-            arguments = ["compile", build_flags, compile_flags, file_flags],
+            arguments = ["block-compile", build_flags, compile_flags, file_flags],
             executable = compile_image,
         )
-        if serial:
-            load_srcs.append(src)
 
     if indexer_build:
         srcs = indexer_metadata + srcs
@@ -874,6 +938,9 @@ def _lisp_library_impl(ctx):
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         cdeps = ctx.attr.cdeps,
+        block_compile = ctx.attr.experimental_block_compile,
+        block_compile_specified = ctx.attr.experimental_block_compile_specified,
+        entry_points = ctx.attr.entry_points,
         image = ctx.attr.image,
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
