@@ -60,6 +60,8 @@
            #:action-find-output-file
            #:action-failures
            #:action-deferred-warnings
+           ;; REPL
+           #:default-toplevel-loop
            ;; Misc
            #:add-features
            #:add-feature))
