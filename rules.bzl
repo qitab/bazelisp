@@ -241,34 +241,6 @@ _LISP_TEST_ATTRS.update({
     ),
 })
 
-def _paths(files, sep = " "):
-    """Return the full file paths for all the 'files'.
-
-    Args:
-     files: a list of build file objects.
-     sep: String to join on, by default a space.
-
-    Returns:
-      Joined string of file paths.
-    """
-    return sep.join([f.path for f in files])
-
-def _spec(spec, files):
-    """Return the compilation/linking specification as parsed by bazel driver.
-
-    The specification will have the following form:
-      (:<spec> "<path>" .... "<path>")
-    for each spec and path of the files.
-
-    Args:
-      spec: the specification name corresponding to the command line argument.
-      files: a list of build file objects to be included in the specification.
-
-    Returns:
-      A list of parenthesized paths prefixed with specs name as keyword.
-    """
-    return '(:{}\n "{}")\n'.format(spec, _paths(files, sep = '"\n "'))
-
 def _concat_fasls(ctx, inputs, output):
     """Concatenates several FASLs into a combined FASL.
 
@@ -282,15 +254,17 @@ def _concat_fasls(ctx, inputs, output):
     elif len(inputs) == 1:
         return inputs[0]
     else:
+        cat_command = "cat ${@:2} > $1"
+        cat_args = ctx.actions.args()
+        cat_args.add(output)
+        cat_args.add_all(inputs)
         ctx.actions.run_shell(
             inputs = inputs,
             outputs = [output],
             progress_message = "Combining %{output}",
             mnemonic = "LispConcatFASLs",
-            command = ("cat {inputs} > {output}").format(
-                inputs = _paths(inputs),
-                output = output.path,
-            ),
+            command = cat_command,
+            arguments = [cat_args],
         )
         return output
 
@@ -704,15 +678,14 @@ def _lisp_binary_impl(ctx):
         print("Build image: %s" % build_image.short_path)
 
     specs = ctx.actions.declare_file(name + ".specs")
+    content = ctx.actions.args()
+    content.set_param_file_format("multiline")
+    content.add_joined(fasls, format_joined = '(:deps\n "%s")', join_with = '"\n "')
+    content.add_joined(warnings, format_joined = '(:warnings\n "%s")', join_with = '"\n "')
+    content.add_joined(hashes, format_joined = '(:hashes\n "%s")', join_with = '"\n "')
     ctx.actions.write(
         output = specs,
-        content = (
-            "".join([
-                _spec("deps", fasls),
-                _spec("warnings", warnings),
-                _spec("hashes", hashes),
-            ])
-        ),
+        content = content,
     )
 
     inputs = [specs]
@@ -769,6 +742,7 @@ def _lisp_binary_impl(ctx):
             pic_objects = depset([core_object_file]),
         ),
     ]
+    elfinate_args = ctx.actions.args()
     if ctx.attr.allow_save_lisp:
         # If we want to allow the binary to be used as a compilation image, the
         # Lisp image has to stay in a form save-lisp-and-die understands. In
@@ -778,16 +752,15 @@ def _lisp_binary_impl(ctx):
         link_additional_inputs.append(linker_script_file)
         elfinate_outs = [core_object_file, linker_script_file]
         elfinate_cmd = (
-            "{elfinate} copy {core} {core_obj} && nm -p {core_obj} | " +
+            "$1 copy $2 $3 && nm -p $3 | " +
             "awk '" +
-            '{{print $2";"}}BEGIN{{print "{{"}}END{{print "}};"}}' +
-            "' >{linker_script}"
-        ).format(
-            elfinate = ctx.executable._elfinate.path,
-            core = core.path,
-            core_obj = core_object_file.path,
-            linker_script = linker_script_file.path,
+            '{print $2";"}BEGIN{print "{"}END{print "};"}' +
+            "' > $4"
         )
+        elfinate_args.add(ctx.executable._elfinate)
+        elfinate_args.add(core)
+        elfinate_args.add(core_object_file)
+        elfinate_args.add(linker_script_file)
         linkopts.append(
             "-Wl,--dynamic-list={}".format(linker_script_file.path),
         )
@@ -796,11 +769,10 @@ def _lisp_binary_impl(ctx):
         # '-core.o' containing the balance of the original Lisp spaces.
         assembly_file = ctx.actions.declare_file(name + ".s")
         elfinate_outs = [assembly_file, core_object_file]
-        elfinate_cmd = "{elfinate} split {core} {asm}".format(
-            elfinate = ctx.executable._elfinate.path,
-            core = core.path,
-            asm = assembly_file.path,
-        )
+        elfinate_cmd = "$1 split $2 $3"
+        elfinate_args.add(ctx.executable._elfinate)
+        elfinate_args.add(core)
+        elfinate_args.add(assembly_file)
 
         # The .s file will get re-assembled before it's linked into the binary.
         # Note that this cc_common.compile action is declared before the
@@ -820,6 +792,7 @@ def _lisp_binary_impl(ctx):
         tools = [ctx.executable._elfinate],
         inputs = [core],
         command = elfinate_cmd,
+        arguments = [elfinate_args],
         progress_message = "Elfinating Lisp core %{output}",
         mnemonic = "LispElfinate",
     )
