@@ -173,8 +173,9 @@ _LISP_BINARY_ATTRS.update({
         default = "main",
         doc = ("Name of function (by default in the `cl-user` package) or " +
                "snippet of Lisp code to run when starting the binary. " +
-               '`"nil"` to start the default REPL. Can be overridden at ' +
-               "runtime with the `LISP_MAIN` environment variable."),
+               '`"nil"` or `"t"` to start the default REPL. Can be ' +
+               "overridden by naming a function (or `nil` or `t`) in the " +
+               "`LISP_MAIN` environment variable."),
     ),
     "malloc": attr.label(
         default = _DEFAULT_MALLOC,

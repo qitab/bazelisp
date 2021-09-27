@@ -141,16 +141,29 @@ digraph {
 ```
 
 For `lisp_binary` and `lisp_test` rules, the rule also genenerates an executable
-output, which is the default output for those rules. That executable runs the
-function or code specified in the `main` attribute when executed.
+output, which is the default output for those rules. By default, that executable
+runs the function or code specified in the `main` attribute (which can be
+overridden by `LISP_MAIN`). That defaults to `cl-user::main`.
 
-This happens in several steps. First, a `LispCore` action loads all of the
-combined FASLs for each target in the target's transitive `deps`, as well as the
-one for the target itself, then generates a Lisp core file with
-`#'sb-ext:save-lisp-and-die`. The core file is split up with in a `LispElfinate`
-action, then combined with the transitive C++ dependencies (the SBCL runtime and
-dependencies provided to the target and its transitive `deps` via `cdeps`) to
-generate an executable in a `CppLink` action.
+Executable generation happens in several actions. First, `LispCore`:
+
+*   Loads all of the combined FASLs for each target in the target's transitive
+    `deps`, as well as the one for the target itself.
+*   Binds `bazel.main::*entry-point*` to the function specified in `main` (or a
+    newly-generated function which executes the code specified in `main`, if
+    `main` contains a snippet of code instead of a single symbol name).
+*   Generates a Lisp core file with `#'sb-ext:save-lisp-and-die`, specifying the
+    `:toplevel` function `bazel.main::restart-image`. That in turn runs the
+    `main` function by default. If the environment variable `LISP_MAIN` is
+    specified, it runs the function named by that (by default in the `cl-user`
+    package) instead. `LISP_MAIN=t` or `LISP_MAIN=nil` starts the default
+    REPL, as does setting LISP_MAIN to anything that does not name a defined
+    function.
+
+The core file is split up with in a `LispElfinate` action, then combined with
+the transitive C++ dependencies (the SBCL runtime and dependencies provided to
+the target and its transitive `deps` via `cdeps`) to generate an executable in a
+`CppLink` action.
 
 By default, the `LispElfinate` action splits the core file into a `.s` file
 containing assembly for the compiled Lisp code and a `.o` file representing the
