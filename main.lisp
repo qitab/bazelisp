@@ -60,8 +60,6 @@
            #:action-find-output-file
            #:action-failures
            #:action-deferred-warnings
-           ;; REPL
-           #:default-toplevel-loop
            ;; Misc
            #:add-features
            #:add-feature))
@@ -485,7 +483,8 @@ package context. This allows for the user to specify their own handlers as a str
 
 (defun restart-image ()
   "Restart function that is called when the image is executed next time.
- Calls toplevel-init if no *entry-point* or calls the function specified in LISP_MAIN."
+Calls toplevel-init if no *entry-point* or calls the function specified in LISP_MAIN.
+If LISP_MAIN is NIL or T it will call top-level REPL as well."
 
   (let ((entry-point *entry-point*)
         (LISP_MAIN (getenv "LISP_MAIN")))
@@ -494,13 +493,22 @@ package context. This allows for the user to specify their own handlers as a str
     (funcall-named "UIOP:CALL-IMAGE-RESTORE-HOOK")
 
     (when LISP_MAIN
-      (let ((main (read-from-string LISP_MAIN)))
-        (unsetenv "LISP_MAIN")
-        (setf entry-point (unless (eq main t) main))))
+      (unsetenv "LISP_MAIN")
+      (handler-case
+          (setf entry-point (read-from-string LISP_MAIN))
+        (error (e)
+          (bazel.log:warning "Could not parse $LISP_MAIN: ~S~%  ~S:~A"
+                             LISP_MAIN (type-of e) e))))
 
-    (if entry-point
-        (funcall entry-point)
-        (default-toplevel-loop))))
+    (case entry-point
+      ((t nil) (setf entry-point #'default-toplevel-loop)))
+
+    (unless (or (functionp entry-point)
+                (ignore-errors (fdefinition entry-point)))
+      (bazel.log:warning "Could not find function: `~S`" entry-point)
+      (setf entry-point #'default-toplevel-loop))
+
+    (funcall entry-point)))
 
 (defun derive-entry-point (main)
   "Returns NIL, SYMBOL, or FUNCTION based on the MAIN function specification."
