@@ -714,21 +714,10 @@ it will signal an error."
  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
  ENTRY-POINTS is a list of entry points which are used when block-compiling."))
 
-(defmethod compile-source (src output-file
-                           &rest key-args &key
-                                          emit-cfasl
-                                          save-locations
-                                          (readtable (copy-readtable))
-                                          block-compile
-                                          entry-points)
+(defmethod compile-source (src output-file &rest key-args)
   "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
- Parameters:
-  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
-  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
-  READTABLE is the readtable to be used for compiling the SRC file.
-  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
-  ENTRY-POINTS is a list of entry points which are used when block-compiling."
+ KEY-ARGS are passed through as opaque data."
   (apply #'%compile-sources (list src) output-file key-args))
 
 
