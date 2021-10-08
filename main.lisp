@@ -60,7 +60,6 @@
            #:action-find-output-file
            #:action-failures
            #:action-deferred-warnings
-           ;; Misc
            #:add-features
            #:add-feature))
 
