@@ -754,23 +754,11 @@ it will signal an error."
                 (*default-pathname-defaults* *default-pathname-defaults*)
                 (*readtable* (setup-readtable readtable)))
             (delete-read-only output-file)
-            (if block-compile
-                (sb-c:compile-files srcs :output-file output-file
-                                         :emit-cfasl emit-cfasl
-                                         :external-format :utf-8
-                                         :block-compile block-compile
-                                         :entry-points entry-points)
-                (prog2
-                    ;; This is just a sanity check because in the current build rules, only one
-                    ;; source is supposed to be compiled here
-                    (assert (= (length srcs) 1))
-                    (mapc #'(lambda (src)
-                              (compile-file src :output-file output-file
-                                                :emit-cfasl emit-cfasl
-                                                :external-format :utf-8
-                                                :block-compile block-compile
-                                                :entry-points entry-points))
-                          srcs))))))
+            (compile-files srcs :output-file output-file
+                                :emit-cfasl emit-cfasl
+                                :external-format :utf-8
+                                :block-compile block-compile
+                                :entry-points entry-points))))
     (unless (and warnings-p failures-p)
       (vv "Files ~A compiled without warnings." srcs))
     (when warnings-p
