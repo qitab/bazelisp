@@ -53,8 +53,6 @@
            #:action-main-function
            #:action-warning-handlers
            #:action-compilation-mode
-           #:action-lisp-load-mode
-           #:action-fasl-load-mode
            #:action-source-file
            #:action-source-files
            #:action-find-output-file
@@ -142,12 +140,8 @@
   (entry-points nil :type list)
   ;; A list warning handlers.
   (warning-handlers nil :type list)
-  ;; The compile mode. One of :dbg, :opt, :fastbuild or :load.
+  ;; The compile mode. One of :dbg, :opt, :fastbuild, or :load.
   (compilation-mode nil :type compilation-mode)
-  ;; The mode used to load the .lisp or .srcs files.
-  (lisp-load-mode nil :type (or null compile-load-mode))
-  ;; The mode used to load the .fasl and .deps files.
-  (fasl-load-mode nil :type (or null compile-load-mode))
   ;; A list of failures.
   (failures nil :type list)
   ;; A list of deferred-warnings.
@@ -816,7 +810,7 @@ it will signal an error."
           "Only once source file supported for the COMPILE action.")
          (setf (action-source-file action) file))
         (t
-         (load-file file :action action :load-mode (action-lisp-load-mode action)))))
+         (load-file file :action action :load-mode :load))))
 
 (defmethod process-file ((action action) (file string) (type (eql :lsp)))
   "Alias for function processing .lisp files."
@@ -825,14 +819,14 @@ it will signal an error."
 (defmethod process-file ((action action) (file string) (type (eql :fasl)))
   "Loads a FASL file."
   (prog1 (load-file file :fasl file :action action
-                         :load-mode (action-fasl-load-mode action))
+                         :load-mode (action-compilation-mode action))
     ;; Sort some heap after every FASL.
     #+sbcl (sb-ext:gc)))
 
 (defmethod process-file ((action action) (file string) (type (eql :cfasl)))
   "Loads a CFASL file. Those are dependencies only loaded when compiling or building a binary."
   (unless (action-processing-sources-p action)
-    (load-file file :action action :load-mode (action-fasl-load-mode action))))
+    (load-file file :action action :load-mode (action-compilation-mode action))))
 
 (defmethod process-file ((action action) (file string) (type (eql :warnings)))
   "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
@@ -1011,15 +1005,7 @@ it will signal an error."
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
                         :emit-cfasl-p emit-cfasl
-                        :record-path-location-p (and coverage t)
-                        ;; Load lisp dependencies when compiling or making srcs image
-                        :lisp-load-mode
-                        (when (member command '(:binary :core :compile :block-compile))
-                          :load)
-                        ;; Load fasl dependencies when compiling or creating a binary image.
-                        :fasl-load-mode
-                        (when (member command '(:binary :core :compile :block-compile))
-                          compilation-mode)))
+                        :record-path-location-p coverage))
 
          (*compile-verbose* (>= *verbose* 1))
          (*compile-print* (>= *verbose* 3))
