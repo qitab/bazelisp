@@ -104,7 +104,7 @@
 ;;;
 
 (deftype compilation-mode () '(member :opt :fastbuild :dbg))
-(deftype compile-load-mode () '(member :opt :fastbuild :dbg :load))
+(deftype optimization-mode () '(or compilation-mode (eql :load)))
 
 (defstruct action
   "The bazel-lisp action contains the input parameters and
@@ -140,7 +140,7 @@
   (entry-points nil :type list)
   ;; A list warning handlers.
   (warning-handlers nil :type list)
-  ;; The compile mode. One of :dbg, :opt, :fastbuild, or :load.
+  ;; The compile mode. One of :dbg, :opt, or :fastbuild.
   (compilation-mode nil :type compilation-mode)
   ;; A list of failures.
   (failures nil :type list)
@@ -560,19 +560,20 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
    :executable executable
    :verbose (plusp *verbose*)))
 
-(defun set-compilation-mode (compilation-mode)
-  "Proclaim the optimization settings based on the COMPILATION-MODE."
+(defun set-optimization-mode (optimization-mode)
+  "Proclaim the optimization settings based on the OPTIMIZATION-MODE."
+  (declare (type optimization-mode optimization-mode))
 
-  (vvv "Set compilation mode: ~S" compilation-mode)
+  (vvv "Set optimization mode: ~S" optimization-mode)
 
   (destructuring-bind (spEed Debug saFety space Compilation-speed)
-      (ecase compilation-mode ; E D F   C
+      (ecase optimization-mode ; E D F   C
         (:load                '(1 1 1 1 3))
         ((:fastbuild nil)     '(1 2 3 1 1))
         (:opt                 '(3 0 0 1 1))
         (:dbg                 '(1 3 3 1 1)))
 
-    (set-interpret-mode compilation-mode)
+    (set-interpret-mode optimization-mode)
 
     ;; Cause bodies of macroexpanders, including MACROLET and DEFINE-COMPILER-MACRO,
     ;; to be compiled in a policy in which these qualities override the global policy.
@@ -672,7 +673,7 @@ it will signal an error."
                (*current-source-file* name)
                (*readtable* (setup-readtable readtable))
                (*action* action))
-          (set-compilation-mode load-mode)
+          (set-optimization-mode load-mode)
           (cond (muffle-warnings
                  (with-all-warnings-muffled
                    ;; TODO(czak): use bazel.warning:redefine-warning.
@@ -1073,7 +1074,7 @@ it will signal an error."
       (mapc #'process-file* warnings)
 
       (verbose "Finalizing the ~A action..." command)
-      (set-compilation-mode (action-compilation-mode action))
+      (set-optimization-mode (action-compilation-mode action))
       (finish-action action command))))
 
 (defmethod execute-command ((command (eql :compile)) &rest args)
