@@ -49,28 +49,25 @@ _LISP_LIBRARY_ATTRS = {
                "(https://docs.bazel.build/versions/master/be/c-cpp.html" +
                "#cc_library))."),
     ),
-    "experimental_block_compile": attr.bool(
+    "block_compile": attr.bool(
         default = False,
-        doc = ("Whether to block-compile the sources. If True, the " +
-               "sources will be block-compiled with " +
-               "SB-C:COMPILE-MULTIPLE-FILES as a single block, with " +
-               ":BLOCK-COMPILE T.\n\n" +
-               "It should be noted that block compilation in SBCL " +
-               "currently has compiler crashes that prevent this feature " +
-               "from being enabled on all source code, and so this feature " +
-               "should be used with caution."),
+        doc = ("Whether to block-compile the sources. By default, this will " +
+               "cause sources to be block-compiled together as a single " +
+               "block, that behavior can be overridden by " +
+               "block_compile_specified_only. If block_compile_entry_points " +
+               "is not specified, all functions are considered as potential " +
+               "entry-points."),
     ),
-    "entry_points": attr.string_list(
+    "block_compile_entry_points": attr.string_list(
         default = [],
-        doc = ("If block-compiling, this is the list of entry points passed " +
-               "to SB-C:COMPILE-FILES (or if using the " +
-               "experimental_block_compile_specified feature, to COMPILE-FILE)"),
+        doc = ("If true, block-compilation only generates global function " +
+               "definitions for the listed functions."),
     ),
-    "experimental_block_compile_specified": attr.bool(
+    "block_compile_specified_only": attr.bool(
         default = False,
-        doc = ("Whether to pass :SPECIFIED to :BLOCK-COMPILE in " +
-               ":COMPILE-FILE. This causes SBCL to respect (START-BLOCK) " +
-               "and (END-BLOCK) declarations on a sub-file basis."),
+        doc = ("If true, block compilation only considers multiple top-level " +
+               "forms together if those are between explicit (START-BLOCK) " +
+               "and (END-BLOCK)."),
     ),
     "order": attr.string(
         default = "serial",
@@ -330,8 +327,8 @@ def lisp_compile_srcs(
         deps = [],
         cdeps = [],
         block_compile = False,
-        block_compile_specified = False,
-        entry_points = [],
+        block_compile_specified_only = False,
+        block_compile_entry_points = [],
         image = None,
         add_features = [],
         nowarn = [],
@@ -349,6 +346,13 @@ def lisp_compile_srcs(
       srcs: list of src Files.
       deps: list of immediate Lisp dependency Targets.
       cdeps: list of immediate C++ dependency Targets.
+      block_compile: Whether to block-compile this target.
+      block_compile_specified_only: Whether to only combine top-level forms
+          in blokcs that are in explicitly specified (with
+          `(start-block)` and `(end-block)`) when block compiling.
+      block_compile_entry_points: When non-empty, package-qualified names of
+          functions to consider as entry points when block-compiling.
+          Otherwise, every function is treated as a potential entry-point.
       image: Build image Target used to compile the sources.
       add_features: list of Lisp feature strings added by this target.
       nowarn: List of suppressed warning type strings.
@@ -376,11 +380,6 @@ def lisp_compile_srcs(
     """
     if not order in _COMPILATION_ORDERS:
         fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
-
-    if block_compile and block_compile_specified:
-        fail("cannot block-compile while block-compiling with :specified")
-    if entry_points and not block_compile:
-        fail("cannot use entry points without block-compiling")
 
     name = ctx.label.name
     verbosep = verbose_level > 0
@@ -462,8 +461,6 @@ def lisp_compile_srcs(
             file_flags.add_joined("--deps", deps_srcs, join_with = " ")
             file_flags.add_joined("--load", load_srcs, join_with = " ")
             file_flags.add_joined("--nowarn", nowarn, join_with = " ")
-            if block_compile_specified:
-                file_flags.add("--block-compile-specified")
 
             direct_inputs = [src]
             direct_inputs.extend(deps_srcs)
@@ -495,10 +492,16 @@ def lisp_compile_srcs(
         file_flags.add_joined("--deps", deps_srcs, join_with = " ")
         file_flags.add_joined("--load", load_srcs, join_with = " ")
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
-        if entry_points:
-            file_flags.add_joined("--entry-points", entry_points, join_with = " ")
+        if block_compile_specified_only:
+            file_flags.add("--block-compile-specified-only")
+        if block_compile_entry_points:
+            file_flags.add_joined(
+                "--block-compile-entry-points",
+                block_compile_entry_points,
+                join_with = " ",
+            )
 
-        direct_inputs = [s for s in srcs]
+        direct_inputs = list(srcs)
         direct_inputs.extend(deps_srcs)
         direct_inputs.extend(load_srcs)
         ctx.actions.run(
@@ -507,7 +510,7 @@ def lisp_compile_srcs(
                 direct_inputs,
                 transitive = [lisp_info.compile_data],
             ),
-            progress_message = "Compiling " + str([x.short_path for x in srcs]),
+            progress_message = "Compiling %{name}",
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = ["block-compile", build_flags, compile_flags, file_flags],
@@ -910,9 +913,9 @@ def _lisp_library_impl(ctx):
         srcs = ctx.files.srcs,
         deps = ctx.attr.deps,
         cdeps = ctx.attr.cdeps,
-        block_compile = ctx.attr.experimental_block_compile,
-        block_compile_specified = ctx.attr.experimental_block_compile_specified,
-        entry_points = ctx.attr.entry_points,
+        block_compile = ctx.attr.block_compile,
+        block_compile_specified_only = ctx.attr.block_compile_specified_only,
+        block_compile_entry_points = ctx.attr.block_compile_entry_points,
         image = ctx.attr.image,
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,

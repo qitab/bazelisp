@@ -137,7 +137,10 @@
   ;; The main function for a binary.
   (main-function nil :type (or null symbol string))
   ;; The entry points if block compiling with them.
-  (entry-points nil :type list)
+  (block-compile-entry-points nil :type list)
+  ;; Whether to only consider combining top-level forms into a block when those are between explicit
+  ;; (START-BLOCK) and (STOP-BLOCK) annotations.
+  (block-compile-specified-only nil :type boolean)
   ;; A list warning handlers.
   (warning-handlers nil :type list)
   ;; The compile mode. One of :dbg, :opt, or :fastbuild.
@@ -899,8 +902,10 @@ it will signal an error."
   (%compile-sources (action-source-files action) (action-find-output-file action "fasl")
                   :emit-cfasl (action-emit-cfasl-p action)
                   :save-locations (action-record-path-location-p action)
-                  :block-compile t
-                  :entry-points (action-entry-points action)
+                  :block-compile (if (action-block-compile-specified-only action)
+                                     :specified
+                                     t)
+                  :entry-points (action-block-compile-entry-points action)
                   :readtable (action-readtable action))
   (mapc #'(lambda (source-file)
             (write-file-hash source-file
@@ -954,18 +959,18 @@ it will signal an error."
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
-                   entry-points
+                   block-compile-entry-points
+                   block-compile-specified-only
                    force
                    main features nowarn
                    precompile-generics
                    save-runtime-options
                    coverage
-                   emit-cfasl
-                   &allow-other-keys)
+                   emit-cfasl)
   "Main processing function for bazel.main.
  Arguments:
-  ARGS - all the arguments,
-  COMMAND - one of :core, :binary, :compile, or :block-compile,
+  ARGS - all the arguments
+  COMMAND - one of :core, :binary, :compile, or :block-compile
   DEPS - dependencies,
   LOAD - files to be loaded after dependencies.
   SRCS - sources for a binary core or for compilation,
@@ -974,7 +979,11 @@ it will signal an error."
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from bazel -c <compilation-mode>
-  ENTRY-POINTS - entry points to use when block-compiling,
+  BLOCK-COMPILE-ENTRY-POINTS - Functions to treat as library entry-points when block-compiling. If
+    nil, treat all functions as potential entry-points.
+  BLOCK-COMPILE-SPECIFIED-ONLY - Whether to only combine top-level-forms into a block within
+    explicit (START-BLOCK) and (END-BLOCK), otherwise considering each top-level-form individually.
+    If not specified, all forms are combined into a single block.
   FORCE - if true, the compilation may run to completion even with errors.
   MAIN - the name of the main function for a binary,
   FEATURES - features to be set before reading sources,
@@ -998,6 +1007,7 @@ it will signal an error."
          (action
            (make-action :args args
                         :command command
+                        :block-compile-specified-only block-compile-specified-only
                         :output-files outs
                         :bindir bindir
                         :compilation-mode compilation-mode
@@ -1056,9 +1066,9 @@ it will signal an error."
                    (non-fatal-error #'handle-error))
       (verbose "Loading ~D source file~:P..." (length load))
       (mapc #'process-file* load)
-      (setf (action-entry-points action)
-            (when entry-points
-              (with-input-from-string (s entry-points)
+      (setf (action-block-compile-entry-points action)
+            (when block-compile-entry-points
+              (with-input-from-string (s block-compile-entry-points)
                 (loop with curr = nil
                       while (setf curr (read s nil nil))
                       collect curr))))
