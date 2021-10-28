@@ -53,7 +53,6 @@
            #:action-main-function
            #:action-warning-handlers
            #:action-compilation-mode
-           #:action-source-file
            #:action-source-files
            #:action-find-output-file
            #:action-failures
@@ -119,9 +118,7 @@
   ;; Flag indicating that the dependencies have been processed
   ;; and the outstanding files are sources for this BUILD action.
   (processing-sources-p nil :type boolean)
-  ;; The source file to be compiled.
-  (source-file nil :type (or null string))
-  ;; A list of source files to be compiled (used when block-compiling).
+  ;; A list of source files to be compiled.
   (source-files nil :type list)
   ;; Flag indicating that the cfasl needs to be generated.
   (emit-cfasl-p nil :type boolean)
@@ -807,14 +804,9 @@ it will signal an error."
 
 (defmethod process-file ((action action) (file string) (type (eql :lisp)))
   "Process a file with the .lisp or .lsp extensions. Loads file if not loaded, yet."
-  (cond ((and (action-processing-sources-p action)
+  (unless (and (action-processing-sources-p action)
               (eq (action-command action) :compile))
-         ;; The .lisp sources in a :compile action are processed by finish-action handler instead.
-         (assert (null (action-source-file action)) nil ; NOLINT
-          "Only once source file supported for the COMPILE action.")
-         (setf (action-source-file action) file))
-        (t
-         (load-file file :action action :load-mode :load))))
+    (load-file file :action action :load-mode :load)))
 
 (defmethod process-file ((action action) (file string) (type (eql :lsp)))
   "Alias for function processing .lisp files."
@@ -919,16 +911,16 @@ it will signal an error."
 
 (defmethod finish-action ((action action) (command (eql :compile)))
   "Compiles the last source file."
-  (assert (action-source-file action) nil ; NOLINT
+  (assert (= (length (action-source-files action)) 1) nil ; NOLINT
           "Exactly one Lisp source file needed for the COMPILE action.")
-  (let* ((source-file (action-source-file action))
+  (let* ((source-file (first (action-source-files action)))
          (*current-source-file* source-file))
     (pprog1
      ;; The file should compile in the current-thread context.
-     (compile-source source-file (action-find-output-file action "fasl")
-                     :emit-cfasl (action-emit-cfasl-p action)
-                     :save-locations (action-record-path-location-p action)
-                     :readtable (action-readtable action))
+     (%compile-sources (list source-file) (action-find-output-file action "fasl")
+                       :emit-cfasl (action-emit-cfasl-p action)
+                       :save-locations (action-record-path-location-p action)
+                       :readtable (action-readtable action))
      (write-file-hash source-file (action-find-output-file action "hash")))
     (check-failures action)
     (save-deferred-warnings
@@ -1007,7 +999,7 @@ it will signal an error."
          (action
            (make-action :args args
                         :command command
-                        :block-compile-specified-only block-compile-specified-only
+                        :source-files srcs
                         :output-files outs
                         :bindir bindir
                         :compilation-mode compilation-mode
@@ -1016,7 +1008,8 @@ it will signal an error."
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
                         :emit-cfasl-p emit-cfasl
-                        :record-path-location-p coverage))
+                        :record-path-location-p coverage
+                        :block-compile-specified-only block-compile-specified-only))
 
          (*compile-verbose* (>= *verbose* 1))
          (*compile-print* (>= *verbose* 3))
@@ -1077,8 +1070,6 @@ it will signal an error."
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
       (mapc #'process-file* srcs)
-      (when (eql command :block-compile)
-        (setf (action-source-files action) srcs))
 
       (verbose "Processing ~D deferred warning file~:P..." (length warnings))
       (mapc #'process-file* warnings)
