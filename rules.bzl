@@ -54,14 +54,7 @@ _LISP_LIBRARY_ATTRS = {
         doc = ("Whether to block-compile the sources. By default, this will " +
                "cause sources to be block-compiled together as a single " +
                "block, that behavior can be overridden by " +
-               "block_compile_specified_only. If block_compile_entry_points " +
-               "is not specified, all functions are considered as potential " +
-               "entry-points."),
-    ),
-    "block_compile_entry_points": attr.string_list(
-        default = [],
-        doc = ("If true, block-compilation only generates global function " +
-               "definitions for the listed functions."),
+               "block_compile_specified_only."),
     ),
     "block_compile_specified_only": attr.bool(
         default = False,
@@ -328,7 +321,6 @@ def lisp_compile_srcs(
         cdeps = [],
         block_compile = False,
         block_compile_specified_only = False,
-        block_compile_entry_points = [],
         image = None,
         add_features = [],
         nowarn = [],
@@ -350,9 +342,6 @@ def lisp_compile_srcs(
       block_compile_specified_only: Whether to only combine top-level forms
           in blokcs that are in explicitly specified (with
           `(start-block)` and `(end-block)`) when block compiling.
-      block_compile_entry_points: When non-empty, package-qualified names of
-          functions to consider as entry points when block-compiling.
-          Otherwise, every function is treated as a potential entry-point.
       image: Build image Target used to compile the sources.
       add_features: list of Lisp feature strings added by this target.
       nowarn: List of suppressed warning type strings.
@@ -494,12 +483,6 @@ def lisp_compile_srcs(
         file_flags.add_joined("--nowarn", nowarn, join_with = " ")
         if block_compile_specified_only:
             file_flags.add("--block-compile-specified-only")
-        if block_compile_entry_points:
-            file_flags.add_joined(
-                "--block-compile-entry-points",
-                block_compile_entry_points,
-                join_with = " ",
-            )
 
         direct_inputs = list(srcs)
         direct_inputs.extend(deps_srcs)
@@ -915,7 +898,6 @@ def _lisp_library_impl(ctx):
         cdeps = ctx.attr.cdeps,
         block_compile = ctx.attr.block_compile,
         block_compile_specified_only = ctx.attr.block_compile_specified_only,
-        block_compile_entry_points = ctx.attr.block_compile_entry_points,
         image = ctx.attr.image,
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,

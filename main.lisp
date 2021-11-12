@@ -133,8 +133,6 @@
   (record-path-location-p nil :type boolean)
   ;; The main function for a binary.
   (main-function nil :type (or null symbol string))
-  ;; The entry points if block compiling with them.
-  (block-compile-entry-points nil :type list)
   ;; Whether to only consider combining top-level forms into a block when those are between explicit
   ;; (START-BLOCK) and (STOP-BLOCK) annotations.
   (block-compile-specified-only nil :type boolean)
@@ -699,22 +697,20 @@ it will signal an error."
 ;;;
 
 (defgeneric compile-source (src output-file &key emit-cfasl save-locations
-                                              readtable block-compile entry-points)
+                                              readtable block-compile)
   (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
  EMIT-CFASL unless nil causes the compilation process to emit the CFASL file.
  SAVE-LOCATIONS unless nil causes the compilation process to record
  line and column numbers for all forms read from SRC.
  READTABLE is the readtable to be used for compilation.
- BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
- ENTRY-POINTS is a list of entry points which are used when block-compiling."))
+ BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED."))
 
 (defmethod compile-source (src output-file
                            &rest key-args &key
                                           emit-cfasl
                                           save-locations
                                           (readtable (copy-readtable))
-                                          block-compile
-                                          entry-points)
+                                          block-compile)
   "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
@@ -730,8 +726,7 @@ it will signal an error."
                                           emit-cfasl
                                           save-locations
                                           (readtable (copy-readtable))
-                                          block-compile
-                                          entry-points)
+                                          block-compile)
   "Compiles the list of SRCS files into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
@@ -752,8 +747,7 @@ it will signal an error."
             (compile-files srcs :output-file output-file
                                 :emit-cfasl emit-cfasl
                                 :external-format :utf-8
-                                :block-compile block-compile
-                                :entry-points entry-points))))
+                                :block-compile block-compile))))
     (unless (and warnings-p failures-p)
       (vv "Files ~A compiled without warnings." srcs))
     (when warnings-p
@@ -897,7 +891,6 @@ it will signal an error."
                   :block-compile (if (action-block-compile-specified-only action)
                                      :specified
                                      t)
-                  :entry-points (action-block-compile-entry-points action)
                   :readtable (action-readtable action))
   (mapc #'(lambda (source-file)
             (write-file-hash source-file
@@ -951,7 +944,6 @@ it will signal an error."
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
-                   block-compile-entry-points
                    block-compile-specified-only
                    force
                    main features nowarn
@@ -971,8 +963,6 @@ it will signal an error."
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from bazel -c <compilation-mode>
-  BLOCK-COMPILE-ENTRY-POINTS - Functions to treat as library entry-points when block-compiling. If
-    nil, treat all functions as potential entry-points.
   BLOCK-COMPILE-SPECIFIED-ONLY - Whether to only combine top-level-forms into a block within
     explicit (START-BLOCK) and (END-BLOCK), otherwise considering each top-level-form individually.
     If not specified, all forms are combined into a single block.
@@ -1059,12 +1049,6 @@ it will signal an error."
                    (non-fatal-error #'handle-error))
       (verbose "Loading ~D source file~:P..." (length load))
       (mapc #'process-file* load)
-      (setf (action-block-compile-entry-points action)
-            (when block-compile-entry-points
-              (with-input-from-string (s block-compile-entry-points)
-                (loop with curr = nil
-                      while (setf curr (read s nil nil))
-                      collect curr))))
 
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
