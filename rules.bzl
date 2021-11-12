@@ -510,7 +510,7 @@ def lisp_compile_srcs(
                 direct_inputs,
                 transitive = [lisp_info.compile_data],
             ),
-            progress_message = "Compiling %{name}",
+            progress_message = "Compiling %{label}",
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = ["block-compile", build_flags, compile_flags, file_flags],
