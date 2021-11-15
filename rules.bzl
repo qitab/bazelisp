@@ -395,8 +395,8 @@ def lisp_compile_srcs(
             build_flags = build_flags,
         )
 
-    multipass = (order == "multipass") or block_compile
-    serial = (order == "serial") and not multipass
+    multipass = (order == "multipass")
+    serial = (order == "serial")
 
     build_image = image[DefaultInfo].files_to_run
     compile_image = build_image
