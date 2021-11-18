@@ -5,6 +5,9 @@
 This project contains build rules and toolchain for building Common Lisp code
 with SBCL using Bazel.
 
+These rules are intended to be
+compatible with the latest released version of Bazel, currently 4.2.1.
+
 See also the full
 [Stardoc generated documentation](doc/rules.md)
 for `lisp_library`, `lisp_binary`, and `lisp_test`.

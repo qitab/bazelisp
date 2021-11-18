@@ -595,7 +595,10 @@ def _lisp_runfiles(ctx):
         for target in runfiles_attr:
             transitive_runfiles.append(target[DefaultInfo].default_runfiles)
     transitive_runfiles.append(ctx.attr.image[DefaultInfo].default_runfiles)
-    return runfiles.merge_all(transitive_runfiles)
+
+    for tr in transitive_runfiles:
+        runfiles = runfiles.merge(tr)
+    return runfiles
 
 def _lisp_providers(ctx, lisp_info, fasl, executable = None):
     executable_list = [executable] if executable != None else []
