@@ -950,7 +950,9 @@ it will signal an error."
                    precompile-generics
                    save-runtime-options
                    coverage
-                   emit-cfasl)
+                   emit-cfasl
+                   verbose
+                   interactive)
   "Main processing function for bazel.main.
  Arguments:
   ARGS - all the arguments
@@ -973,7 +975,10 @@ it will signal an error."
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
-  EMIT-CFASL - will emit also .CFASL file in addition to the FASL file."
+  EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
+  VERBOSE - Verbosity level from 0 to 3.
+  INTERACTIVE - Whether to enable interactive debugger."
+  (declare (ignore interactive verbose))  ; handled in execute-command
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
         (parse-specs specs)
