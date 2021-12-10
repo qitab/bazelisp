@@ -133,6 +133,8 @@
   (record-path-location-p nil :type boolean)
   ;; The main function for a binary.
   (main-function nil :type (or null symbol string))
+  ;; Whether block compilation is enabled.
+  (block-compile-p nil :type boolean)
   ;; Whether to only consider combining top-level forms into a block when those are between explicit
   ;; (START-BLOCK) and (STOP-BLOCK) annotations.
   (block-compile-specified-only nil :type boolean)
@@ -230,6 +232,8 @@
 
 ;; The current file being processed.
 (declaim (type (or null string) *current-source-file*))
+;; TODO(dougk): This doesn't provide a way to distinguish which file is associated with errors
+;; raised when compile-files is processing multiple srcs at once.
 (defvar *current-source-file* nil
   "Contains the name of the currently processed file. Used by error reporting.")
 
@@ -696,32 +700,6 @@ it will signal an error."
 ;;; Main compile/build loop
 ;;;
 
-(defgeneric compile-source (src output-file &key emit-cfasl save-locations
-                                              readtable block-compile)
-  (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
- EMIT-CFASL unless nil causes the compilation process to emit the CFASL file.
- SAVE-LOCATIONS unless nil causes the compilation process to record
- line and column numbers for all forms read from SRC.
- READTABLE is the readtable to be used for compilation.
- BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED."))
-
-(defmethod compile-source (src output-file
-                           &rest key-args &key
-                                          emit-cfasl
-                                          save-locations
-                                          (readtable (copy-readtable))
-                                          block-compile)
-  "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
- Returns (values FASL WARNINGS-P FAILURES-P).
- Parameters:
-  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
-  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
-  READTABLE is the readtable to be used for compiling the SRC file.
-  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
-  ENTRY-POINTS is a list of entry points which are used when block-compiling."
-  (apply #'%compile-sources (list src) output-file key-args))
-
-
 (defun %compile-sources (srcs output-file &key
                                           emit-cfasl
                                           save-locations
@@ -761,6 +739,32 @@ it will signal an error."
                                 src output-file :readtable readtable))
             srcs))
     (values fasl warnings-p failures-p)))
+
+(defgeneric compile-source (src output-file &key emit-cfasl save-locations
+                                              readtable block-compile)
+  (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
+ EMIT-CFASL unless nil causes the compilation process to emit the CFASL file.
+ SAVE-LOCATIONS unless nil causes the compilation process to record
+ line and column numbers for all forms read from SRC.
+ READTABLE is the readtable to be used for compilation.
+ BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED."))
+
+(defmethod compile-source (src output-file
+                           &rest key-args &key
+                                          emit-cfasl
+                                          save-locations
+                                          (readtable (copy-readtable))
+                                          block-compile)
+  "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
+ Returns (values FASL WARNINGS-P FAILURES-P).
+ Parameters:
+  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
+  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
+  READTABLE is the readtable to be used for compiling the SRC file.
+  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
+  ENTRY-POINTS is a list of entry points which are used when block-compiling."
+  (declare (ignore emit-cfasl save-locations readtable block-compile))
+  (apply #'%compile-sources (list src) output-file key-args))
 
 (defun write-file-hash (src hash-file)
   "Compute the hash of the SRC file and write it to the HASH-FILE."
@@ -884,41 +888,33 @@ it will signal an error."
   (check-and-save-image action command))
 (defmethod finish-action ((action action) (command (eql :core)))
   (check-and-save-image action command))
-(defmethod finish-action ((action action) (command (eql :block-compile)))
-  (%compile-sources (action-source-files action) (action-find-output-file action "fasl")
-                  :emit-cfasl (action-emit-cfasl-p action)
-                  :save-locations (action-record-path-location-p action)
-                  :block-compile (if (action-block-compile-specified-only action)
-                                     :specified
-                                     t)
-                  :readtable (action-readtable action))
-  (mapc #'(lambda (source-file)
-            (write-file-hash source-file
-                             (action-find-output-file-with-name
-                              action (pathname-name source-file) "hash")))
-        (action-source-files action))
-  (check-failures action)
-    (save-deferred-warnings
-     (action-find-output-file action "warnings")
-     (action-deferred-warnings action)))
 
 (defmethod finish-action ((action action) (command (eql :compile)))
   "Compiles the last source file."
-  (assert (= (length (action-source-files action)) 1) nil ; NOLINT
-          "Exactly one Lisp source file needed for the COMPILE action.")
-  (let* ((source-file (first (action-source-files action)))
-         (*current-source-file* source-file))
-    (pprog1
-     ;; The file should compile in the current-thread context.
-     (%compile-sources (list source-file) (action-find-output-file action "fasl")
-                       :emit-cfasl (action-emit-cfasl-p action)
-                       :save-locations (action-record-path-location-p action)
-                       :readtable (action-readtable action))
-     (write-file-hash source-file (action-find-output-file action "hash")))
+  (let* ((srcs (action-source-files action))
+         ;; Currently SBCL is not binding *compile-file-pathname* when raising undefined-function.
+         ;; So handle this in at least the one-file case.
+         (*current-source-file*
+          (unless (rest srcs)
+           (first srcs))))
+    (%compile-sources srcs
+                      (action-find-output-file action "fasl")
+                      :emit-cfasl (action-emit-cfasl-p action)
+                      :save-locations (action-record-path-location-p action)
+                      :block-compile (if (and (action-block-compile-p action)
+                                              (action-block-compile-specified-only action))
+                                         :specified
+                                         (action-block-compile-p action))
+                      :readtable (action-readtable action))
+    (mapc #'(lambda (source-file)
+              (write-file-hash source-file
+                               (action-find-output-file-with-name
+                                action (pathname-name source-file) "hash")))
+          (action-source-files action))
     (check-failures action)
     (save-deferred-warnings
-     (action-find-output-file action "warnings")
-     (action-deferred-warnings action))))
+      (action-find-output-file action "warnings")
+      (action-deferred-warnings action))))
 
 (defun parse-specs (specs)
   "Parse the SPECS file and return values for SRCS, DEPS, LOAD, WARNINGS, and HASHES."
@@ -944,6 +940,7 @@ it will signal an error."
                    warnings hashes
                    specs
                    (compilation-mode :fastbuild)
+                   block-compile
                    block-compile-specified-only
                    force
                    main features nowarn
@@ -951,12 +948,11 @@ it will signal an error."
                    save-runtime-options
                    coverage
                    emit-cfasl
-                   verbose
-                   interactive)
+                   verbose)
   "Main processing function for bazel.main.
  Arguments:
   ARGS - all the arguments
-  COMMAND - one of :core, :binary, :compile, or :block-compile
+  COMMAND - one of :core, :binary, or :compile
   DEPS - dependencies,
   LOAD - files to be loaded after dependencies.
   SRCS - sources for a binary core or for compilation,
@@ -965,6 +961,7 @@ it will signal an error."
   WARNINGS - is a list of files that contain deferred warnings,
   HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from bazel -c <compilation-mode>
+  BLOCK-COMPILE - Whether to enable block compilation.
   BLOCK-COMPILE-SPECIFIED-ONLY - Whether to only combine top-level-forms into a block within
     explicit (START-BLOCK) and (END-BLOCK), otherwise considering each top-level-form individually.
     If not specified, all forms are combined into a single block.
@@ -976,8 +973,7 @@ it will signal an error."
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
   EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
-  VERBOSE - Verbosity level from 0 to 3.
-  INTERACTIVE - Whether to enable interactive debugger."
+  VERBOSE - Verbosity level from 0 to 3."
   (declare (ignore interactive verbose))  ; handled in execute-command
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
@@ -1004,6 +1000,7 @@ it will signal an error."
                         :save-runtime-options-p save-runtime-options
                         :emit-cfasl-p emit-cfasl
                         :record-path-location-p coverage
+                        :block-compile-p block-compile
                         :block-compile-specified-only block-compile-specified-only))
 
          (*compile-verbose* (>= *verbose* 1))
@@ -1021,12 +1018,6 @@ it will signal an error."
 
     (unless outs
       (fatal "Missing output file. Called with:~%~{~12T~A: ~A~%~}" args))
-
-    (when (and (eq command :compile) (/= (length srcs) 1))
-      ;; This assertion is arbitrary.
-      ;; If changed, make sure processing source files below is adapted.
-      (fatal "Compile command assumes only one source. Given:~{~%~3T~A~}~%" srcs))
-
     (init-action action command)
 
     (add-features features)
@@ -1068,8 +1059,6 @@ it will signal an error."
       (finish-action action command))))
 
 (defmethod execute-command ((command (eql :compile)) &rest args)
-  (apply #'process command args))
-(defmethod execute-command ((command (eql :block-compile)) &rest args)
   (apply #'process command args))
 (defmethod execute-command ((command (eql :binary)) &rest args)
   (apply #'process command args))

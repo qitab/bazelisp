@@ -433,72 +433,67 @@ def lisp_compile_srcs(
     warnings = []
     hashes = []
     output_fasl = ctx.actions.declare_file(name + ".fasl")
-    if not block_compile:
-        for src in srcs:
-            stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
-            if len(srcs) == 1:
-                fasl = output_fasl
-            else:
-                fasl = ctx.actions.declare_file(stem + ".fasl")
-            fasls.append(fasl)
-            hashes.append(ctx.actions.declare_file(stem + ".hash"))
-            warnings.append(ctx.actions.declare_file(stem + ".warnings"))
-            outs = [fasls[-1], hashes[-1], warnings[-1]]
-            file_flags = ctx.actions.args()
-            file_flags.add_joined("--outs", outs, join_with = " ")
-            file_flags.add("--srcs", src)
-            file_flags.add_joined("--deps", deps_srcs, join_with = " ")
-            file_flags.add_joined("--load", load_srcs, join_with = " ")
-            file_flags.add_joined("--nowarn", nowarn, join_with = " ")
-
-            direct_inputs = [src]
-            direct_inputs.extend(deps_srcs)
-            direct_inputs.extend(load_srcs)
-            ctx.actions.run(
-                outputs = outs,
-                inputs = depset(
-                    direct_inputs,
-                    transitive = [lisp_info.compile_data],
-                    order = "preorder",
-                ),
-                progress_message = "Compiling %{input}",
-                mnemonic = "LispCompile",
-                env = _BAZEL_LISP_IMAGE_ENV,
-                arguments = ["compile", build_flags, compile_flags, file_flags],
-                executable = compile_image,
-            )
-            if serial:
-                load_srcs.append(src)
+    if block_compile:
+        # Compile all at once
+        compile_srcs_list = [srcs]
+        progress_message = "Compiling %{label}"
     else:
-        stem = "{}~/".format(name)
-        fasls.append(output_fasl)
-        hashes.extend([ctx.actions.declare_file(stem + src.short_path[:-len(src.extension) - 1] + ".hash") for src in srcs])
-        warnings.append(ctx.actions.declare_file(stem + name + ".warnings"))
-        outs = [fasls[0], warnings[0]] + hashes
-        file_flags = ctx.actions.args()
-        file_flags.add_joined("--outs", outs, join_with = " ")
-        file_flags.add_joined("--srcs", srcs, join_with = " ")
-        file_flags.add_joined("--deps", deps_srcs, join_with = " ")
-        file_flags.add_joined("--load", load_srcs, join_with = " ")
-        file_flags.add_joined("--nowarn", nowarn, join_with = " ")
-        if block_compile_specified_only:
-            file_flags.add("--block-compile-specified-only")
+        # Compile one at a time
+        compile_srcs_list = [[src] for src in srcs]
+        progress_message = "Compiling %{input}"
 
-        direct_inputs = list(srcs)
-        direct_inputs.extend(deps_srcs)
-        direct_inputs.extend(load_srcs)
+    for compile_srcs in compile_srcs_list:
+        if len(compile_srcs_list) == 1:
+            # Either we're compiling everything together for block-compilation
+            # or there's only one src.
+            compile_fasl = output_fasl
+            compile_warnings = ctx.actions.declare_file(
+                "{}~/{}.warnings".format(name, name),
+            )
+        else:
+            # We're in the one-at-a-time case and there are multiple srcs.
+            src = compile_srcs[0]
+            stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
+            compile_fasl = ctx.actions.declare_file(stem + ".fasl")
+            compile_warnings = ctx.actions.declare_file(stem + ".warnings")
+        compile_hashes = [
+            ctx.actions.declare_file("{}~/{}.hash".format(
+                name,
+                src.short_path[:-len(src.extension) - 1],
+            ))
+            for src in compile_srcs
+        ]
+        fasls.append(compile_fasl)
+        warnings.append(compile_warnings)
+        hashes.extend(compile_hashes)
+        outs = [compile_fasl]
+        outs.extend(compile_hashes)
+        outs.append(compile_warnings)
+        action_flags = ctx.actions.args()
+        action_flags.add_joined("--outs", outs, join_with = " ")
+        action_flags.add_joined("--srcs", compile_srcs, join_with = " ")
+        action_flags.add_joined("--deps", deps_srcs, join_with = " ")
+        action_flags.add_joined("--load", load_srcs, join_with = " ")
+        action_flags.add_joined("--nowarn", nowarn, join_with = " ")
+        if block_compile:
+            action_flags.add("--block-compile")
+            if block_compile_specified_only:
+                action_flags.add("--block-compile-specified-only")
         ctx.actions.run(
             outputs = outs,
             inputs = depset(
-                direct_inputs,
+                compile_srcs + deps_srcs + load_srcs,
                 transitive = [lisp_info.compile_data],
+                order = "preorder",
             ),
-            progress_message = "Compiling %{label}",
+            progress_message = progress_message,
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
-            arguments = ["block-compile", build_flags, compile_flags, file_flags],
+            arguments = ["compile", build_flags, compile_flags, action_flags],
             executable = compile_image,
         )
+        if serial:
+            load_srcs.extend(compile_srcs)
 
     if indexer_build:
         srcs = indexer_metadata + srcs

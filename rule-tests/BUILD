@@ -314,7 +314,7 @@ lisp_actions_test(
          # a single src.
          '"--outs", "bin/package/binary.fasl ' +
          "bin/package/binary~/package/binary.hash " +
-         'bin/package/binary~/package/binary.warnings", ' +
+         'bin/package/binary~/binary.warnings", ' +
          '"--srcs", "package/binary.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
         ("LispCore: " +
@@ -345,7 +345,7 @@ lisp_actions_test(
          # a single src.
          '"--outs", "bin/package/binary-allow-save-lisp.fasl ' +
          "bin/package/binary-allow-save-lisp~/package/binary-allow-save-lisp.hash " +
-         'bin/package/binary-allow-save-lisp~/package/binary-allow-save-lisp.warnings", ' +
+         'bin/package/binary-allow-save-lisp~/binary-allow-save-lisp.warnings", ' +
          '"--srcs", "bin/package/binary-allow-save-lisp.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
         ("LispCore: " +
@@ -377,7 +377,7 @@ lisp_actions_test(
          # a single src.
          '"--outs", "bin/package/library.fasl ' +
          "bin/package/library~/package/library.hash " +
-         'bin/package/library~/package/library.warnings", ' +
+         'bin/package/library~/library.warnings", ' +
          '"--srcs", "package/library.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
     ],
@@ -393,7 +393,7 @@ lisp_actions_dbg_test(
          'library-feature", ' +
          '"--outs", "bin/package/library.fasl ' +
          "bin/package/library~/package/library.hash " +
-         'bin/package/library~/package/library.warnings", ' +
+         'bin/package/library~/library.warnings", ' +
          '"--srcs", "package/library.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
     ],
@@ -409,7 +409,7 @@ lisp_actions_opt_test(
          'library-feature", ' +
          '"--outs", "bin/package/library.fasl ' +
          "bin/package/library~/package/library.hash " +
-         'bin/package/library~/package/library.warnings", ' +
+         'bin/package/library~/library.warnings", ' +
          '"--srcs", "package/library.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
     ],
