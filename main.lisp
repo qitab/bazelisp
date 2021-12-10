@@ -959,7 +959,7 @@ it will signal an error."
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
   VERBOSE - Verbosity level from 0 to 3."
-  (declare (ignore interactive verbose))  ; handled in execute-command
+  (declare (ignore verbose))  ; handled in execute-command
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
         (parse-specs specs)
