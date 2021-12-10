@@ -120,8 +120,6 @@
   (processing-sources-p nil :type boolean)
   ;; A list of source files to be compiled.
   (source-files nil :type list)
-  ;; Flag indicating that the cfasl needs to be generated.
-  (emit-cfasl-p nil :type boolean)
   ;; Flag indicating that the compilation should commence even with errors.
   (force-compilation-p nil :type boolean)
   ;; Used to precompile the generic functions.
@@ -701,14 +699,12 @@ it will signal an error."
 ;;;
 
 (defun %compile-sources (srcs output-file &key
-                                          emit-cfasl
                                           save-locations
                                           (readtable (copy-readtable))
                                           block-compile)
   "Compiles the list of SRCS files into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
-  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
   SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
   READTABLE is the readtable to be used for compiling the SRC file.
   BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
@@ -723,7 +719,6 @@ it will signal an error."
                 (*readtable* (setup-readtable readtable)))
             (delete-read-only output-file)
             (compile-files srcs :output-file output-file
-                                :emit-cfasl emit-cfasl
                                 :external-format :utf-8
                                 :block-compile block-compile))))
     (unless (and warnings-p failures-p)
@@ -740,10 +735,10 @@ it will signal an error."
             srcs))
     (values fasl warnings-p failures-p)))
 
-(defgeneric compile-source (src output-file &key emit-cfasl save-locations
-                                              readtable block-compile)
+(defgeneric compile-source (src output-file &key save-locations
+                                                 readtable
+                                                 block-compile)
   (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
- EMIT-CFASL unless nil causes the compilation process to emit the CFASL file.
  SAVE-LOCATIONS unless nil causes the compilation process to record
  line and column numbers for all forms read from SRC.
  READTABLE is the readtable to be used for compilation.
@@ -751,19 +746,17 @@ it will signal an error."
 
 (defmethod compile-source (src output-file
                            &rest key-args &key
-                                          emit-cfasl
                                           save-locations
                                           (readtable (copy-readtable))
                                           block-compile)
   "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
-  EMIT-CFASL set to non-nil will also emit the corresponding CFASL file.
   SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
   READTABLE is the readtable to be used for compiling the SRC file.
   BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
   ENTRY-POINTS is a list of entry points which are used when block-compiling."
-  (declare (ignore emit-cfasl save-locations readtable block-compile))
+  (declare (ignore save-locations readtable block-compile))
   (apply #'%compile-sources (list src) output-file key-args))
 
 (defun write-file-hash (src hash-file)
@@ -816,11 +809,6 @@ it will signal an error."
                          :load-mode (action-compilation-mode action))
     ;; Sort some heap after every FASL.
     #+sbcl (sb-ext:gc)))
-
-(defmethod process-file ((action action) (file string) (type (eql :cfasl)))
-  "Loads a CFASL file. Those are dependencies only loaded when compiling or building a binary."
-  (unless (action-processing-sources-p action)
-    (load-file file :action action :load-mode (action-compilation-mode action))))
 
 (defmethod process-file ((action action) (file string) (type (eql :warnings)))
   "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
@@ -899,7 +887,6 @@ it will signal an error."
            (first srcs))))
     (%compile-sources srcs
                       (action-find-output-file action "fasl")
-                      :emit-cfasl (action-emit-cfasl-p action)
                       :save-locations (action-record-path-location-p action)
                       :block-compile (if (and (action-block-compile-p action)
                                               (action-block-compile-specified-only action))
@@ -947,7 +934,6 @@ it will signal an error."
                    precompile-generics
                    save-runtime-options
                    coverage
-                   emit-cfasl
                    verbose)
   "Main processing function for bazel.main.
  Arguments:
@@ -972,7 +958,6 @@ it will signal an error."
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
-  EMIT-CFASL - will emit also .CFASL file in addition to the FASL file.
   VERBOSE - Verbosity level from 0 to 3."
   (declare (ignore interactive verbose))  ; handled in execute-command
   (multiple-value-setq (srcs deps load warnings hashes)
@@ -998,7 +983,6 @@ it will signal an error."
                         :force-compilation-p force
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
-                        :emit-cfasl-p emit-cfasl
                         :record-path-location-p coverage
                         :block-compile-p block-compile
                         :block-compile-specified-only block-compile-specified-only))
