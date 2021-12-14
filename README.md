@@ -202,6 +202,23 @@ except the `LispCompile` and `LispCore` actions would behave as they would in
 `LISP_BUILD_FORCE` runs `LispCompile` and `LispCore` actions that try to proceed
 despite errors to the greatest extent possible.
 
+`VERBOSE_LISP_BUILD` overrides the setting of the `verbose` attribute if set to
+a higher value.
+
+## Build debugging
+
+When build steps fail, passing
+[`--verbose_failures`](https://docs.bazel.build/versions/main/command-line-reference.html#flag--verbose_failures)
+at the Bazel CLI will result in the full command-line being printed for the
+failing actions. (Or
+[`--subcommands`](https://docs.bazel.build/versions/main/command-line-reference.html#flag--subcommands)
+can be used to print all action command-lines.)
+
+When rerunning the command for a `LispCompile` or `LispCore` action locally,
+the `--verbose` flag can be set to `3` to provide maximum debugging output.
+The `--interactive` flag can also be passed to the compilation image to enable
+the interactive debugger, which the compilation image disables by default.
+
 ## Providers and outputs
 
 These rules

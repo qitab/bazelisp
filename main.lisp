@@ -934,8 +934,10 @@ it will signal an error."
                    precompile-generics
                    save-runtime-options
                    coverage
-                   verbose)
-  "Main processing function for bazel.main.
+                   verbose
+                   interactive)
+  "Main processing function for bazel.main. The keyword arguments of this function are flags for
+the compilation image.
  Arguments:
   ARGS - all the arguments
   COMMAND - one of :core, :binary, or :compile
@@ -958,7 +960,8 @@ it will signal an error."
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
-  VERBOSE - Verbosity level from 0 to 3."
+  VERBOSE - Verbosity level from 0 to 3.
+  INTERACTIVE - Whether to enable interactive debugging."
   (declare (ignore interactive verbose))  ; handled in execute-command
   (multiple-value-setq (srcs deps load warnings hashes)
     (if specs
