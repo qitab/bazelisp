@@ -18,7 +18,7 @@ load(
     "collect_lisp_info",
     "extend_lisp_info",
 )
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 
 _BAZEL_LISP_IMAGE = "//:image"
@@ -827,7 +827,7 @@ lisp_binary = rule(
     executable = True,
     attrs = _LISP_BINARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    toolchains = use_cc_toolchain(),
     doc = """
 Supports all of the same attributes as [`lisp_library`](#lisp_library), plus
 additional attributes governing the behavior of the completed binary. The
@@ -851,7 +851,7 @@ lisp_test = rule(
     test = True,
     attrs = _LISP_TEST_ATTRS,
     fragments = ["cpp"],
-    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    toolchains = use_cc_toolchain(),
     doc = """
 Like [`lisp_binary`](#lisp_binary), for defining tests to be run with the
 [`test`](https://docs.bazel.build/versions/master/user-manual.html#test)
@@ -915,7 +915,7 @@ lisp_library = rule(
     implementation = _lisp_library_impl,
     attrs = _LISP_LIBRARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
+    toolchains = use_cc_toolchain(),
     doc = """
 The basic compilation unit for Lisp code. Can have Lisp dependencies
 ([`deps`](#lisp_library-deps)) and C/C++ dependencies
