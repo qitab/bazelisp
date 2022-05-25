@@ -17,7 +17,6 @@
 
 (defpackage #:bazel.sbcl
   (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
-  (:import-from #:sb-c #:compile-files)
   (:import-from #:sb-md5 #:md5sum-file)
   (:export #:compile-files
            #:exit
@@ -388,3 +387,10 @@
   "Executes body in an environment where FIND-PACKAGE will not signal an unknown package error.
  Instead it will return the DEFAULT package."
   `(call-with-augmented-find-package (lambda () ,@body) :default ,default))
+
+(defun compile-files (names &rest rest)
+  "Call COMPILE-FILE on NAMES, which must be singular despite being named NAMES,
+passing through REST unaltered."
+  (if (typep names '(or atom (cons string null)))
+      (apply #'compile-file (if (atom names) names (car names)) rest)
+      (error "Multiple file support is incomplete")))
