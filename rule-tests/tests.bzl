@@ -7,6 +7,8 @@ google3/lisp/devtools/bazel/macro-tests/.
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//:provider.bzl", "LispInfo")
 
+DYNSPACE = '"--dynamic-space-size", "4GB"'  # value to expect for SBCL's --dynamic-space-size
+
 def create_empty_files(names):  # buildozer: disable=unnamed-macro
     for name in names:
         native.genrule(

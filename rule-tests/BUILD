@@ -1,6 +1,7 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(
     ":tests.bzl",
+    "DYNSPACE",
     "create_empty_files",
     "fake_lisp_rule",
     "has_action_test",
@@ -307,7 +308,7 @@ lisp_actions_test(
     name = "lisp-binary-one-file-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature ' +
          'binary-feature", ' +
          # The FASL is under the target name instead of src path if thre's
@@ -338,7 +339,7 @@ lisp_actions_test(
     name = "lisp-binary-allow-save-lisp-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature ' +
          'binary-feature", ' +
          # The FASL is under the target name instead of src path if thre's
@@ -370,7 +371,7 @@ lisp_actions_test(
     name = "lisp-library-one-file-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature ' +
          'library-feature", ' +
          # The FASL is under the target name instead of src path if thre's
@@ -388,7 +389,7 @@ lisp_actions_dbg_test(
     name = "lisp-library-one-file-dbg-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "dbg", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "dbg", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature ' +
          'library-feature", ' +
          '"--outs", "bin/package/library.fasl ' +
@@ -404,7 +405,7 @@ lisp_actions_opt_test(
     name = "lisp-library-one-file-opt-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "opt", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "opt", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature ' +
          'library-feature", ' +
          '"--outs", "bin/package/library.fasl ' +
@@ -465,7 +466,7 @@ lisp_actions_test(
     name = "lisp-library-serial-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", "--outs", ' +
          '"bin/package/library-serial~/package/library-serial-1.fasl ' +
          "bin/package/library-serial~/package/library-serial-1.hash " +
@@ -473,7 +474,7 @@ lisp_actions_test(
          '"--srcs", "bin/package/library-serial-1.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", ' +
          '"--outs", "bin/package/library-serial~/package/library-serial-2.fasl ' +
          "bin/package/library-serial~/package/library-serial-2.hash " +
@@ -495,7 +496,7 @@ lisp_actions_test(
     name = "lisp-library-parallel-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", "--outs", ' +
          '"bin/package/library-parallel~/package/library-parallel-1.fasl ' +
          "bin/package/library-parallel~/package/library-parallel-1.hash " +
@@ -503,7 +504,7 @@ lisp_actions_test(
          '"--srcs", "bin/package/library-parallel-1.lisp", ' +
          '"--deps", "package/dep.lisp"]'),
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", ' +
          '"--outs", "bin/package/library-parallel~/package/library-parallel-2.fasl ' +
          "bin/package/library-parallel~/package/library-parallel-2.hash " +
@@ -523,7 +524,7 @@ lisp_actions_test(
     name = "lisp-library-multipass-actions-test",
     commands = [
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", "--outs", ' +
          '"bin/package/library-multipass~/package/library-multipass-1.fasl ' +
          "bin/package/library-multipass~/package/library-multipass-1.hash " +
@@ -536,7 +537,7 @@ lisp_actions_test(
          # And some now-unavoidable warnings get suppressed.
          '"--nowarn", "redefined-method redefined-function"]'),
         ("LispCompile: " +
-         '["bin/package/image", "compile", "--compilation-mode", "fastbuild", ' +
+         '["bin/package/image", ' + DYNSPACE + ', "compile", "--compilation-mode", "fastbuild", ' +
          '"--bindir", "bin", "--features", "dep-feature image-feature", ' +
          '"--outs", "bin/package/library-multipass~/package/library-multipass-2.fasl ' +
          "bin/package/library-multipass~/package/library-multipass-2.hash " +

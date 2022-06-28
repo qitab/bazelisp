@@ -489,7 +489,14 @@ def lisp_compile_srcs(
             progress_message = progress_message,
             mnemonic = "LispCompile",
             env = _BAZEL_LISP_IMAGE_ENV,
-            arguments = ["compile", build_flags, compile_flags, action_flags],
+            arguments = [
+                "--dynamic-space-size",
+                "4GB",  # reduce from default of 16GB
+                "compile",
+                build_flags,
+                compile_flags,
+                action_flags,
+            ],
             executable = compile_image,
         )
         if serial:

@@ -109,6 +109,7 @@ genrule(
     ],
     outs = ["elfinate"],
     cmd = "$(location @local_sbcl//:sbcl) --noinform" +
+          " --dynamic-space-size 512MB" +  # reduce from default of 16GB
           " --load $(location @local_sbcl//:contrib/sb-posix)" +
           " --eval '(setq sb-ext:*evaluator-mode* :compile)'" +
           " --load $(location @sbcl//:tools-for-build/editcore.lisp)" +
