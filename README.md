@@ -94,7 +94,7 @@ some things about the build:
 *   Features specified by the `add_features` attribute of the target and its
     Lisp dependencies
 
-Depenencies are loaded with `#'load-file` with the *optimize qualities*:
+Dependencies are loaded with `#'load-file` with the *optimize qualities*:
 
 `speed` | `debug` | `safety` | `space` | `compilation-speed`
 ------- | ------- | -------- | ------- | -------------------
@@ -143,7 +143,7 @@ digraph {
 }
 ```
 
-For `lisp_binary` and `lisp_test` rules, the rule also genenerates an executable
+For `lisp_binary` and `lisp_test` rules, the rule also generates an executable
 output, which is the default output for those rules. By default, that executable
 runs the function or code specified in the `main` attribute (which can be
 overridden by `LISP_MAIN`). That defaults to `cl-user::main`.
@@ -240,7 +240,7 @@ of `lisp_library`. For `lisp_binary` and `lisp_test`, the default output is the
 executable (same name as the target).
 
 If the flag `--//:additional_dynamic_load_outputs` is
-passed, `OutputGroupInfo` has the following additoinal fields:
+passed, `OutputGroupInfo` has the following additional fields:
 
 *   `deps_manifest` additionally contains a plaintext representation of the
     target's transitive Lisp features (prefixed with `feature:`) and transitive
