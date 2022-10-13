@@ -718,7 +718,7 @@ def _lisp_binary_impl(ctx):
     # but it's nothing like having 40,000 closures over #<FUNCTION ALWAYS-BOUND {xxxxxx}>
     # (which is the SLOT-BOUNDP method "fast method function" for every defstruct slot)
     # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
-    linkopts = ["-Wl,-no-pie"]
+    linkopts = ["-Wl,-no-pie", "-Wl,--export-dynamic"]
 
     # Transform the .core file into a -core.o file, so that can be linked in
     # with the C++ dependencies.
