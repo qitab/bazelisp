@@ -50,6 +50,8 @@
 
 (in-package #:bazel.sbcl)
 
+(setq SB-KERNEL::*WARN-IF-STRANGE-MEMBER-TYPE-MEMBER* t)
+
 (defun exit (&optional (code 0))
   "Exit the process with a return CODE."
   (sb-ext:exit :code code))
