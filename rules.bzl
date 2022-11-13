@@ -152,7 +152,7 @@ _LISP_LIBRARY_ATTRS = {
     "_grep_includes": attr.label(
         allow_single_file = True,
         executable = True,
-        cfg = "host",
+        cfg = "exec",
         default = Label("@bazel_tools//tools/cpp:grep-includes"),
     ),
 }
