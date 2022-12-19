@@ -808,9 +808,7 @@ it will signal an error."
   (prog1 (load-file file :fasl file :action action
                          :load-mode (action-compilation-mode action))
     ;; Sort some heap after every FASL.
-    ;; But don't if #+msan, not because it wouldn't work, but because GC
-    ;; is slower, and we need to eliminate all extraneous delays.
-    #+sbcl (unless (member :msan *features*) (sb-ext:gc))))
+    #+sbcl (sb-ext:gc)))
 
 (defmethod process-file ((action action) (file string) (type (eql :warnings)))
   "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
