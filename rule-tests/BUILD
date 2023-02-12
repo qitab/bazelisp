@@ -19,6 +19,8 @@ load(
     "lisp_test",
 )
 
+package(default_applicable_licenses = ["//:license"])
+
 licenses(["notice"])
 
 # This can create some of the files needed for these tests, but the tests for
