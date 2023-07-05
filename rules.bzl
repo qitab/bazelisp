@@ -558,7 +558,6 @@ def _lisp_dynamic_library(ctx, lisp_info):
         cc_toolchain = cc_toolchain,
         linking_contexts = [lisp_info.cc_info.linking_context],
         output_type = "dynamic_library",
-        grep_includes = ctx.executable._grep_includes,
     )
     return linking_outputs.library_to_link.dynamic_library
 
@@ -819,7 +818,6 @@ def _lisp_binary_impl(ctx):
         stamp = ctx.attr.stamp,
         output_type = "executable",
         additional_inputs = link_additional_inputs,
-        grep_includes = ctx.executable._grep_includes,
     )
 
     return _lisp_providers(
