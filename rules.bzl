@@ -149,12 +149,6 @@ _LISP_LIBRARY_ATTRS = {
     "_cc_toolchain": attr.label(
         default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
     ),
-    "_grep_includes": attr.label(
-        allow_single_file = True,
-        executable = True,
-        cfg = "exec",
-        default = Label("@bazel_tools//tools/cpp:grep-includes"),
-    ),
 }
 
 _LISP_BINARY_ATTRS = dict(_LISP_LIBRARY_ATTRS)
