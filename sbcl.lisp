@@ -16,7 +16,7 @@
   (require :sb-md5))
 
 (defpackage #:bazel.sbcl
-  (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
+  (:use #:bazel.utils #:common-lisp #:sb-alien #:sb-thread)
   (:import-from #:sb-md5 #:md5sum-file)
   (:export #:compile-files
            #:exit
