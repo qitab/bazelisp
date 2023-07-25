@@ -485,7 +485,7 @@ def lisp_compile_srcs(
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = [
                 "--dynamic-space-size",
-                "4GB",  # reduce from default of 16GB
+                "5GB",  # reduce from default of 16GB
                 "compile",
                 build_flags,
                 compile_flags,
