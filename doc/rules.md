@@ -13,7 +13,6 @@ lisp_binary(<a href="#lisp_binary-name">name</a>, <a href="#lisp_binary-deps">de
             <a href="#lisp_binary-malloc">malloc</a>, <a href="#lisp_binary-nowarn">nowarn</a>, <a href="#lisp_binary-order">order</a>, <a href="#lisp_binary-precompile_generics">precompile_generics</a>, <a href="#lisp_binary-runtime">runtime</a>, <a href="#lisp_binary-save_runtime_options">save_runtime_options</a>, <a href="#lisp_binary-stamp">stamp</a>, <a href="#lisp_binary-verbose">verbose</a>)
 </pre>
 
-
 Supports all of the same attributes as [`lisp_library`](#lisp_library), plus
 additional attributes governing the behavior of the completed binary. The
 [`main`](#lisp_binary-main) attribute defines behavior (generally specifying a
@@ -66,7 +65,6 @@ lisp_library(<a href="#lisp_library-name">name</a>, <a href="#lisp_library-deps"
              <a href="#lisp_library-cdeps">cdeps</a>, <a href="#lisp_library-compile_data">compile_data</a>, <a href="#lisp_library-image">image</a>, <a href="#lisp_library-instrument_coverage">instrument_coverage</a>, <a href="#lisp_library-nowarn">nowarn</a>, <a href="#lisp_library-order">order</a>, <a href="#lisp_library-verbose">verbose</a>)
 </pre>
 
-
 The basic compilation unit for Lisp code. Can have Lisp dependencies
 ([`deps`](#lisp_library-deps)) and C/C++ dependencies
 ([`cdeps`](#lisp_library-cdeps)).
@@ -110,7 +108,6 @@ lisp_test(<a href="#lisp_test-name">name</a>, <a href="#lisp_test-deps">deps</a>
           <a href="#lisp_test-block_compile_specified_only">block_compile_specified_only</a>, <a href="#lisp_test-cdeps">cdeps</a>, <a href="#lisp_test-compile_data">compile_data</a>, <a href="#lisp_test-image">image</a>, <a href="#lisp_test-instrument_coverage">instrument_coverage</a>, <a href="#lisp_test-main">main</a>, <a href="#lisp_test-malloc">malloc</a>,
           <a href="#lisp_test-nowarn">nowarn</a>, <a href="#lisp_test-order">order</a>, <a href="#lisp_test-precompile_generics">precompile_generics</a>, <a href="#lisp_test-runtime">runtime</a>, <a href="#lisp_test-save_runtime_options">save_runtime_options</a>, <a href="#lisp_test-stamp">stamp</a>, <a href="#lisp_test-verbose">verbose</a>)
 </pre>
-
 
 Like [`lisp_binary`](#lisp_binary), for defining tests to be run with the
 [`test`](https://docs.bazel.build/versions/master/user-manual.html#test)
