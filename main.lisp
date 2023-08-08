@@ -1096,7 +1096,9 @@ the compilation image.
                                   "~&~S: ~A while executing: ~A~%"
                                   (type-of e) e command)
                           (print-action-full
-                           :args args :stream *error-output*))))
+                           :args args :stream *error-output*)
+                          (unless verbose
+                            (exit 1)))))
     (with-continue-on-error (:when force)
       (call-next-method))))
 
