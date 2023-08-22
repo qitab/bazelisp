@@ -492,6 +492,7 @@ def lisp_compile_srcs(
                 action_flags,
             ],
             executable = compile_image,
+            toolchain = None,
         )
         if serial:
             load_srcs.extend(compile_srcs)
@@ -696,6 +697,7 @@ def _lisp_binary_impl(ctx):
         env = _BAZEL_LISP_IMAGE_ENV,
         arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
+        toolchain = None,
     )
 
     cc_toolchain = find_cc_toolchain(ctx)
@@ -780,6 +782,7 @@ def _lisp_binary_impl(ctx):
         arguments = [elfinate_args],
         progress_message = "Elfinating Lisp core %{output}",
         mnemonic = "LispElfinate",
+        toolchain = None,
     )
 
     # The rule's malloc attribute can be overridden by the --custom_malloc flag.
