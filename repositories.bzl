@@ -38,7 +38,7 @@ def bazelisp_repositories():
         git_repository,
         name = "rules_cc",
         remote = "https://github.com/bazelbuild/rules_cc.git",
-        commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
+        commit = "8bb0eb5c5ccd96b91753bb112096bb6993d16d13",
         shallow_since = "1605101351 -0800",
     )
 
