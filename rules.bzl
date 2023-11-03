@@ -827,6 +827,7 @@ def _lisp_binary_impl(ctx):
 lisp_binary = rule(
     implementation = _lisp_binary_impl,
     executable = True,
+    exec_groups = {"cpp_link": exec_group()},
     attrs = _LISP_BINARY_ATTRS,
     fragments = ["cpp"],
     toolchains = use_cc_toolchain(),
