@@ -330,7 +330,7 @@ lisp_actions_test(
          '"--save-runtime-options"]'),
         ("LispElfinate: " +
          '["bash", "-c", "$1 split $2 $3", "", ' +
-         '"bin/elfinate", ' +
+         '"bin/elfinate.sar", ' +
          '"bin/package/binary.core", ' +
          '"bin/package/binary.s"]'),
     ],
@@ -361,7 +361,7 @@ lisp_actions_test(
         ("LispElfinate: " +
          '["bash", "-c", "$1 copy $2 $3 && nm -p $3 | ' +
          'awk \'{print $2\\";\\"}BEGIN{print \\"{\\"}END{print \\"};\\"}\' > $4", "", ' +
-         '"bin/elfinate", ' +
+         '"bin/elfinate.sar", ' +
          '"bin/package/binary-allow-save-lisp.core", ' +
          '"bin/package/binary-allow-save-lisp-core.o", ' +
          '"bin/package/binary-allow-save-lisp-syms.lds"]'),

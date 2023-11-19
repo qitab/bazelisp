@@ -24,7 +24,7 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 _BAZEL_LISP_IMAGE = "//:image"
 _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
 _BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
-_ELFINATE = "//:elfinate"
+_ELFINATE = "//:elfinate.sar"
 _DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
 _DEFAULT_LIBSBCL = "@local_sbcl//:c-support"
 

@@ -109,24 +109,16 @@ genrule(
 # as the '.o' from elfinator can both be used as srcs to a cc_binary
 # which depends on ":c-support". The SBCL runtime auto-detects
 # presence of text-in-ELF and data-in-ELF.
-genrule(
-    name = "elfinator",
+sh_binary(
+    name = "elfinate",
     srcs = [
-        "@sbcl//:tools-for-build/editcore.lisp",
-        "@sbcl//:tools-for-build/corefile.lisp",
+        "elfconvert.sh",
     ],
-    outs = ["elfinate"],
-    cmd = "$(location @local_sbcl//:sbcl) --noinform" +
-          " --dynamic-space-size 512MB" +  # reduce from default of 16GB
-          " --load $(location @local_sbcl//:contrib/sb-posix)" +
-          " --eval '(setq sb-ext:*evaluator-mode* :compile)'" +
-          " --load $(location @sbcl//:tools-for-build/editcore.lisp)" +
-          " --eval '(save-lisp-and-die \"$(@)\" :executable t :toplevel (function elfinate))'",
-    output_to_bindir = 1,
-    tools = [
-        "@local_sbcl//:contrib/sb-posix",
+    data = [
         "@local_sbcl//:core",
         "@local_sbcl//:sbcl",
+        "@sbcl//:tools-for-build/corefile.lisp",
+        "@sbcl//:tools-for-build/editcore.lisp",
     ],
     visibility = ["//visibility:public"],
 )
