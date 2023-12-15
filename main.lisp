@@ -808,7 +808,7 @@ it will signal an error."
   (prog1 (load-file file :fasl file :action action
                          :load-mode (action-compilation-mode action))
     ;; Sort some heap after every FASL.
-    #+sbcl (sb-ext:gc)))
+    #+nil (sb-ext:gc)))
 
 (defmethod process-file ((action action) (file string) (type (eql :warnings)))
   "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
