@@ -119,6 +119,7 @@ sh_binary(
         "@local_sbcl//:sbcl",
         "@sbcl//:tools-for-build/corefile.lisp",
         "@sbcl//:tools-for-build/editcore.lisp",
+        "@sbcl//:tools-for-build/elftool.lisp",
     ],
     visibility = ["//visibility:public"],
 )

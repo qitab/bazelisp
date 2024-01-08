@@ -13,7 +13,7 @@ esac
 sbcl=$RUNFILES/google3/third_party/lisp/sbcl/binary-distribution/$sbcl_subdir/bin/sbcl
 args=(--noinform --dynamic-space-size 512MB)
 mode='(setq *evaluator-mode* :compile)'
-script=$RUNFILES/google3/third_party/lisp/sbcl/src/tools-for-build/editcore
+script=$RUNFILES/google3/third_party/lisp/sbcl/src/tools-for-build/elftool
 
 action=$1
 input=$2
