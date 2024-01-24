@@ -1108,4 +1108,12 @@ the compilation image.
 
 (defun main ()
   "Main entry point."
+  (let* ((timeout-string (sb-ext:posix-getenv "SBCL_WATCHDOG_TIMEOUT"))
+         (timeout (if timeout-string
+                      (read-from-string timeout-string)
+                      (- (* 15 60) 10))))
+    (unless (= timeout 0)
+      (sb-alien:alien-funcall
+       (sb-alien:extern-alien "start_sbcl_watchdog" (function sb-alien:void sb-alien:int))
+       timeout)))
   (apply #'execute-command (parse-command-args (command-line-arguments))))
