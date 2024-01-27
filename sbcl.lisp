@@ -44,9 +44,7 @@
            #:make-thread
            #:join-thread
            #:with-recursive-lock
-           #:make-mutex #:mutex
-           #:pmapcar
-           #:pprog1))
+           #:make-mutex #:mutex))
 
 (in-package #:bazel.sbcl)
 
@@ -71,27 +69,6 @@
   :OUTPUT - indicates that the error stream equals the output stream."
   (sb-ext:process-exit-code
    (sb-ext:run-program program args :input input :output output :error error :directory dir)))
-
-(declaim (ftype (function (function &rest list) (values list &optional)) pmapcar))
-(defun pmapcar (function &rest lists)
-  "Takes a FUNCTION and LISTS of arguments and executes the function for each argument tuple.
- The function is run is separate threads. The first tuple of arguments is run in the current one."
-  (flet ((run (args) (make-thread function :arguments args)))
-    (declare (dynamic-extent #'run) (inline run))
-    (let* ((args (apply #'mapcar #'list lists))
-           (threads (mapcar #'run (rest args))))
-      (when args
-        (list* (apply function (first args)) (mapcar #'join-thread threads))))))
-
-(defmacro pprog1 (form1 &rest forms)
-  "Take each of the FORMS and run them in a separate thread. Join threads at the end.
- Returns the result of the first form. FORM1 is executed in the current thread."
-  (let ((functions (gensym "F"))
-        (threads (gensym "T")))
-    `(let* ((,functions (list ,@(loop for form in forms collect `(lambda () ,form))))
-            (,threads (mapcar #'make-thread ,functions)))
-       (prog1 ,form1
-         (mapc #'join-thread ,threads)))))
 
 (defun inline-function-p (function)
   "Returns non-nil when the FUNCTION is declared inline."
