@@ -485,7 +485,7 @@ def lisp_compile_srcs(
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = [
                 "--dynamic-space-size",
-                "5GB",  # reduce from default of 16GB
+                "6GB",  # reduce from default of 16GB
                 "compile",
                 build_flags,
                 compile_flags,
@@ -749,7 +749,7 @@ def _lisp_binary_impl(ctx):
         elfinate_args.add(core_object_file)
         elfinate_args.add(linker_script_file)
         linkopts.append(
-            "-Wl,--dynamic-list={}".format(linker_script_file.path),
+            "-Wl,--export-dynamic",
         )
     else:
         # Otherwise, produce a '.s' file holding only compiled Lisp code and a
