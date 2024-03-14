@@ -785,6 +785,16 @@ def _lisp_binary_impl(ctx):
         toolchain = None,
     )
 
+    # libc++ dependencies from cc_runtimes_toolchain.
+    cc_runtimes_toolchain = ctx.toolchains["@bazel_tools//tools/cpp:cc_runtimes_toolchain_type"]
+    runtimes_ccinfos = []
+    if cc_runtimes_toolchain:
+        runtimes_ccinfos += [
+            target[CcInfo]
+            for target in cc_runtimes_toolchain.cc_runtimes_info.runtimes
+            if CcInfo in target
+        ]
+
     # The rule's malloc attribute can be overridden by the --custom_malloc flag.
     malloc = ctx.attr._custom_malloc or ctx.attr.malloc
     linking_outputs = cc_common.link(
@@ -811,7 +821,7 @@ def _lisp_binary_impl(ctx):
             # implementation, so this does not get propagated to any of the
             # binary's consumers.
             malloc[CcInfo].linking_context,
-        ],
+        ] + [info.linking_context for info in runtimes_ccinfos],
         stamp = ctx.attr.stamp,
         output_type = "executable",
         additional_inputs = link_additional_inputs,
@@ -830,7 +840,12 @@ lisp_binary = rule(
     exec_groups = {"cpp_link": exec_group()},
     attrs = _LISP_BINARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = use_cc_toolchain(),
+    toolchains = use_cc_toolchain() + [
+        config_common.toolchain_type(
+            "@bazel_tools//tools/cpp:cc_runtimes_toolchain_type",
+            mandatory = False,
+        ),
+    ],
     doc = """
 Supports all of the same attributes as [`lisp_library`](#lisp_library), plus
 additional attributes governing the behavior of the completed binary. The
@@ -854,7 +869,12 @@ lisp_test = rule(
     test = True,
     attrs = _LISP_TEST_ATTRS,
     fragments = ["cpp"],
-    toolchains = use_cc_toolchain(),
+    toolchains = use_cc_toolchain() + [
+        config_common.toolchain_type(
+            "@bazel_tools//tools/cpp:cc_runtimes_toolchain_type",
+            mandatory = False,
+        ),
+    ],
     doc = """
 Like [`lisp_binary`](#lisp_binary), for defining tests to be run with the
 [`test`](https://docs.bazel.build/versions/master/user-manual.html#test)
