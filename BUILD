@@ -11,10 +11,10 @@
 # Starlark rules which are defined in rules.bzl. See README.md for
 # more info about this package.
 
-load("@bazel_tools//tools/build_defs/license:license.bzl", "license")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
+load("@bazel_tools//tools/build_defs/license:license.bzl", "license")
 
 package(default_applicable_licenses = ["//:license"])
 
