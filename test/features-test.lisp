@@ -13,8 +13,7 @@
   (assert (eq 'cl-user::xyz1234567890
               (bazel.main::to-feature "cl-user:xyz1234567890")))
 
-  (assert (null (ignore-errors (bazel.main::to-feature "123"))))
-  (assert (null (ignore-errors (bazel.main::to-feature "()"))))
+  (assert (eq :|123| (bazel.main::to-feature "123")))
   (assert (null (ignore-errors (bazel.main::to-feature 123))))
 
   (assert (find :bazel *features*)) ; NOLINT

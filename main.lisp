@@ -589,30 +589,29 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
   "Return a symbol feature derived from a FEATURE string or symbol.
 
 By default the string is read into the KEYWORD package.
-If the feature string is package prefixed, the package
-is instantiated unless already provided.
-
-If the feature parses as anything other than a symbol,
-it will signal an error."
-  (typecase feature
+If the feature string is package prefixed, the package is made
+with a default :USE list of (\"CL\") unless it already exists."
+  (etypecase feature
     (symbol feature)
     (string
-     (multiple-value-bind (value error)
-         (ignore-errors
-          (let ((*package* (find-package "KEYWORD")))
-            (with-creating-find-package ()
-              (values (read-from-string feature)))))
-       (cond ((and (symbolp value) value))
-             (error
-              (bazel.log:fatal
-               "Could not parse ~S as a feature due to~% ~S: ~A~%"
-               feature (type-of error) error)
-              nil)
-             (t
-              (bazel.log:fatal "Cannot parse ~S as a feature." feature)
-              nil))))
-    (t
-     (bazel.log:fatal "~S is not a feature." feature))))
+     ;; Like the ~/ format directive, it makes no difference whether the feature
+     ;; is spelled using 1 colon or 2; and while #\\ and #\| escapes are not
+     ;; prohibited, they have ordinary character syntax.
+     (let* ((string (string-upcase (string-trim '(#\sp) feature)))
+            (colon (position #\: string))
+            (pkgname (subseq string 0 colon))
+            (colon2 (and colon
+                         (eql (if (< colon (1- (length string))) (char string (1+ colon)))
+                              #\:)
+                         (1+ colon)))
+            (sym (subseq string (1+ (or colon2 colon -1)))))
+       (if (or (position #\: sym) (= (length sym) 0))
+           (bazel.log:fatal "~S is not a feature designator~%" feature)
+           (values (intern sym
+                           (cond ((or (not colon) (string= pkgname ""))
+                                  (find-package "KEYWORD"))
+                                 ((find-package pkgname))
+                                 (t (make-package pkgname :use '("CL")))))))))))
 
 (defun add-feature (feature)
   "Add a single string FEATURE to *features*."
