@@ -12,8 +12,8 @@ The three rules defined here are:
   lisp_test - Outputs a binary that is run with the test command
 """
 
-load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load(
     ":provider.bzl",
     "LispInfo",

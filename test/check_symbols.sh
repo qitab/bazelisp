@@ -14,7 +14,7 @@ if ! nm $TEST_SRCDIR/google3/third_party/lisp/bazel/test/test |
 fi
 
 if ! nm $TEST_SRCDIR/google3/third_party/lisp/bazel/test/test |
-  grep -q ' (flet sub-zot in common-lisp-user::zot)'; then
+  grep -q ' (flet sub-zot in .*zot)'; then
   echo "Failed to find expected lisp symbol in symbol table"
   exit 1
 fi

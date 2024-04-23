@@ -1,5 +1,11 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(
+    "//:rules.bzl",
+    "lisp_binary",
+    "lisp_library",
+    "lisp_test",
+)
+load(
     ":tests.bzl",
     "DYNSPACE",
     "create_empty_files",
@@ -11,12 +17,6 @@ load(
     "lisp_deps_analysis_test",
     "lisp_instrumented_files_info_test",
     "lisp_providers_test",
-)
-load(
-    "//:rules.bzl",
-    "lisp_binary",
-    "lisp_library",
-    "lisp_test",
 )
 
 package(default_applicable_licenses = ["//:license"])
