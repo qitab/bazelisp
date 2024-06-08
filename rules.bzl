@@ -200,6 +200,10 @@ _LISP_BINARY_ATTRS.update({
         doc = ("SBCL C++ dependencies. Consumers should generally omit this " +
                "attr and use the default value."),
     ),
+    "helper_script": attr.label(
+        default = None,
+        allow_single_file = True,
+    ),
     "_elfinate": attr.label(
         default = Label(_ELFINATE),
         executable = True,
@@ -674,7 +678,10 @@ def _lisp_binary_impl(ctx):
         content = content,
     )
 
-    inputs = [specs]
+    if ctx.file.helper_script == None:
+        inputs = [specs]
+    else:
+        inputs = [specs, ctx.file.helper_script]
     inputs.extend(fasls)
     inputs.extend(hashes)
     inputs.extend(warnings)

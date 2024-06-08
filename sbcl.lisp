@@ -109,15 +109,6 @@
   (setf (extern-alien "lisp_startup_options" int) 1)
   nil)
 
-(defun terminate-other-threads ()
-  "Terminates all non-system threads but the current one."
-  (let ((threads (remove-if (lambda (x)
-                              (or (thread-ephemeral-p x)
-                                  (eq x *current-thread*)))
-                            (list-all-threads))))
-    (mapc #'terminate-thread threads)
-    (mapc (lambda (thread) (join-thread thread :default nil)) threads)))
-
 (defun name-closure (closure name)
   "Return CLOSURE with the NAME changed, so it prints nicely."
   ;; This is not necessary, except for debugging and aesthetics.
@@ -277,32 +268,6 @@
 ;;;
 ;;; Generate an image.
 ;;;
-
-(defun save-lisp-and-die (name &key toplevel save-runtime-options verbose
-                               precompile-generics executable)
-  "Saves the current Lisp image and dies.
- Arguments:
-  NAME - the file name to save the image.
-  TOPLEVEL - the name of the toplevel function.
-  SAVE-RUNTIME-OPTIONS - indicates if the runtime options shall be saved to the C runtime.
-      This is usually permanent.
-  VERBOSE - if true, the output streams are not muted before dumping the image.
-  PRECOMPILE-GENERICS - will precompile the generic functions before saving.
-  EXECUTABLE - Whether to combine the launcher with the image to create an executable."
-  (sb-ext:disable-debugger)
-  (terminate-other-threads)
-  (when precompile-generics
-    (precompile-generic-functions :verbose bazel.log:*verbose*))
-  (unless verbose (mute-output-streams))
-  (sb-ext:fold-identical-code :aggressive t)
-  (setf (extern-alien "gc_coalesce_string_literals" char) 2)
-  (sb-ext:save-lisp-and-die
-   name
-   :executable executable
-   :toplevel toplevel
-   :save-runtime-options save-runtime-options)
-
-  (assert (not "Expected the image to survive after save-lisp-and-die."))) ; NOLINT
 
 (defun set-interpret-mode (compile-mode)
   "Set the mode of eval to :interpret if COMPILE-MODE is :LOAD. Otherwise, set it to :COMPILE."
