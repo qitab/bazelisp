@@ -25,7 +25,10 @@ license(
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
+exports_files([
+    "LICENSE",
+    "imagesave.lisp",
+])
 
 bzl_library(
     name = "build_rules",
