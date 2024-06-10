@@ -551,14 +551,18 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
   (funcall-named "UIOP:CALL-IMAGE-DUMP-HOOK")
   ;; Set to a sane value.
   (in-package "COMMON-LISP-USER")
-  ;; Finally call the Lisp implementation function.
-  (save-lisp-and-die
-   name
-   :toplevel #'restart-image
-   :save-runtime-options save-runtime-options
-   :precompile-generics precompile-generics
-   :executable executable
-   :verbose (plusp *verbose*)))
+  (dolist (candidate '("lisp/devtools/bazel/imagesave.lisp"
+                       "third_party/lisp/bazel/imagesave.lisp"))
+    (when (probe-file candidate)
+      (load candidate :verbose nil :print nil)
+      (funcall (intern "SAVE-AND-EXIT")
+               name
+               :toplevel #'restart-image
+               :save-runtime-options save-runtime-options
+               :precompile-generics precompile-generics
+               :executable executable
+               :verbose (plusp *verbose*))))
+  (sb-ext:save-lisp-and-die name :toplevel #'restart-image :executable t))
 
 (defun set-optimization-mode (optimization-mode)
   "Proclaim the optimization settings based on the OPTIMIZATION-MODE."
