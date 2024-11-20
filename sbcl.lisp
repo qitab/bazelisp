@@ -13,7 +13,19 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   ;; MD5 pulls in SB-ROTATE-BYTE which makes it impossible
   ;; to compile either of those from fresh upstream sources without some magic.
-  (require :sb-md5))
+  (require :sb-md5)
+  ;; Avoid ever recompiling the github MD5 because it unportably uses SBCL internals,
+  ;; and in attempting to address the PR (https://github.com/pmai/md5/issues/3)
+  ;; the author caused some new style-warnings to be generated.
+  ;; We don't need to keep chasing problems; just use the contrib module as if it were
+  ;; named MD5. You might think that this rename step should be done when building
+  ;; the SBCL contrib module, but that would completely remove the ability to build and
+  ;; test the upstream MD5, at least until it becomes a thin shim.
+  ;; Whereas anything built with the bazel build rule needs MD5 because of this
+  ;; file per se needing it; and weird problems crop up when attempting to define
+  ;; //third_party/lisp/md5 in such a way that a package rename occurs when and
+  ;; only when that lisp_library() is loaded. So do it now, which always works.
+  (rename-package "SB-MD5" "SB-MD5" '("MD5")))
 
 (defpackage #:bazel.sbcl
   (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
