@@ -6,4 +6,6 @@
 exports_files([
     "tools-for-build/corefile.lisp",
     "tools-for-build/editcore.lisp",
+    "tools-for-build/elftool.lisp",
+    "contrib/sb-cover/cover.lisp",
 ])
