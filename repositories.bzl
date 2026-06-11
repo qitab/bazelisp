@@ -9,6 +9,10 @@ load(
     "git_repository",
     "new_git_repository",
 )
+load(
+    "@bazel_tools//tools/build_defs/repo:http.bzl",
+    "http_archive",
+)
 
 def _include_if_not_defined(repo_rule, name, **kwargs):
     if not native.existing_rule(name):
@@ -35,11 +39,18 @@ def bazelisp_repositories():
     )
 
     _include_if_not_defined(
-        git_repository,
+        http_archive,
         name = "rules_cc",
-        remote = "https://github.com/bazelbuild/rules_cc.git",
-        commit = "b1c40e1de81913a3c40e5948f78719c28152486d",
-        shallow_since = "1605101351 -0800",
+        sha256 = "abc605dd850f813bb37004b77db20106a19311a96b2da1c92b789da529d28fe1",
+        strip_prefix = "rules_cc-0.0.17",
+        urls = ["https://github.com/bazelbuild/rules_cc/releases/download/0.0.17/rules_cc-0.0.17.tar.gz"],
+    )
+
+    _include_if_not_defined(
+        git_repository,
+        name = "com_google_protobuf",
+        remote = "https://github.com/protocolbuffers/protobuf.git",
+        tag = "v21.7",
     )
 
     # Installed SBCL in /usr/bin/sbcl and /usr/lib/sbcl/*. See BUILD.local_sbcl

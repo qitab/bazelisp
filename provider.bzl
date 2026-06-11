@@ -11,11 +11,6 @@ LispInfo = provider(
     fields = {
         "fasls": "Depset of FASLs for transitive dependencies",
         "srcs": "Depset of transitive sources",
-        "hashes": "Depset of md5 hash files for transitive sources",
-        "warnings": (
-            "Depset of files of warnings checked at link time (FASL load) " +
-            "for transitive sources"
-        ),
         "features": "Depset of transitive declared Lisp features",
         "compile_data": (
             "Depset of files from transitive compile_data, made available " +
@@ -67,8 +62,6 @@ def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], 
             transitive = [li.srcs for li in lisp_infos],
             order = "postorder",
         ),
-        hashes = depset(transitive = [li.hashes for li in lisp_infos]),
-        warnings = depset(transitive = [li.warnings for li in lisp_infos]),
         features = depset(
             features,
             transitive = [li.features for li in lisp_infos],
@@ -80,23 +73,17 @@ def collect_lisp_info(deps = [], cdeps = [], build_image = None, features = [], 
 def extend_lisp_info(
         base,
         fasls = [],
-        srcs = [],
-        hashes = [],
-        warnings = []):
+        srcs = []):
     """Extends a LispInfo with compilation inputs and outputs.
 
      Args:
       base: The base LispInfo provider to be extended.
       fasls: FASLs generated for this target.
       srcs: This target's Lisp sources.
-      hashes: Hash files for each file in srcs.
-      warnings: Warnings files for each file in srcs.
     """
     return LispInfo(
         fasls = depset(fasls, transitive = [base.fasls], order = "postorder"),
         srcs = depset(srcs, transitive = [base.srcs], order = "postorder"),
-        hashes = depset(hashes, transitive = [base.hashes]),
-        warnings = depset(warnings, transitive = [base.warnings]),
         features = base.features,
         compile_data = base.compile_data,
         cc_info = base.cc_info,
@@ -113,10 +100,6 @@ def print_provider(p):
         print("FASLs: %s" % [f.short_path for f in p.fasls.to_list()])
     if p.srcs:
         print("Srcs: %s" % [s.short_path for s in p.srcs.to_list()])
-    if p.hashes:
-        print("Hashes: %s" % [h.short_path for h in p.hashes.to_list()])
-    if p.warnings:
-        print("Warnings: %s" % [w.short_path for w in p.warnings.to_list()])
     if p.features:
         print("Features: %s" % p.features.to_list())
     if p.compile_data:

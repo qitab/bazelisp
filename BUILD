@@ -12,22 +12,15 @@
 # more info about this package.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
-load("@bazel_tools//tools/build_defs/license:license.bzl", "license")
 load("@io_bazel_stardoc//stardoc:stardoc.bzl", "stardoc")
-
-package(default_applicable_licenses = ["//:license"])
-
-license(
-    name = "license",
-    package_name = "bazel",
-)
+load(":rules.bzl", "lisp_test")
 
 licenses(["notice"])
 
 exports_files([
     "LICENSE",
     "imagesave.lisp",
+    "sbcl.lisp",
 ])
 
 bzl_library(
@@ -36,7 +29,8 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "@bazel_skylib//rules:common_settings",
-        "@rules_cc//cc:find_cc_toolchain.bzl",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_cc//cc/common",
     ],
 )
 
@@ -73,24 +67,23 @@ alias(
     visibility = ["//visibility:public"],
 )
 
-genrule(
-    name = "make-image",
+[genrule(
+    name = "make-lfc-" + arch,
     srcs = [
         "utils.lisp",
         "warning.lisp",
         "log.lisp",
         "sbcl.lisp",
         "main.lisp",
-        "@local_sbcl//:contrib/sb-md5",
-        "@local_sbcl//:contrib/sb-rotate-byte",
         "@local_sbcl//:core",
         "@local_sbcl//:sbcl",
     ],
-    outs = ["image"],
+    outs = ["lfc." + arch],  # Lisp file compiler
     cmd = (
         "$(location @local_sbcl//:sbcl)" +
-        " --noinform" +
-        " --eval '(setf sb-ext:*evaluator-mode* :compile)'" +
+        """ --eval '(sb-ext:unlock-package :sb-vm)'""" +
+        """ --eval '(setf sb-ext:*evaluator-mode* :compile
+  #+x86-64 sb-vm::*eager-tls-assignment* #+x86-64 t)'""" +
         " --load '$(location utils.lisp)'" +
         " --load '$(location warning.lisp)'" +
         " --load '$(location log.lisp)'" +
@@ -100,7 +93,35 @@ genrule(
     ),
     executable = 1,
     output_to_bindir = 1,
+    # tags can't involve "select" which is why this uses one rule per arch
+    tags = ["requires-arch:" + arch],
     visibility = ["//visibility:public"],
+) for arch in [
+    "arm",
+    "x86",
+]]
+
+alias(
+    name = "lfc",
+    actual = select({
+        "@platforms//cpu:aarch64": "lfc.arm",
+        "//conditions:default": "lfc.x86",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+genrule(
+    name = "make-test-image",
+    srcs = [
+        ":lfc",
+        "faslkludge.lisp",
+    ],
+    outs = ["test-image"],
+    cmd = "LISP_MAIN=t $(location :lfc) --load $(location faslkludge.lisp) --eval " +
+          "'(bazel.main:save-image \"$@\" (quote bazel.main:main) :executable t)'",
+    executable = 1,
+    output_to_bindir = 1,
+    visibility = ["__subpackages__"],
 )
 
 # Elfinator reads an SBCL-native core file and produces two outputs:
@@ -118,7 +139,6 @@ sh_binary(
         "elfconvert.sh",
     ],
     data = [
-        "@local_sbcl//:core",
         "@local_sbcl//:sbcl",
         "@sbcl//:tools-for-build/corefile.lisp",
         "@sbcl//:tools-for-build/editcore.lisp",
@@ -127,8 +147,7 @@ sh_binary(
     visibility = ["//visibility:public"],
 )
 
-bool_flag(
-    name = "additional_dynamic_load_outputs",
-    build_setting_default = False,
-    visibility = ["//visibility:public"],
+lisp_test(
+    name = "mangler",
+    srcs = ["mangler.lisp"],
 )

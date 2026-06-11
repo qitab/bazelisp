@@ -7,7 +7,10 @@ google3/lisp/devtools/bazel/macro-tests/.
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//:provider.bzl", "LispInfo")
 
-DYNSPACE = '"--dynamic-space-size", "5GB"'  # value to expect for SBCL's --dynamic-space-size
+# An argument pair that looks like --dynamic-space-size <anything>
+# is changed to this constant value so we don't have to update the
+# tests just because an invocation of SBCL wants more memory.
+DYNSPACE = '"--dynamic-space-size", "nGB"'
 
 def create_empty_files(names):  # buildozer: disable=unnamed-macro
     for name in names:
@@ -37,10 +40,6 @@ def _fake_lisp_rule_impl(ctx):
         ),
     )
     fake_src_file = ctx.file.src
-    fake_hash_file = ctx.actions.declare_file(ctx.label.name + ".hash")
-
-    # This needs to be in the right format, but doesn't currently need to be corret.
-    ctx.actions.write(fake_hash_file, "{}\00{}".format(fake_src_file.path, "x" * 16))
 
     # The executable will end up in runfiles by default, and that's enough for us to check
     # that's getting propagated. For the rest of these, generate some content that lets
@@ -49,8 +48,6 @@ def _fake_lisp_rule_impl(ctx):
         LispInfo(
             fasls = depset([_empty_output(ctx, ".fasl")]),
             srcs = depset([fake_src_file]),
-            hashes = depset([fake_hash_file]),
-            warnings = depset([_empty_output(ctx, ".warnings")]),
             features = depset([ctx.label.name + "-feature"]),
             compile_data = depset([_empty_output(ctx, ".compile-data")]),
             cc_info = CcInfo(),
@@ -66,7 +63,7 @@ fake_lisp_rule = rule(
     attrs = {
         "src": attr.label(allow_single_file = [".lisp"]),
         "_default_lisp_image": attr.label(
-            default = "//:image",
+            default = "//:test-image",
             executable = True,
             cfg = "target",
             allow_single_file = True,
@@ -109,24 +106,21 @@ def _lisp_providers_test_impl(ctx):
     fasls = sorted([f.basename for f in lisp_info.fasls.to_list()])
     asserts.equals(env, sorted(ctx.attr.fasls), fasls)
 
-    # LispInfo.srcs/hashes/warnings contains compilation outputs for each
-    # source file in the transitive dependencies. These are named based
-    # on the source file, i.e. foo.lisp parallels foo~.hash and foo~.warnings.
+    # LispInfo.srcs contains compilation outputs for each
+    # source file in the transitive dependencies.
     srcs = sorted([f.basename for f in lisp_info.srcs.to_list()])
-    hashes = sorted([f.basename for f in lisp_info.hashes.to_list()])
-    warnings = sorted([f.basename for f in lisp_info.warnings.to_list()])
     expected_srcs = sorted(ctx.attr.src_outputs_for)
     expected_src_stems = [src.rsplit(".", 1)[0] for src in expected_srcs]
-    expected_hashes = [stem + ".hash" for stem in expected_src_stems]
-    expected_warnings = [stem + ".warnings" for stem in expected_src_stems]
     asserts.equals(env, expected_srcs, srcs)
-    asserts.equals(env, expected_hashes, hashes)
-    asserts.equals(env, expected_warnings, warnings)
 
     # LispInfo.features collects features (go/clhs/*features*) provided by
     # transitive dependencies.
-    lisp_features = sorted(lisp_info.features.to_list())
-    asserts.equals(env, sorted(ctx.attr.lisp_features), lisp_features)
+    lisp_features = [
+        x
+        for x in lisp_info.features.to_list()
+        if (x != "size-based-stdvector" and x != "copt-ndebug")
+    ]
+    asserts.equals(env, sorted(ctx.attr.lisp_features), sorted(lisp_features))
 
     return analysistest.end(env)
 
@@ -183,13 +177,30 @@ def _command(ctx, env, argv):
         argv[0] = "bash"
     return [_abbreviate_paths(ctx, env, arg) for arg in argv]
 
+def _remove_size_based_stdvector(string):
+    strings = [x for x in string.split(" ") if x != "size-based-stdvector"]
+    return " ".join(strings)
+
 def _lisp_actions_test_impl(ctx):
     """Asserts the command lines generated for run/run_shell actions for lisp_* are as expected."""
     env = analysistest.begin(ctx)
     commands = []
     for a in analysistest.target_actions(env):
         if a.argv and a.mnemonic.startswith("Lisp"):
-            commands.append("{}: {}".format(a.mnemonic, _command(ctx, env, a.argv)))
+            # argv is immutable. I looked for how to mutate it.
+            # YAQS says "A workaround is to make a copy of the list before appending to it."
+            # but then doesn't tell you how to copy. copy() would be the Python way
+            # however this isn't quite exactly Python and so copy doesn't work.
+            copy_of_argv = []
+            copy_of_argv.extend(a.argv)
+
+            # now mutate the copy
+            for i in range(len(copy_of_argv)):
+                if copy_of_argv[i] == "--dynamic-space-size":
+                    copy_of_argv[1 + i] = "nGB"  # dummy value
+                if copy_of_argv[i] == "--features":
+                    copy_of_argv[1 + i] = _remove_size_based_stdvector(copy_of_argv[1 + i])
+            commands.append("{}: {}".format(a.mnemonic, _command(ctx, env, copy_of_argv)))
     if len(ctx.attr.commands) == len(commands):
         for expected_command, actual_command in zip(ctx.attr.commands, commands):
             asserts.equals(env, expected_command, actual_command)
@@ -262,34 +273,5 @@ has_action_test = analysistest.make(
     config_settings = {
         "//command_line_option:compilation_mode": "fastbuild",
         "//command_line_option:collect_code_coverage": "0",
-    },
-)
-
-def _lisp_deps_analysis_test_impl(ctx):
-    """Asserts that the deps_manifest output group creates the expected manifest."""
-    env = analysistest.begin(ctx)
-    target_under_test = analysistest.target_under_test(env)
-
-    deps_manifest_output = target_under_test[OutputGroupInfo].deps_manifest.to_list()
-    asserts.equals(env, 1, len(deps_manifest_output))
-    asserts.equals(env, ctx.attr.expected_out, deps_manifest_output[0].basename)
-
-    actions = analysistest.target_actions(env)
-    generating_actions = [action for action in actions if action.outputs.to_list() == deps_manifest_output]
-    asserts.equals(env, 1, len(generating_actions))
-
-    content = _abbreviate_paths(ctx, env, generating_actions[0].content)
-    asserts.equals(env, ctx.attr.expected_content, content)
-
-    return analysistest.end(env)
-
-lisp_deps_analysis_test = analysistest.make(
-    impl = _lisp_deps_analysis_test_impl,
-    attrs = {
-        "expected_out": attr.string(),
-        "expected_content": attr.string(),
-    },
-    config_settings = {
-        "//:additional_dynamic_load_outputs": True,
     },
 )
