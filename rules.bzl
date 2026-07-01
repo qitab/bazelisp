@@ -10,9 +10,33 @@ The three rules defined here are:
   lisp_library - The basic unit of compilation
   lisp_binary - Outputs an executable binary
   lisp_test - Outputs a binary that is run with the test command
+
+Usage example:
+
+load("//your/path/to/bazel:rules.bzl", "lisp_binary", "lisp_library", "lisp_test")
+
+lisp_library(
+    name = "foo",
+    srcs = ["foo.lisp"],
+    deps = ["//lisp/log"],
+)
+
+lisp_binary(
+    name = "bar",
+    srcs = ["main.lisp"],
+    deps = [":foo"],
+)
+
+lisp_test(
+    name = "foo-test",
+    srcs = ["foo-test.lisp"],
+    deps = [
+       ":foo",
+       "//lisp/test",
+    ],
+)
 """
 
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load(
     ":provider.bzl",
@@ -21,21 +45,17 @@ load(
     "extend_lisp_info",
 )
 
-_BAZEL_LISP_IMAGE = "//:image"
 _BAZEL_LISP_IMAGE_MAIN = "bazel.main:main"
 _BAZEL_LISP_IMAGE_ENV = {"LISP_MAIN": _BAZEL_LISP_IMAGE_MAIN}
-_ELFINATE = "//:elfinate.sar"
-_DEFAULT_MALLOC = "@bazel_tools//tools/cpp:malloc"
+_ELFINATE = "//:elfinate"
 _DEFAULT_LIBSBCL = "@local_sbcl//:c-support"
 
-_COMPILATION_ORDERS = ["multipass", "serial", "parallel"]
 _LISP_LIBRARY_ATTRS = {
     "srcs": attr.label_list(
         allow_files = [".lisp", ".lsp"],
         doc = ("Common Lisp (`.lisp` or `.lsp`) source files. If there are " +
-               "multiple files in `srcs`, which other files in `srcs` are " +
-               "loaded before each file is compiled depends on the `order` " +
-               "attr."),
+               "multiple files in `srcs`, each is compiled with its " +
+               "predecessors loaded."),
     ),
     "deps": attr.label_list(
         providers = [LispInfo],
@@ -61,24 +81,6 @@ _LISP_LIBRARY_ATTRS = {
         doc = ("If true, block compilation only considers multiple top-level " +
                "forms together if those are between explicit (START-BLOCK) " +
                "and (END-BLOCK)."),
-    ),
-    "order": attr.string(
-        default = "serial",
-        values = _COMPILATION_ORDERS,
-        doc = (
-            "Compilation order, one of:\n" +
-            "\n" +
-            '`"serial"` (default) - Each source is compiled in an image ' +
-            "with previous sources loaded. (Note that in this " +
-            "configuration you should put a comment at the top of the " +
-            "list of srcs if there is more than one, so that formatters " +
-            "like Buildozer do not change the order.)\n" +
-            "\n" +
-            '`"multipass"` - Each source is compiled in an image with all ' +
-            "sources loaded.\n" +
-            "\n" +
-            '`"parallel"` - Each source is compiled independently.'
-        ),
     ),
     "data": attr.label_list(
         allow_files = True,
@@ -108,7 +110,7 @@ _LISP_LIBRARY_ATTRS = {
         allow_single_file = True,
         executable = True,
         cfg = "target",
-        default = Label(_BAZEL_LISP_IMAGE),
+        default = Label("//:lfc"),
         doc = (
             "Lisp binary used as Bazel compilation image. This should be a " +
             "binary with the main function `#'bazel:main` defined in " +
@@ -139,16 +141,6 @@ _LISP_LIBRARY_ATTRS = {
             "command-line-reference.html#flag--instrumentation_filter).`"
         ),
     ),
-    "_additional_dynamic_load_outputs": attr.label(
-        default = Label(
-            "//:additional_dynamic_load_outputs",
-        ),
-        providers = [BuildSettingInfo],
-    ),
-    # Do not add references, temporary attribute for find_cc_toolchain.
-    "_cc_toolchain": attr.label(
-        default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
-    ),
 }
 
 _LISP_BINARY_ATTRS = dict(_LISP_LIBRARY_ATTRS)
@@ -161,15 +153,12 @@ _LISP_BINARY_ATTRS.update({
                "overridden by naming a function (or `nil` or `t`) in the " +
                "`LISP_MAIN` environment variable."),
     ),
-    "malloc": attr.label(
-        default = _DEFAULT_MALLOC,
+    "_malloc_dontuse": attr.label(
+        default = Label("@bazel_tools//tools/cpp:malloc"),
         providers = [CcInfo],
         doc = ("Target providing a custom malloc implementation. Same as " +
                "[`cc_binary.malloc`](https://docs.bazel.build/versions/" +
-               "master/be/c-cpp.html#cc_binary.malloc). Note that these " +
-               "rules do not respect [`--custom_malloc`]" +
-               "(https://docs.bazel.build/versions/master/" +
-               "command-line-reference.html#flag--custom_malloc)."),
+               "master/be/c-cpp.html#cc_binary.malloc)."),
     ),
     "stamp": attr.int(
         values = [-1, 0, 1],
@@ -201,7 +190,7 @@ _LISP_BINARY_ATTRS.update({
                "attr and use the default value."),
     ),
     "helper_script": attr.label(
-        default = None,
+        default = Label("//:imagesave.lisp"),
         allow_single_file = True,
     ),
     "_elfinate": attr.label(
@@ -221,6 +210,11 @@ _LISP_BINARY_ATTRS.update({
 
 _LISP_TEST_ATTRS = dict(_LISP_BINARY_ATTRS)
 _LISP_TEST_ATTRS.update({
+    # For tests we want to avoid taking time to convert the Lisp text space to an ELF section.
+    # "allow-save-lisp" implements that, which doesn't really mean that a test may invoke
+    # SAVE-LISP. It just coincidental that allowing save-lisp implies NOT converting to ELF.
+    "allow_save_lisp": attr.bool(default = True, doc = "do not touch"),
+    "precompile_generics": attr.bool(default = False, doc = "do not touch"),
     "stamp": attr.int(
         values = [-1, 0, 1],
         default = 0,
@@ -289,10 +283,16 @@ def _build_flags(ctx, add_features, verbose_level, instrument_coverage):
     if cc_toolchain.compiler in ["msan", "msan-track-origins"]:
         add_features = depset(["msan"], transitive = [add_features])
     flags = ctx.actions.args()
-    flags.add(
-        "--compilation-mode",
-        ctx.var.get("LISP_COMPILATION_MODE", ctx.var["COMPILATION_MODE"]),
-    )
+
+    # Maybe there's an explicit LISP_COMPILATION_MODE. Usually not.
+    lisp_compilation_mode = ctx.var.get("LISP_COMPILATION_MODE", "none")
+    if lisp_compilation_mode == "none":
+        # if C++ wants -UNDEBUG then we want Lisp code safety, i.e. fastbuild
+        if "-UNDEBUG" in ctx.fragments.cpp.copts:
+            lisp_compilation_mode = "fastbuild"
+        else:  # failing that, use the command-line-given ("-c") mode
+            lisp_compilation_mode = ctx.var["COMPILATION_MODE"]
+    flags.add("--compilation-mode", lisp_compilation_mode)
     flags.add("--bindir", ctx.bin_dir.path)
     flags.add_joined("--features", add_features, join_with = " ")
 
@@ -312,6 +312,16 @@ def _list_excluding_depset(items, exclude):
     exclude_set = {item: True for item in exclude.to_list()}
     return [item for item in items if item not in exclude_set]
 
+def _is_arm_cpu(ctx):
+    gnu_triple = ctx.toolchains["@bazel_tools//tools/cpp:toolchain_type"].cc.target_gnu_system_name
+    return gnu_triple[0:5] == "aarch"
+
+def _executor_for_ctx(ctx):
+    if _is_arm_cpu(ctx):
+        return {"requires-arch:arm": "1"}
+    else:
+        return {}
+
 def lisp_compile_srcs(
         ctx,
         srcs = [],
@@ -322,7 +332,6 @@ def lisp_compile_srcs(
         image = None,
         add_features = [],
         nowarn = [],
-        order = "serial",
         compile_data = [],
         verbose_level = 0,
         instrument_coverage = -1,
@@ -343,8 +352,6 @@ def lisp_compile_srcs(
       image: Build image Target used to compile the sources.
       add_features: list of Lisp feature strings added by this target.
       nowarn: List of suppressed warning type strings.
-      order: Order in which to load sources, either "serial", "parallel", or
-          "multipass".
       compile_data: list of data dependency Targets whose outputs and runfiles
          are made available at load/compile time for this target and its
          consumers.
@@ -365,9 +372,6 @@ def lisp_compile_srcs(
               lisp_info.fasls if there are srcs)
           - build_flags: Args to pass to all LispCompile and LispCore actions
     """
-    if not order in _COMPILATION_ORDERS:
-        fail("order {} must be one of {}".format(order, _COMPILATION_ORDERS))
-
     name = ctx.label.name
     verbosep = verbose_level > 0
     indexer_build = (ctx.var.get("GROK_ELLIPSIS_BUILD", "0") == "1")
@@ -393,9 +397,6 @@ def lisp_compile_srcs(
             build_flags = build_flags,
         )
 
-    multipass = (order == "multipass")
-    serial = (order == "serial")
-
     build_image = image[DefaultInfo].files_to_run
     compile_image = build_image
 
@@ -407,19 +408,10 @@ def lisp_compile_srcs(
     if indexer_build:
         deps_srcs.extend(indexer_metadata)
 
-    # Sources for this target loaded before compilation (after deps), passed to
-    # --load. What this contains depends on the compilation order:
-    # multipass: Contains everything
-    # parallel: Contains nothing
-    # serial: Contains previous entries in srcs (accumulated below)
-    load_srcs = srcs if multipass else []
+    # Sources for this target loaded before compilation (after deps)
+    load_srcs = []
 
-    # Arbitrary heuristic to reduce load on the build system by bundling
-    # FASL and source files load into one compile-image binary.
     compile_flags = ctx.actions.args()
-
-    if multipass:
-        nowarn = nowarn + ["redefined-method", "redefined-function"]
 
     # buildozer: disable=print
     if verbosep:
@@ -428,8 +420,6 @@ def lisp_compile_srcs(
         print("Compile Img: " + compile_image.executable.short_path)
 
     fasls = []
-    warnings = []
-    hashes = []
     output_fasl = ctx.actions.declare_file(name + ".fasl")
     if block_compile:
         # Compile all at once
@@ -445,30 +435,14 @@ def lisp_compile_srcs(
             # Either we're compiling everything together for block-compilation
             # or there's only one src.
             compile_fasl = output_fasl
-            compile_warnings = ctx.actions.declare_file(
-                "{}~/{}.warnings".format(name, name),
-            )
         else:
             # We're in the one-at-a-time case and there are multiple srcs.
             src = compile_srcs[0]
             stem = "{}~/{}".format(name, src.short_path[:-len(src.extension) - 1])
             compile_fasl = ctx.actions.declare_file(stem + ".fasl")
-            compile_warnings = ctx.actions.declare_file(stem + ".warnings")
-        compile_hashes = [
-            ctx.actions.declare_file("{}~/{}.hash".format(
-                name,
-                src.short_path[:-len(src.extension) - 1],
-            ))
-            for src in compile_srcs
-        ]
         fasls.append(compile_fasl)
-        warnings.append(compile_warnings)
-        hashes.extend(compile_hashes)
-        outs = [compile_fasl]
-        outs.extend(compile_hashes)
-        outs.append(compile_warnings)
         action_flags = ctx.actions.args()
-        action_flags.add_joined("--outs", outs, join_with = " ")
+        action_flags.add("--outs", compile_fasl)
         action_flags.add_joined("--srcs", compile_srcs, join_with = " ")
         action_flags.add_joined("--deps", deps_srcs, join_with = " ")
         action_flags.add_joined("--load", load_srcs, join_with = " ")
@@ -477,8 +451,10 @@ def lisp_compile_srcs(
             action_flags.add("--block-compile")
             if block_compile_specified_only:
                 action_flags.add("--block-compile-specified-only")
+        gc = ctx.var.get("LISPGC", "gencgc")
+        heapsize = "6GB" if gc == "gencgc" else "8GB"
         ctx.actions.run(
-            outputs = outs,
+            outputs = [compile_fasl],
             inputs = depset(
                 compile_srcs + deps_srcs + load_srcs,
                 transitive = [lisp_info.compile_data],
@@ -489,7 +465,7 @@ def lisp_compile_srcs(
             env = _BAZEL_LISP_IMAGE_ENV,
             arguments = [
                 "--dynamic-space-size",
-                "5GB",  # reduce from default of 16GB
+                heapsize,
                 "compile",
                 build_flags,
                 compile_flags,
@@ -497,9 +473,9 @@ def lisp_compile_srcs(
             ],
             executable = compile_image,
             toolchain = None,
+            execution_requirements = _executor_for_ctx(ctx),
         )
-        if serial:
-            load_srcs.extend(compile_srcs)
+        load_srcs.extend(compile_srcs)
 
     if indexer_build:
         srcs = indexer_metadata + srcs
@@ -507,8 +483,6 @@ def lisp_compile_srcs(
         lisp_info,
         srcs = srcs,
         fasls = [output_fasl] if srcs else [],
-        hashes = hashes,
-        warnings = warnings,
     )
     return struct(
         lisp_info = lisp_info,
@@ -524,56 +498,8 @@ def _cc_configure_features(ctx, cc_toolchain):
         unsupported_features = ctx.disabled_features,
     )
 
-# DEPS file is used to list all the Lisp sources for a target.
-# It is a quick hack to make (bazel:load ...) work.
-def _lisp_deps_manifest(ctx, lisp_info):
-    """Creates a file that lists all Lisp files needed by the target in order."""
-    out = ctx.actions.declare_file(ctx.label.name + ".deps")
-    content = ctx.actions.args()
-    content.set_param_file_format("multiline")
-    content.add_joined(
-        lisp_info.features,
-        join_with = "\n",
-        format_each = "feature: %s",
-    )
-    content.add_joined(
-        lisp_info.srcs,
-        join_with = "\n",
-        format_each = "src: %s",
-    )
-    ctx.actions.write(
-        output = out,
-        content = content,
-    )
-    return out
-
-def _lisp_dynamic_library(ctx, lisp_info):
-    cc_toolchain = find_cc_toolchain(ctx)
-    feature_configuration = _cc_configure_features(ctx, cc_toolchain)
-    linking_outputs = cc_common.link(
-        name = ctx.label.name,
-        actions = ctx.actions,
-        feature_configuration = feature_configuration,
-        cc_toolchain = cc_toolchain,
-        linking_contexts = [lisp_info.cc_info.linking_context],
-        output_type = "dynamic_library",
-    )
-    return linking_outputs.library_to_link.dynamic_library
-
 def _lisp_output_group_info(ctx, lisp_info, fasl_list):
     outputs = {"fasl": fasl_list}
-
-    # Additional outputs for dynamic loading. These should only be used when
-    # explicitly requested, so condition the generation of the extra actions
-    # on a flag. (It might be better to just condition this on --output_groups,
-    # but that's not readable from Starlark.)
-    generate_dynamic_load_outputs = (
-        ctx.attr._additional_dynamic_load_outputs[BuildSettingInfo].value
-    )
-    if generate_dynamic_load_outputs:
-        outputs["deps_manifest"] = [_lisp_deps_manifest(ctx, lisp_info)]
-        outputs["dynamic_library"] = [_lisp_dynamic_library(ctx, lisp_info)]
-
     return OutputGroupInfo(**outputs)
 
 def _lisp_instrumented_files_info(ctx):
@@ -621,17 +547,22 @@ def _lisp_providers(ctx, lisp_info, fasl, executable = None):
 def _lisp_binary_impl(ctx):
     """Implementation for lisp_binary and lisp_test rules."""
     name = ctx.label.name
-    core = ctx.actions.declare_file(name + ".core")
+    core_object_file = ctx.actions.declare_file(name + "-core.o")
+
+    # allow_save_lisp implies that SBCL will write the .o file by itself.
+    # It's clearly the wrong name for an attribute with that semantics, but
+    # certain SWEs had stronger opinions than mine about what to name it.
+    # Since ARM does not support "full ELF" mode, we just use the nice .o file
+    if _is_arm_cpu(ctx) or ctx.attr.allow_save_lisp:
+        core = core_object_file  # SBCL will produce an ELF '.o' file on its own
+    else:
+        core = ctx.actions.declare_file(name + ".core")  # it's a preliminary step
+
     verbose_level = max(
         ctx.attr.verbose,
         int(ctx.var.get("VERBOSE_LISP_BUILD", "0")),
     )
     verbosep = verbose_level > 0
-
-    # buildozer: disable=print
-    if verbosep:
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("Core: %s" % core)
 
     compile = lisp_compile_srcs(
         ctx = ctx,
@@ -641,25 +572,19 @@ def _lisp_binary_impl(ctx):
         image = ctx.attr.image,
         add_features = ctx.attr.add_features,
         nowarn = ctx.attr.nowarn,
-        order = ctx.attr.order,
         compile_data = ctx.attr.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,
     )
 
-    # TODO(czak): Add --hashes, and --warnings flags to bazl.main.
     lisp_info = compile.lisp_info
 
     fasls = lisp_info.fasls.to_list()
-    hashes = lisp_info.hashes.to_list()
-    warnings = lisp_info.warnings.to_list()
 
     if LispInfo in ctx.attr.image:
         # The image already includes some deps.
         included = ctx.attr.image[LispInfo]
         fasls = _list_excluding_depset(fasls, included.fasls)
-        hashes = _list_excluding_depset(hashes, included.hashes)
-        warnings = _list_excluding_depset(warnings, included.warnings)
 
     build_image = ctx.file.image
 
@@ -671,8 +596,6 @@ def _lisp_binary_impl(ctx):
     content = ctx.actions.args()
     content.set_param_file_format("multiline")
     content.add_joined(fasls, format_joined = '(:deps\n "%s")', join_with = '"\n "')
-    content.add_joined(warnings, format_joined = '(:warnings\n "%s")', join_with = '"\n "')
-    content.add_joined(hashes, format_joined = '(:hashes\n "%s")', join_with = '"\n "')
     ctx.actions.write(
         output = specs,
         content = content,
@@ -683,8 +606,6 @@ def _lisp_binary_impl(ctx):
     else:
         inputs = [specs, ctx.file.helper_script]
     inputs.extend(fasls)
-    inputs.extend(hashes)
-    inputs.extend(warnings)
     inputs = depset(inputs, transitive = [lisp_info.compile_data])
 
     core_flags = ctx.actions.args()
@@ -705,6 +626,7 @@ def _lisp_binary_impl(ctx):
         arguments = ["core", compile.build_flags, core_flags],
         executable = build_image,
         toolchain = None,
+        execution_requirements = _executor_for_ctx(ctx),
     )
 
     cc_toolchain = find_cc_toolchain(ctx)
@@ -722,10 +644,6 @@ def _lisp_binary_impl(ctx):
     # and another 40,000 over CALL-NEXT-METHOD and so on and so on.
     linkopts = ["-Wl,-no-pie"]
 
-    # Transform the .core file into a -core.o file, so that can be linked in
-    # with the C++ dependencies.
-    core_object_file = ctx.actions.declare_file(name + "-core.o")
-    link_additional_inputs = []
     compilation_outputs = [
         cc_common.create_compilation_outputs(
             # This file contains the SBCL core, essentially as '.data' in the
@@ -736,37 +654,11 @@ def _lisp_binary_impl(ctx):
             pic_objects = depset([core_object_file]),
         ),
     ]
-    elfinate_args = ctx.actions.args()
-    if ctx.attr.allow_save_lisp:
-        # If we want to allow the binary to be used as a compilation image, the
-        # Lisp image has to stay in a form save-lisp-and-die understands. In
-        # this case, copy the entire native SBCL core into a binary blob in a
-        # normal '.o' file.
-        linker_script_file = ctx.actions.declare_file(name + "-syms.lds")
-        link_additional_inputs.append(linker_script_file)
-        elfinate_outs = [core_object_file, linker_script_file]
-        elfinate_cmd = (
-            "$1 copy $2 $3 && nm -p $3 | " +
-            "awk '" +
-            '{print $2";"}BEGIN{print "{"}END{print "};"}' +
-            "' > $4"
-        )
-        elfinate_args.add(ctx.executable._elfinate)
-        elfinate_args.add(core)
-        elfinate_args.add(core_object_file)
-        elfinate_args.add(linker_script_file)
-        linkopts.append(
-            "-Wl,--dynamic-list={}".format(linker_script_file.path),
-        )
-    else:
-        # Otherwise, produce a '.s' file holding only compiled Lisp code and a
+    if not _is_arm_cpu(ctx) and not ctx.attr.allow_save_lisp:
+        # Produce a '.s' file holding only compiled Lisp code and a
         # '-core.o' containing the balance of the original Lisp spaces.
         assembly_file = ctx.actions.declare_file(name + ".s")
         elfinate_outs = [assembly_file, core_object_file]
-        elfinate_cmd = "$1 split $2 $3"
-        elfinate_args.add(ctx.executable._elfinate)
-        elfinate_args.add(core)
-        elfinate_args.add(assembly_file)
 
         # The .s file will get re-assembled before it's linked into the binary.
         # Note that this cc_common.compile action is declared before the
@@ -780,30 +672,20 @@ def _lisp_binary_impl(ctx):
             srcs = [assembly_file],
         )
         compilation_outputs.append(asm_compilation_output)
+        ctx.actions.run_shell(
+            outputs = elfinate_outs,
+            tools = [ctx.executable._elfinate],
+            inputs = [core],
+            command = ctx.executable._elfinate.path + " " + core.path + " " + assembly_file.path,
+            progress_message = "Elfinating Lisp core %{output}",
+            mnemonic = "LispElfinate",
+            toolchain = None,
+        )
 
-    ctx.actions.run_shell(
-        outputs = elfinate_outs,
-        tools = [ctx.executable._elfinate],
-        inputs = [core],
-        command = elfinate_cmd,
-        arguments = [elfinate_args],
-        progress_message = "Elfinating Lisp core %{output}",
-        mnemonic = "LispElfinate",
-        toolchain = None,
-    )
-
-    # libc++ dependencies from cc_runtimes_toolchain.
-    cc_runtimes_toolchain = ctx.toolchains["@bazel_tools//tools/cpp:cc_runtimes_toolchain_type"]
     runtimes_ccinfos = []
-    if cc_runtimes_toolchain:
-        runtimes_ccinfos += [
-            target[CcInfo]
-            for target in cc_runtimes_toolchain.cc_runtimes_info.runtimes
-            if CcInfo in target
-        ]
 
     # The rule's malloc attribute can be overridden by the --custom_malloc flag.
-    malloc = ctx.attr._custom_malloc or ctx.attr.malloc
+    malloc = ctx.attr._custom_malloc or ctx.attr._malloc_dontuse
     linking_outputs = cc_common.link(
         name = name,
         actions = ctx.actions,
@@ -831,7 +713,6 @@ def _lisp_binary_impl(ctx):
         ] + [info.linking_context for info in runtimes_ccinfos],
         stamp = ctx.attr.stamp,
         output_type = "executable",
-        additional_inputs = link_additional_inputs,
     )
 
     return _lisp_providers(
@@ -847,12 +728,7 @@ lisp_binary = rule(
     exec_groups = {"cpp_link": exec_group()},
     attrs = _LISP_BINARY_ATTRS,
     fragments = ["cpp"],
-    toolchains = use_cc_toolchain() + [
-        config_common.toolchain_type(
-            "@bazel_tools//tools/cpp:cc_runtimes_toolchain_type",
-            mandatory = False,
-        ),
-    ],
+    toolchains = use_cc_toolchain(),
     doc = """
 Supports all of the same attributes as [`lisp_library`](#lisp_library), plus
 additional attributes governing the behavior of the completed binary. The
@@ -870,18 +746,26 @@ Example:
     )""",
 )
 
-lisp_test = rule(
+def lisp_test(name, **kwargs):
+    """Macro wrapper on lisp_test_rule appending an extra tag
+
+    Args:
+        name: Rule name.
+        **kwargs: Passed through to lisp_binary"""
+
+    tags = kwargs.pop("tags", [])
+
+    moretags = ["notsan"]
+    alltags = tags + [x for x in moretags if x not in tags]
+    _lisp_test(name = name, tags = alltags, **kwargs)
+
+_lisp_test = rule(
     implementation = _lisp_binary_impl,
     executable = True,
     test = True,
     attrs = _LISP_TEST_ATTRS,
     fragments = ["cpp"],
-    toolchains = use_cc_toolchain() + [
-        config_common.toolchain_type(
-            "@bazel_tools//tools/cpp:cc_runtimes_toolchain_type",
-            mandatory = False,
-        ),
-    ],
+    toolchains = use_cc_toolchain(),
     doc = """
 Like [`lisp_binary`](#lisp_binary), for defining tests to be run with the
 [`test`](https://docs.bazel.build/versions/master/user-manual.html#test)
@@ -919,6 +803,45 @@ def _lisp_library_impl(ctx):
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         print("Library: %s" % ctx.label.name)
 
+    cc_toolchain = find_cc_toolchain(ctx)
+
+    feature_configuration = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cc_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = ctx.disabled_features + ["module_maps"],
+    )
+
+    c_compile_variables = cc_common.create_compile_variables(
+        feature_configuration = feature_configuration,
+        cc_toolchain = cc_toolchain,
+        user_compile_flags = ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts,
+        source_file = "dummyfile.c",
+    )
+
+    # We don't really need a complete C++ command-line, but I do not know how to detect
+    # presence of -D{thingy} in the opaque object that eventually becomes the command-line.
+    # So the technique of materializing the compiler invocation as a string list then
+    # searching for the flag of interest is perfectly adequate albeit brain-dead.
+    #
+    # And another problem: when I attempt to do this load() to use an abstract constant
+    # as you're "supposed to"
+    #  load("@rules_cc//cc:action_names.bzl", "CPP_COMPILE_ACTION_NAME")
+    # then all tests in //lisp/devtools/bazel/macro-tests fail. Gimme a friggin break for once.
+    command_line = cc_common.get_memory_inefficient_command_line(
+        feature_configuration = feature_configuration,
+        action_name = "c++-compile",  # should be CPP_COMPILE_ACTION_NAME ?
+        variables = c_compile_variables,
+    )
+    if "-D_LIBCPP_GOOGLE3_ENABLE_SIZE_BASED_VECTOR" in command_line:
+        augment_lisp_features = ["size-based-stdvector"] + ctx.attr.add_features
+    else:
+        augment_lisp_features = ctx.attr.add_features
+    if "-DADDRESS_SANITIZER" in command_line or "-DHWADDRESS_SANITIZER" in command_line:
+        augment_lisp_features = ["address-sanitizer"] + augment_lisp_features
+    if "-DNDEBUG" in command_line and not "-UNDEBUG" in command_line:
+        augment_lisp_features = ["copt-ndebug"] + augment_lisp_features
+
     compile = lisp_compile_srcs(
         ctx = ctx,
         srcs = ctx.files.srcs,
@@ -927,9 +850,8 @@ def _lisp_library_impl(ctx):
         block_compile = ctx.attr.block_compile,
         block_compile_specified_only = ctx.attr.block_compile_specified_only,
         image = ctx.attr.image,
-        add_features = ctx.attr.add_features,
+        add_features = augment_lisp_features,
         nowarn = ctx.attr.nowarn,
-        order = ctx.attr.order,
         compile_data = ctx.attr.compile_data,
         verbose_level = verbose_level,
         instrument_coverage = ctx.attr.instrument_coverage,

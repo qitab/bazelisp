@@ -7,44 +7,26 @@
 ;;; Utilities for Bazel Lisp and their implementation in SBCL.
 ;;;
 
-;; Default optimization settings.
-; #-dbg (declaim (optimize (speed 3) (safety 1)))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; MD5 pulls in SB-ROTATE-BYTE which makes it impossible
-  ;; to compile either of those from fresh upstream sources without some magic.
-  (require :sb-md5))
-
 (defpackage #:bazel.sbcl
-  (:use #:common-lisp #:sb-thread #:sb-alien #:bazel.utils)
-  (:import-from #:sb-md5 #:md5sum-file)
-  (:export #:compile-files
+  (:use #:common-lisp #:sb-thread #:sb-alien)
+  (:export #:always-block-compile-file-p
+           #:compile-files
+           #:c++-mangle
+           #:c-symbol-existsp
            #:exit
            #:run
            #:inline-function-p
-           #:function-has-transforms-p
-           #:getenv #:unsetenv #:chdir
+           #:getenv #:unsetenv
            #:command-line-arguments #:program-name
            #:default-toplevel-loop
            #:mute-output-streams
            #:save-lisp-and-die
-           #:dump-alien-symbols
-           #:dump-extern-symbols
-           #:dump-dynamic-list-lds
-           #:combine-run-time-and-core
            #:md5sum-file
            #:set-interpret-mode
-           #:set-interactive-mode
-           #:setup-readtable
            #:remove-extra-debug-info
            #:name-closure
            #:with-creating-find-package
-           #:with-default-package
-           ;; threading
-           #:make-thread
-           #:join-thread
-           #:with-recursive-lock
-           #:make-mutex #:mutex))
+           #:with-default-package))
 
 (in-package #:bazel.sbcl)
 
@@ -73,12 +55,6 @@
 (defun inline-function-p (function)
   "Returns non-nil when the FUNCTION is declared inline."
   (eq (sb-int:info :function :inlinep function) 'inline))
-
-(defun function-has-transforms-p (function)
-  "Returns non-nil if the FUNCTION has transforms."
-  (or (sb-c::info :function :source-transform function)
-      (let ((info (sb-c::info :function :info function)))
-        (and info (sb-c::fun-info-transforms info)))))
 
 (defun getenv (variable)
   "Returns the value of the environment VARIABLE."
@@ -114,20 +90,6 @@
   ;; This is not necessary, except for debugging and aesthetics.
   (setf (sb-kernel:%fun-name closure) name)
   closure)
-
-(defun remove-extra-debug-info ()
-  "Removes debug info like docstrings and xrefs."
-  (sb-vm::map-allocated-objects
-   (lambda (obj type size)
-     (declare (ignore size))
-     (when (= type sb-vm:code-header-widetag)
-       (dotimes (i (sb-kernel:code-n-entries obj))
-         (let ((f (sb-kernel:%code-entry-point obj i)))
-           (setf (sb-kernel:%simple-fun-info f) 'function)
-           ;; Preserve source forms, assuming we want them if they exist.
-           (setf (sb-kernel:%simple-fun-source f)
-                 (sb-kernel:%simple-fun-lexpr f))))))
-   :all))
 
 ;;;
 ;;; Precompile generic functions.
@@ -260,9 +222,6 @@
         (unless (find (symbol-package s) *skip-precompile-packages*)
           (when (precompile s)
             (precompile `(setf ,s)))))
-      (when (plusp verbose)
-        (bazel.log:info "Precompiled ~D (~D% out of ~D) generic functions.~%"
-                        count (round (* 100 count) all) all))
       (values count all))))
 
 ;;;
@@ -273,66 +232,108 @@
   "Set the mode of eval to :interpret if COMPILE-MODE is :LOAD. Otherwise, set it to :COMPILE."
   (declare (optimize (speed 1) (safety 3) (compilation-speed 1) (debug 1)))
   (setf sb-ext:*evaluator-mode* (if (eq compile-mode :load) :interpret :compile))
-  (bazel.log:vvv "Set interpret mode to: ~A"  sb-ext:*evaluator-mode*)
   sb-ext:*evaluator-mode*)
-
-(defun set-interactive-mode (&optional (interactive-p t))
-  "If INTERACTIVE-P is true, the debugger will be enabled."
-  (if interactive-p
-      (sb-ext:enable-debugger)
-      (sb-ext:disable-debugger)))
 
 ;;;
 ;;; Reading lisp files.
 ;;;
 
-(defun setup-readtable (rt)
-  (setf (sb-ext:readtable-base-char-preference rt) :both)
-  rt)
-
-(defvar *in-find-package* nil "Prevents cycles in make-package")
-(defvar *with-creating-find-package-mutex* (make-mutex :name "with-creating-find-package-mutex"))
-
-(defun call-with-augmented-find-package (body &key (use '("COMMON-LISP")) (default nil))
-  "Calls the BODY after making sure that the reader
- will not error on unknown packages or not exported symbols.
- USE is the set of packages to use by the new package.
- This affects _all_ threads' calls to FIND-PACKAGE, and
- is generally not appropriate to use in production code"
-  (declare (function body))
-  ;; The instant that ENCAPSULATE stores the new definition of FIND-PACKAGE, we must
-  ;; accept that any thread - whether already running, or newly created - can access
-  ;; our local function as a consequence of needing FIND-PACKAGE for any random reason.
-  ;; Were the closure allocated on this thread's stack, then this function's frame
-  ;; would be forbidden from returning until no other thread was executing the code
-  ;; that was made globally visible. Since there's no way to determine when the last
-  ;; execution has ended, the FLET body has indefinite, not dynamic, extent.
-  (flet ((creating-find-package (f name)
-           (or (funcall f name)
-               default
-               (unless *in-find-package*
-                 (let ((*in-find-package* t))
-                   (make-package name :use use))))))
-    (with-recursive-lock (*with-creating-find-package-mutex*)
-      (sb-int:encapsulate 'find-package 'create #'creating-find-package)
-      (unwind-protect
-           (handler-bind ((package-error #'continue))
-             (funcall body))
-        (sb-int:unencapsulate 'find-package 'create)))))
-
-(defmacro with-creating-find-package ((&key (use '("COMMON-LISP"))) &body body)
-  "Executes body in an environment where FIND-PACKAGE will not signal an unknown package error.
- Instead it will create the package with the missing name with the provided USE packages."
-  `(call-with-augmented-find-package (lambda () ,@body) :use ',use))
-
-(defmacro with-default-package ((default) &body body)
-  "Executes body in an environment where FIND-PACKAGE will not signal an unknown package error.
- Instead it will return the DEFAULT package."
-  `(call-with-augmented-find-package (lambda () ,@body) :default ,default))
+(defun always-block-compile-file-p (file)
+  "Return true if :block-compile should be enabled for FILE"
+  (declare (ignore file))
+  nil)
 
 (defun compile-files (names &rest rest)
   "Call COMPILE-FILE on NAMES, which must be singular despite being named NAMES,
 passing through REST unaltered."
   (if (typep names '(or atom (cons string null)))
-      (apply #'compile-file (if (atom names) names (car names)) rest)
+      (let ((source (if (atom names) names (car names))))
+        (when (find-package "SB-COVER")
+          ;; no effect if coverage isn't enabled
+          (funcall (find-symbol "ENABLE-COVERAGE-LOGGING" "SB-COVER")))
+        (apply #'compile-file source
+               :block-compile (or (getf rest :block-compile)
+                                  (always-block-compile-file-p source))
+               rest))
       (error "Multiple file support is incomplete")))
+
+(defun md5sum-file (file)
+  "Run external md5sum program on FILE"
+  (let ((process (sb-ext:run-program "md5sum" (list (namestring (merge-pathnames file)))
+                                     :output :stream :search t)))
+    (assert (zerop (sb-ext:process-exit-code process)))
+    (let ((hex (subseq (read-line (sb-ext:process-output process)) 0 32))
+          (result (make-array 16 :element-type '(unsigned-byte))))
+    (dotimes (i 16 result)
+      (setf (aref result i)
+            (parse-integer hex :start (* i 2) :end (* (1+ i) 2) :radix 16))))))
+
+;;; This belongs somewhere in SB-ALIEN, but only in theory, because the mangling
+;;; algorithm depends technically on the C compiler. It so happens that we use LLVM
+;;; which uses the mangling specification developed for Itanium. The real mangler
+;;; takes over 6 thousand lines of code to express. This is a far cry from that.
+(defun c++-mangle (name arg-types &optional const) ; NOLINT
+  "Produce the C linkage name for C++ function NAME with ARG-TYPES"
+  (labels ((typemangle (spec)
+             (apply #'concatenate 'string
+                    (mapcar #'mangle-modifier (sb-int:ensure-list spec))))
+           (mangle-modifier (x)
+             (string
+              (cond ((case x
+                       (* #\P)
+                       (integer #\i)
+                       (sb-alien:long #\l)
+                       (sb-alien:unsigned-long #\m)
+                       (sb-alien:double #\d)
+                       (sb-alien:void #\v)
+                       (character #\c)
+                       (boolean #\b)))
+                    ;; package-insensitive comparison
+                    ((string= x "CONST") #\K)
+                    ((string= x "REF") #\R)
+                    ((string= x "string_view")
+                     ;; the mangled string demangles to
+                     ;;   "std::__u::basic_string_view<char, std::__u::char_traits<char> >"
+                     ;; #\N => nesting, "St" => std::, #\I => template parameter list
+                     ;; "S_" => backreference to std::__u and so on
+                     (if (member :msan *features*)
+                         "NSt6__msan17basic_string_viewIcNS_11char_traitsIcEEEE"
+                         "NSt3__u17basic_string_viewIcNS_11char_traitsIcEEEE"))
+                    ((stringp x) (format nil "~D~A" (length x) x))
+                    (t (error "Unhandled C++ name"))))))
+    (format nil "_Z~A~{~A~}"
+            (if (stringp name)
+                (format nil "~D~A" (length name) name)
+                (with-output-to-string (s)
+                  (write-char #\N s)
+                  (when const (write-char #\K s))
+                  (dolist (part name) (format s "~D~A" (length part) part))
+                  (write-char #\E s)))
+            (if arg-types (mapcar #'typemangle arg-types) '(#\v)))))
+
+(defun c-symbol-existsp (sym)
+  "True if and only if &SYM is nonzero in an ELF binary"
+  (macrolet ((compute-offset ()
+               (let ((accessor (find-symbol "ALIEN-LINKAGE-ELEMENT-OFFSET" "SB-VM")))
+                 (if accessor
+                     `(,accessor index t)
+                     `(+ (* index sb-vm:alien-linkage-table-entry-size) 8)))))
+    (let ((index (gethash sym (car sb-sys:*linkage-info*))))
+      (and index
+           ;; check that alien linkage table entry doesn't point to undefined-tramp
+           (/= (sb-sys:sap-ref-word (sb-sys:int-sap sb-vm:alien-linkage-space-start)
+                                    (compute-offset))
+               (sb-fasl:get-asm-routine 'sb-vm::undefined-alien-tramp))))))
+
+(defun maybe-save-coverage ()
+  "If ${COVERAGE} is set, writes coverage data to a file in ${COVERAGE_DIR}. The file has the .dat
+  extension and is in LCOV format. By convention, for Lisp coverage the filname starts with
+  'lispcov'."
+  (when (getenv "COVERAGE")
+    (let ((coverage-dir (getenv "COVERAGE_DIR")))
+      (unless coverage-dir
+        (error "COVERAGE is set, but COVERAGE_DIR is not."))
+      (funcall (find-symbol "LCOV-REPORT" "SB-COVER")
+       (format nil "~A/lispcov-~A.dat" coverage-dir (sb-unix:unix-getpid))))))
+
+(pushnew 'maybe-save-coverage sb-ext:*exit-hooks*)
