@@ -10,9 +10,6 @@
 ;;; bazel-lisp compile -v 2 -W "optional-and-key" "test.lisp" test.fasl
 ;;;
 
-;; Default compilation settings for bazel-lisp.
-#-dbg (declaim (optimize (speed 3) (safety 1)))
-
 (defpackage #:bazel.main
   (:use #:common-lisp #+sbcl #:bazel.sbcl #:bazel.utils)
   (:import-from #:bazel.log
@@ -23,80 +20,14 @@
   (:export #:save-image
            ;; Main entry point for bazel-lisp
            #:main
-           ;; Splits a string by space.
            ;; List of all files compiled into the image with src hashes.
            #:*compiled-sources*
-           ;; A hash-map by source file name of the form-path line and column numbers.
-           #:*path-locations*
-           ;; This should be bound to the current source file being processed.
-           #:*current-source-file*
-           ;; A generic method called for each compiled lisp source file.
            #:compile-source
-           ;; Generic processing for files.
-           #:process-file
-           ;; Generics for specific commands.
-           #:init-action
-           #:finish-action
-           #:load-file
-           ;; bazel-lisp warning handler.
-           #:handle-warning
-           ;; Post entry generic handler for each command.
-           #:execute-command
-           ;; Action model accessors
-           #:*action*
-           #:action
-           #:action-command
-           #:action-args
-           #:action-output-files
-           #:action-processing-sources-p
-           #:action-save-runtime-options-p
-           #:action-main-function
-           #:action-warning-handlers
-           #:action-compilation-mode
-           #:action-source-files
-           #:action-find-output-file
-           #:action-failures
-           #:action-deferred-warnings
+           #:load-file ; for interactive use
            #:add-features
            #:add-feature))
 
 (in-package #:bazel.main)
-
-;;;
-;;; Basic Utilities
-;;;
-
-(defstruct file
-  "Represents a file with name and contents."
-  (name nil :type string)
-  (contents nil :type (simple-array octet)))
-
-(defmethod cl:print-object ((file file) stream)
-  "Prints the file object as an unreadable object."
-  (print-unreadable-object (file stream :type t)
-    (format stream "~S (~D)" (file-name file) (length (file-contents file)))))
-
-(defun get-file-contents (file-name)
-  "Read contents of a file with FILE-NAME and return them as an array of octets."
-  (with-open-file (stream file-name :element-type 'octet)
-    (let* ((length (file-length stream))
-           (contents (make-array (the fixnum length) :element-type 'octet)))
-      (assert (= length (read-sequence contents stream))) ; NOLINT
-      contents)))
-
-(defun get-file (file-name)
-  "Returns a file object with contents for FILE-NAME."
-  (make-file
-   :name file-name
-   :contents (get-file-contents file-name)))
-
-(defun stem-file-name (name)
-  "Removes the type of file from the end of its NAME."
-  (declare (string name))
-  (let ((type (pathname-type name)))
-    (if type
-        (subseq name 0 (- (length name) (length (the string type)) 1))
-        name)))
 
 ;;;
 ;;; BUILD-action model
@@ -127,8 +58,6 @@
   ;; Flag indicating that the final binary should have its runtime options burned.
   ;; Value T will prevent such target binary from interpreting those options from the command line.
   (save-runtime-options-p nil :type boolean)
-  ;; Indicates that source forms positions should be recorded.
-  (record-path-location-p nil :type boolean)
   ;; The main function for a binary.
   (main-function nil :type (or null symbol string))
   ;; Whether block compilation is enabled.
@@ -142,26 +71,21 @@
   (compilation-mode nil :type compilation-mode)
   ;; A list of failures.
   (failures nil :type list)
-  ;; A list of deferred-warnings.
-  (deferred-warnings nil :type list)
   ;; A count of muffled infos.
   (muffled-infos-count 0 :type fixnum)
   ;; A count of muffled warnings.
-  (muffled-warnings-count 0 :type fixnum)
-  ;; Readtable used for this action.
-  (readtable *readtable* :type readtable))
+  (muffled-warnings-count 0 :type fixnum))
 
 (defmethod cl:print-object ((action action) stream)
   "Prints the FASL file object as an unreadable object."
   (print-unreadable-object (action stream :type t)
     (format stream ":command ~S :outputs ~D~@[ :main ~S~] :compilation-mode ~S ~
-                    :failures ~D :deferred ~D :muffled ~D :infos ~D"
+                    :failures ~D :muffled ~D :infos ~D"
             (action-command action)
             (length (action-output-files action))
             (action-main-function action)
             (action-compilation-mode action)
             (length (action-failures action))
-            (length (action-deferred-warnings action))
             (action-muffled-warnings-count action)
             (action-muffled-infos-count action))))
 
@@ -169,64 +93,6 @@
 ;; All of the state of the current bazel-lisp BUILD action.
 ;; The action is shared among threads.
 (defvar *action* nil)
-(declaim (type mutex *action-mutex*))
-(defvar *action-mutex* (make-mutex :name "bazel-lisp-action-mutex")
-  "Action mutex guards *action* global variable.")
-
-(defun print-action-full (&key
-                          args
-                          (action *action*)
-                          (verbose *verbose*)
-                          (stream *standard-output*))
-  "Print the ACTION using VERBOSE mode to the output STREAM."
-  (declare (optimize (debug 3) (speed 0)))
-  (let* ((*verbose* verbose)
-         (args (copy-list (if action (action-args action) args)))
-         (deps (split (getf args :deps)))
-         (srcs (split (getf args :srcs)))
-         (specs (getf args :specs))
-         (load (split (getf args :load)))
-         (outs (split (getf args :outs)))
-         (warnings (split (getf args :warning)))
-         (hashes (split (getf args :hashes)))
-         (bindir (getf args :bindir)))
-    (when (< verbose 2)
-      (when (> (length deps) 1) (remf args :deps))
-      (when (> (length srcs) 1) (remf args :srcs))
-      (when (> (length load) 1) (remf args :load)))
-    (when (< verbose 3)
-      (when (> (length warnings) 1) (remf args :warnings))
-      (when (> (length hashes) 1) (remf args :hashes)))
-
-    (verbose "Program name: ~A" (program-name))
-    (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
-    (verbose "Current dir: ~A" *default-pathname-defaults*)
-    (verbose "Params:~{~&~3T~A: ~A~%~}" args)
-    #+sbcl
-    (vv "Environment:~{~%~3T~S~}~%" (sb-unix::posix-environ))
-    (verbose "Action: ~A~%" action)
-    (flet ((strip-bindir (name) (if bindir (strip-prefix bindir name) name)))
-      (cond ((< verbose 2)
-             (verbose "Deps: ~A" (length deps))
-             (verbose "Srcs: ~A" (length srcs))
-             (verbose "Load: ~A" (length load)))
-            (t
-             (vv "Deps:~{~%~3T~A~}" (mapcar #'strip-bindir deps))
-             (vv "Srcs:~{~%~3T~A~}" (mapcar #'strip-bindir srcs))
-             (vv "Load:~{~%~3T~A~}" (mapcar #'strip-bindir load))))
-      (verbose "Outs:~{~%~3T~A~}" (mapcar #'strip-bindir outs))
-      (when (< verbose 3)
-        (verbose "Hashes: ~A" (length hashes))
-        (verbose "Warnings: ~A" (length warnings))))
-    (when (and (>= verbose 3) specs (probe-file specs))
-      (verbose "Specs file: ~S contents" specs)
-      (with-open-file (in specs
-                          :element-type 'character
-                          :external-format :utf-8)
-        (loop :for line = (read-line in nil)
-              :while line
-              :do (write-string line stream)
-                  (terpri stream))))))
 
 ;; The current file being processed.
 (declaim (type (or null string) *current-source-file*))
@@ -236,36 +102,36 @@
   "Contains the name of the currently processed file. Used by error reporting.")
 
 ;; The set of compiled sources with their md5 checksums.
-;; TODO(czak): Rename source-file-hash.
-(declaim (type hash-table *compiled-sources*))
-(defvar *compiled-sources* (make-hash-table :test #'equal)
-  "Stores compiled source names relative to google3 with the corresponding md5 hashes.")
+;; Constructed on demand
+(define-symbol-macro *compiled-sources* (get-or-make-md5sum-table))
+(defvar %namestring-to-md5sum nil) ; NOLINT
+(defun get-or-make-md5sum-table ()
+  "Construct hash-table from debug-infos"
+  (or %namestring-to-md5sum
+      #-sbcl (error "Implement")
+      #+sbcl
+      (let ((ht (make-hash-table :test 'equal)))
+        (dolist (c (sb-vm:list-allocated-objects
+                    :all :type sb-vm:code-header-widetag)
+                   (setf %namestring-to-md5sum ht))
+          (when (typep (sb-kernel:%code-debug-info c) 'sb-c::debug-info)
+            (let* ((di (sb-kernel:%code-debug-info c))
+                   (src (sb-c::debug-info-source di)))
+              (unless (typep src 'sb-c::core-debug-source)
+                (let ((md5sum (getf (sb-c::debug-source-plist src) :md5sum)))
+                  (when md5sum
+                    (setf (gethash (sb-c::debug-source-namestring src) ht)
+                          md5sum))))))))))
 
 (defun action-add-failure (warning &optional (action *action*))
   "Add a WARNING to the failures list of the ACTION."
   (verbose "Added failure: ~S '~A'" (type-of warning) warning)
-  (with-recursive-lock (*action-mutex*)
-    (pushnew (list *current-source-file* (type-of warning) warning)
-             (action-failures action) :test #'equalp)))
-
-(defun action-find-output-file (action type)
-  "Searches in the ACTION output files for a file ending with the string TYPE."
-  (declare (type action action) (string type))
-  (find type (action-output-files action) :key #'pathname-type :test #'equalp))
-
-(defun action-find-output-file-with-name (action name type)
-  "Searches in the ACTION output files for a file ending with
-   the string TYPE and starting with the string NAME."
-  (declare (type action action) (string name type))
-  (find-if #'(lambda (pathname)
-                    (and (string= (pathname-name pathname) name)
-                         (string= (pathname-type pathname) type)))
-           (action-output-files action)))
+  (pushnew (list *current-source-file* (type-of warning) warning)
+           (action-failures action) :test #'equalp))
 
 ;;;
 ;;; Functions dealing with compiler warnings and deferred warnings.
 ;;; This requires the bazel.warning package.
-;;; TODO(czak): Add support for those into UIOP.
 ;;;
 
 (defun resolve-warning-handler (handler &key (fail-on-error t))
@@ -340,57 +206,9 @@ package context. This allows for the user to specify their own handlers as a str
           (vvv "Handler ~A => ~A" handler value)
           (case value
             ((nil) nil)
-            ((:show) (setf result :show))
             ((:fail) (return :fail))
             (t       (when restart (return :muffle)))))
         finally (return result)))
-
-(defun save-deferred-warnings (warning-file warnings)
-  "Saves the WARNINGS to the WARNING-FILE."
-  (declare (string warning-file) (list warnings))
-  (verbose "Saving ~A warning~:P: ~S" (length warnings) warning-file)
-  (delete-read-only warning-file)
-  (with-open-file (out warning-file :direction :output :if-exists :supersede)
-    (with-standard-io-syntax
-      (format out "~@[(~{~S~^~%~})~]" warnings))))
-
-(defun read-deferred-warnings (action warnings-file)
-  "Reads warnings from the WARNINGS-FILE and appends those to the ACTION deferred-warnings."
-  (with-open-file (in warnings-file)
-    (with-standard-io-syntax
-      (loop with count fixnum = 0
-            for warnings = (read in nil :eof)
-            until (eq warnings :eof) do
-              (incf count (length (the list warnings)))
-              (setf (action-deferred-warnings action)
-                    (union (action-deferred-warnings action) warnings :test #'equalp))
-            finally
-         (message :info (if (plusp count) 1 3)
-                  "Read ~D warning~:P from: ~A" count warnings-file)))))
-
-(defun resolve-deferred-warnings (warnings)
-  "Try to resolve deferred WARNINGS. Return a list of unresolved ones."
-  (declare (list warnings))
-  (let ((length (length warnings)))
-    (message :info (if (plusp length) 1 2) "Resolving ~D deferred warning~:P" length))
-  (loop for warning in warnings
-        for (src kind-of-warning data) = warning
-        for not-resolved
-          = (if (and (eq kind-of-warning :undefined-function)
-                     (fboundp data))
-                (cond ((inline-function-p data)
-                       ;; Inline functions cannot be deferred.
-                       `((,src :undefined-inline-function ,data)))
-                      ((and (symbolp data) (macro-function data))
-                       `((,src :undefined-macro ,data)))
-                      ((compiler-macro-function data)
-                       `((,src :undefined-compiler-macro-function ,data)))
-                      ((function-has-transforms-p data)
-                       `((,src :undefined-function-transforms ,data))))
-                (list warning))
-        do
-     (message :info (if not-resolved 1 2) "~8T~S => ~:[~;not ~]resolved." warning not-resolved)
-        nconc not-resolved))
 
 (defun handle-warning (warning &optional (action *action*))
   "Invoke the WARNING handlers and adds a failure to the ACTION failure list."
@@ -400,8 +218,6 @@ package context. This allows for the user to specify their own handlers as a str
     (ecase result
       (:ignore
        (bazel.log:vvv "IGNORE: ~S '~A'" (type-of warning) warning))
-      (:show
-       (bazel.log:info "SHOW: ~S '~A'" (type-of warning) warning))
       (:muffle
        (bazel.log:vv "MUFFLE: ~S '~A'" (type-of warning) warning)
        (if warning-p
@@ -464,13 +280,6 @@ package context. This allows for the user to specify their own handlers as a str
 ;;; Bazel-Lisp specific utilities
 ;;;
 
-(defun delete-doc-strings ()
-  "Delete all the symbol doc strings."
-  (do-all-symbols (var)
-    (dolist (type '(function type structure variable setf method-combination compiler-macro))
-      (when (documentation var type)
-        (setf (documentation var type) nil)))))
-
 (declaim (type (or symbol function) *entry-point*))
 (defvar *entry-point* nil)
 
@@ -481,9 +290,6 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
 
   (let ((entry-point *entry-point*)
         (LISP_MAIN (getenv "LISP_MAIN")))
-
-    ;; Provided UIOP is loaded, apply its image restore protocol.
-    (funcall-named "UIOP:CALL-IMAGE-RESTORE-HOOK")
 
     (when LISP_MAIN
       (unsetenv "LISP_MAIN")
@@ -503,34 +309,7 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
 
     (funcall entry-point)))
 
-(defun derive-entry-point (main)
-  "Returns NIL, SYMBOL, or FUNCTION based on the MAIN function specification."
-  (let* ((main-exp
-          (if (stringp main)
-              (with-standard-io-syntax
-                (read-from-string main))
-              main)))
-    (typecase main-exp
-      (null nil)
-      (function main-exp)
-      (symbol
-       (unless (fboundp main-exp)
-         (fatal "~S is not a known function name." main-exp))
-       main-exp)
-      (cons
-       (let ((fname (first main-exp)))
-         (cond ((or (not (symbolp fname))
-                    (macro-function fname)
-                    (special-operator-p fname))
-                (lambda () (eval main-exp)))
-               ((fboundp fname)
-                (lambda () (apply fname (rest main-exp))))
-               (t
-                (fatal "~S is not a known function name." fname)))))
-      (t
-       (fatal "Cannot use ~S as an entry point." main-exp)))))
-
-(defun save-image (name main &key save-runtime-options precompile-generics remove-debug-info
+(defun save-image (name main &key save-runtime-options precompile-generics
                         executable)
   "Saves the image to a binary image named 'name'. Exits.
  Arguments:
@@ -541,20 +320,23 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
       This is usually permanent.
   PRECOMPILE-GENERICS - will precompile the generic functions before saving.
   EXECUTABLE - Whether to combine the launcher with the image to create an executable."
-  (let ((main-fn (derive-entry-point main)))
+  (let ((main-fn (or (if (stringp main)
+                         (with-standard-io-syntax (read-from-string main))
+                         ;; what else could it be but a string?
+                         main)
+                     'sb-impl::toplevel-init)))
+    (etypecase main-fn
+      (symbol
+       (unless (fboundp main-fn)
+         (fatal "~S is not a known function name." main-fn))))
     (verbose "Saving binary to: ~S~@[ (old-main: ~S)~]~@[ (main: ~S)~]"
              name (unless (eq main-fn *entry-point*) *entry-point*) main-fn)
     (setf *entry-point* main-fn))
-  (when remove-debug-info
-    (remove-extra-debug-info))
-  ;; Provided UIOP is loaded, apply its image dump protocol.
-  (funcall-named "UIOP:CALL-IMAGE-DUMP-HOOK")
   ;; Set to a sane value.
   (in-package "COMMON-LISP-USER")
-  (dolist (candidate '("lisp/devtools/bazel/imagesave.lisp"
-                       "third_party/lisp/bazel/imagesave.lisp"))
-    (when (probe-file candidate)
-      (load candidate :verbose nil :print nil)
+  (let ((script "third_party/lisp/bazel/imagesave.lisp"))
+    (when (probe-file script)
+      (load script :verbose nil :print nil)
       (funcall (intern "SAVE-AND-EXIT")
                name
                :toplevel #'restart-image
@@ -573,7 +355,8 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
   (destructuring-bind (spEed Debug saFety space Compilation-speed)
       (ecase optimization-mode ; E D F   C
         (:load                '(1 1 1 1 3))
-        ((:fastbuild nil)     '(1 2 3 1 1))
+        ((:fastbuild nil)     '(1 #+arm64 1 #-arm64 2 ; arm64 has compiler bugs in debug 2
+                                    3 1 1))
         (:opt                 '(3 0 0 1 1))
         (:dbg                 '(1 3 3 1 1)))
 
@@ -590,39 +373,16 @@ If LISP_MAIN is NIL or T it will call top-level REPL as well."
                          #+sbcl(sb-c::insert-array-bounds-checks 3)))))
 
 (defun to-feature (feature)
-  "Return a symbol feature derived from a FEATURE string or symbol.
-
-By default the string is read into the KEYWORD package.
-If the feature string is package prefixed, the package
-is instantiated unless already provided.
-
-If the feature parses as anything other than a symbol,
-it will signal an error."
-  (typecase feature
-    (symbol feature)
+  "Intern FEATURE in the keyword package if a string, or return as-is if a symbol"
+  (etypecase feature
+    (symbol (the (not null) feature))
     (string
-     (multiple-value-bind (value error)
-         (ignore-errors
-          (let ((*package* (find-package "KEYWORD")))
-            (with-creating-find-package ()
-              (values (read-from-string feature)))))
-       (cond ((and (symbolp value) value))
-             (error
-              (bazel.log:fatal
-               "Could not parse ~S as a feature due to~% ~S: ~A~%"
-               feature (type-of error) error)
-              nil)
-             (t
-              (bazel.log:fatal "Cannot parse ~S as a feature." feature)
-              nil))))
-    (t
-     (bazel.log:fatal "~S is not a feature." feature))))
+     (assert (not (find #\: feature)))
+     (intern (string-upcase feature) "KEYWORD"))))
 
 (defun add-feature (feature)
   "Add a single string FEATURE to *features*."
-  (let ((feature (to-feature feature)))
-    (when feature
-      (pushnew feature *features*))))
+  (pushnew (to-feature feature) *features*))
 
 (defun add-features (string)
   "Add the features from the STRING first converting them into keywords."
@@ -651,8 +411,7 @@ it will signal an error."
                        fasl
                        (action *action*)
                        (load-mode (action-compilation-mode action))
-                       (muffle-warnings (not (action-processing-sources-p action)))
-                       (readtable (action-readtable action)))
+                       (muffle-warnings (not (action-processing-sources-p action))))
   "Loads a file with NAME using action-compilation-mode.
  Checks for duplications and marks file as loaded. The warnings are muffled for dependencies.
  Arguments:
@@ -660,39 +419,22 @@ it will signal an error."
   FASL - if non-nil, the FASL will be loaded in place of the Lisp file.
   ACTION - the current bazel action object,
   LOAD-MODE - the load mode used to load the file.
-  MUFFLE-WARNINGS - if true, as in the case of deps, no warnings will be printed.
-  READTABLE - is the readtable to be used while loading."
+  MUFFLE-WARNINGS - if true, as in the case of deps, no warnings will be printed."
   (declare (type (or string pathname) name) (type action action))
   (unless load-mode
     (return-from load-file))
-  (with-open-file (in (or fasl name))
-    (unless (plusp (file-length in))
-      (bazel.log:verbose "Not loading an empty file: ~S." name)
-      (return-from load-file)))
   (with-safe-io-syntax
     (handler-bind ((non-fatal-error #'handle-error))
       (with-compilation-unit (:source-namestring name)
         (let* ((name (namestring name))
                (*default-pathname-defaults* *default-pathname-defaults*)
                (*current-source-file* name)
-               (*readtable* (setup-readtable readtable))
                (*action* action))
           (set-optimization-mode load-mode)
           (cond (muffle-warnings
                  (with-all-warnings-muffled
-                   ;; TODO(czak): use bazel.warning:redefine-warning.
-                   ;;   For this we need to know the NOWARN info
-                   ;;   for each package.
                    (handler-bind (((or bazel.warning:redefined-function
-                                       bazel.warning:redefined-macro
-                                       ;; bazel.warning:changed-ftype-proclamation
-                                       bazel.warning:conflicting-ftype-declaration
-                                       ;; TODO(czak): someone fix cl-pb.
-                                       ;; bazel.warning:redefined-generic
-                                       ;; bazel.warning:redefined-method
-                                       bazel.warning:redefined-package
-                                       bazel.warning:inline-used-before-definition
-                                       bazel.warning:compiler-macro-after-function-use)
+                                       bazel.warning:redefined-macro)
                                    #'handle-warning))
                      (load (or fasl name) :external-format :utf-8))))
                 (t
@@ -703,28 +445,31 @@ it will signal an error."
 ;;;
 
 (defun %compile-sources (srcs output-file &key
-                                          save-locations
-                                          (readtable (copy-readtable))
                                           block-compile)
   "Compiles the list of SRCS files into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
-  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
-  READTABLE is the readtable to be used for compiling the SRC file.
   BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
   ENTRY-POINTS is a list of entry points which are used when block-compiling."
-  (verbose "~{~A ~} => ~S (~A)" srcs (namestring output-file) *default-pathname-defaults*)
-  (ensure-directories-exist output-file)
   (multiple-value-bind (fasl warnings-p failures-p)
-    (with-compilation-unit (:source-namestring (car srcs))
+    (with-compilation-unit (:source-plist `(:md5sum ,(md5sum-file (car srcs)))
+                            :source-namestring (car srcs))
       (with-safe-io-syntax
-          (let ((output-file (merge-pathnames output-file))
-                (*default-pathname-defaults* *default-pathname-defaults*)
-                (*readtable* (setup-readtable readtable)))
-            (delete-read-only output-file)
-            (compile-files srcs :output-file output-file
-                                :external-format :utf-8
-                                :block-compile block-compile))))
+          (let ((*default-pathname-defaults* *default-pathname-defaults*))
+            (cond ((eq output-file :anonymous)
+                   (assert (not (cdr srcs)))
+                   (sb-c:compile-file-to-tempfile (car srcs)
+                                                  :external-format :utf-8
+                                                  :block-compile block-compile))
+                  (t
+                   (verbose "~{~A ~} => ~S (~A)" srcs (namestring output-file)
+                            *default-pathname-defaults*)
+                   (ensure-directories-exist output-file)
+                   (let ((output-file (merge-pathnames output-file)))
+                     (ignore-errors (delete-file output-file))
+                     (compile-files srcs :output-file output-file
+                                         :external-format :utf-8
+                                         :block-compile block-compile)))))))
     (unless (and warnings-p failures-p)
       (vv "Files ~A compiled without warnings." srcs))
     (when warnings-p
@@ -732,138 +477,97 @@ it will signal an error."
     (with-simple-restart (continue "Ignore compilation failure for ~A and continue." srcs)
       (when failures-p
         (fatal "Files ~A failed to compile." srcs)))
-    (when save-locations
-      (mapc #'(lambda (src)
-                (funcall-named* "BAZEL.PATH:SAVE-LOCATIONS"
-                                src output-file :readtable readtable))
-            srcs))
     (values fasl warnings-p failures-p)))
 
-(defgeneric compile-source (src output-file &key save-locations
-                                                 readtable
-                                                 block-compile)
-  (:documentation "Compile the SRC file into the FASL OUTPUT-FILE.
- SAVE-LOCATIONS unless nil causes the compilation process to record
- line and column numbers for all forms read from SRC.
- READTABLE is the readtable to be used for compilation.
- BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED."))
-
-(defmethod compile-source (src output-file
-                           &rest key-args &key
-                                          save-locations
-                                          (readtable (copy-readtable))
-                                          block-compile)
+(defun compile-source (src output-file &rest key-args &key block-compile)
   "Compiles the SRC file into the OUTPUT-FILE. A corresponding FASL will be created.
  Returns (values FASL WARNINGS-P FAILURES-P).
  Parameters:
-  SAVE-LOCATIONS when non-nil will save the path locations to the FASL file as well.
-  READTABLE is the readtable to be used for compiling the SRC file.
-  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED.
-  ENTRY-POINTS is a list of entry points which are used when block-compiling."
-  (declare (ignore save-locations readtable block-compile))
+  BLOCK-COMPILE is whether to block compile, and can be either T or :SPECIFIED."
+  (declare (ignore block-compile))
   (apply #'%compile-sources (list src) output-file key-args))
 
-(defun write-file-hash (src hash-file)
-  "Compute the hash of the SRC file and write it to the HASH-FILE."
-  (assert (equalp (pathname-type hash-file) "hash")) ; NOLINT
-  (let ((md5sum (md5sum-file src)))
-    (delete-read-only hash-file)
-    (with-open-file (out hash-file :direction :output :if-exists :supersede :element-type 'octet)
-      (write-stringz src out)
-      (write-sequence md5sum out))
-    (vv "Saved MD5 sum ~S to ~S." md5sum hash-file)))
-
-(defun defer-undefined-warning (warning &optional (action *action*))
-  "If the WARNING is an undefined function warning, add it to ACTION's deferred warnings."
-  (multiple-value-bind (undefined function) (bazel.warning:undefined-function-p warning)
-    (when undefined
-      (verbose "Added deferred warning: ~S '~A'" (type-of warning) warning)
-      (pushnew `(,*current-source-file* :undefined-function ,function)
-               (action-deferred-warnings action) :test #'equalp)
-      t)))
+(defun defer-undefined-warning (warning)
+  "Return true if WARNING is an undefined function warning and is therefore ignorable."
+  ;; Separately compiled units see hundreds if not thousands of this kind of warning.
+  ;; Missing functions become relevant (and are detected) only when producing a core file.
+  (values (bazel.warning:undefined-function-p warning)))
 
 ;;;
 ;;; File handlers
 ;;;
 
-(defgeneric process-file (action file type)
-  (:documentation "Process each input FILE of TYPE for this BUILD ACTION."))
-
-(defmethod process-file ((action action) (file string) type)
-  "Skips the given file for which there is no other handler."
-  ;; Maybe this should error instead of skip, but it's possible for files to be included in the
-  ;; build command-line just to forward those to things analyzing the compilation with extra
-  ;; actions (i.e. .meta files forwarded to the Kythe indexer):
-  ;; https://docs.bazel.build/versions/master/be/extra-actions.html
-  (verbose "File skipped: ~S [~A]" file type))
-
-(defmethod process-file ((action action) (file string) (type (eql :lisp)))
-  "Process a file with the .lisp or .lsp extensions. Loads file if not loaded, yet."
-  (unless (and (action-processing-sources-p action)
-              (eq (action-command action) :compile))
-    (load-file file :action action :load-mode :load)))
-
-(defmethod process-file ((action action) (file string) (type (eql :lsp)))
-  "Alias for function processing .lisp files."
-  (process-file action file :lisp))
-
-(defmethod process-file ((action action) (file string) (type (eql :fasl)))
-  "Loads a FASL file."
-  (prog1 (load-file file :fasl file :action action
-                         :load-mode (action-compilation-mode action))
-    ;; Sort some heap after every FASL.
-    #+sbcl (sb-ext:gc)))
-
-(defmethod process-file ((action action) (file string) (type (eql :warnings)))
-  "Loads a deferred warnings file. Deferred warnings are only checked in a binary (final) target."
-  (cond ((member (action-command action) '(:core :binary))
-         ;; For binary target read the deferred warnings here so those can be checked
-         ;; when the action is finalized later.
-         (read-deferred-warnings action file))))
-
-(defmethod process-file ((action action) (file string) (type (eql :hash)))
-  "Loads an MD5 hash file."
-  (with-open-file (in file :element-type 'octet)
-    ;; NAMESTRING canonicalizes to base-char (in SBCL at least), and furthermore
-    ;; returns a shareable string memoized on the corresponding pathname object.
-    (let ((src (namestring (read-stringz in)))
-          (md5 (make-array 16 :element-type 'octet)))
-      (assert (= 16 (read-sequence md5 in))) ; NOLINT
-      (setf (gethash src *compiled-sources*) md5))))
-
-(defun process-file* (file &optional (action *action*))
-  "Sets the environment before processing the file."
+(defun process-file (file &aux (action *action*) (type (pathname-type file)))
+  "Process FILE"
   (let ((*current-source-file* file))
     (vvv "~:[dep~;src~]: ~S" (action-processing-sources-p action) file)
-    (process-file action file (to-keyword (pathname-type file)))))
+    (cond
+      ((or (string= type "lisp") (string= type "lsp"))
+       (unless (and (action-processing-sources-p action)
+                    (eq (action-command action) :compile))
+         (load-file file :action action :load-mode :load)))
+      ((string= type "fasl")
+       (load-file file :fasl file :action action
+                       :load-mode (action-compilation-mode action)))
+      (t
+       ;; Maybe this should error instead of skip, but it's possible for files to be included in
+       ;; the build command-line just to forward those to things analyzing the compilation with
+       ;; extra actions (i.e. .meta files forwarded to the Kythe indexer):
+       ;; https://docs.bazel.build/versions/master/be/extra-actions.html
+       (verbose "File skipped: ~S [~A]" file type)))))
 
-(defun process-dependencies (deps)
-  "Iterates through the DEPS dependencies and invokes process-file on the DEPS."
+(defun process-dependencies (deps collect-undefs)
+  "Iterates through the DEPS dependencies and invokes process-file on the DEPS.
+if COLLECT-UNDEFS then return the unresolved function references"
   (verbose "Processing ~D dependencie~:P..." (length deps))
-  (with-all-warnings-muffled
-    (with-compilation-unit ()
-      (map () #'process-file* deps)))
-  (values))
+  (let ((undefs (make-hash-table :test 'equal))
+        (saved-hook sb-int:*setf-fdefinition-hook*))
+    ;; Technically we only want to observe the calls to ENSURE-LINKAGE-INDEX that are
+    ;; a consequence of the FASL asking for such via APPLY-FASL-FIXUPS, but I can't
+    ;; see any way to hit this interceptor other than via the fasloader, except possibly
+    ;; a COMPILE action in a different thread. We can ignore that little glitch
+    ;; since there can't be another thread.
+    (when collect-undefs
+      #+x86-64
+      (sb-int:encapsulate 'sb-int:ensure-linkage-index 'intercept
+        (lambda (realfun fname &optional quiet)
+          (when (and (not quiet)
+                     (boundp 'sb-fasl::*current-fasl-group*))
+            (cond ((and (fboundp fname)
+                        ;; If FNAME is FBOUNDP to a function that is not inlineable,
+                        ;; there's nothing further to do with it.
+                        (not (inline-function-p fname))
+                        (or (listp fname)
+                            (not (macro-function fname)))))
+                  (t
+                   ;; Record each source file that referenced the potentially-undefined name
+                   (let ((source-file (sb-fasl::fasl-group-header-label
+                                       sb-fasl::*current-fasl-group*)))
+                     (pushnew source-file (gethash fname undefs))))))
+          (funcall realfun fname quiet))))
+    (unwind-protect
+         (with-all-warnings-muffled
+             (when collect-undefs
+               (push (lambda (fname defn)
+                       (declare (ignore defn))
+                       (unless (inline-function-p fname)
+                         (remhash fname undefs)))
+                     sb-int:*setf-fdefinition-hook*))
+           (with-compilation-unit ()
+             (map nil #'process-file deps)))
+      (untrace)
+      (when collect-undefs
+        (setf sb-int:*setf-fdefinition-hook* saved-hook)
+        #+x86-64
+        (sb-int:unencapsulate 'sb-int:ensure-linkage-index 'intercept)))
+    undefs))
 
 ;;;
 ;;; Command handlers
 ;;;
 
-(defgeneric execute-command (command &rest arguments &key &allow-other-keys)
-  (:documentation "Executes a COMMAND with the command line ARGUMENTS."))
-
-(defgeneric init-action (action command)
-  (:documentation "Initializes the action based on the command")
-  (:method ((action action) command) #| noop |#))
-
-(defgeneric finish-action (action command)
-  (:documentation "Given a finished BUILD action execute the final command."))
-
 (defun check-and-save-image (action command)
   "Save the binary from this image."
-  (nconcf (action-failures action)
-          (resolve-deferred-warnings
-            (shiftf (action-deferred-warnings action) nil)))
   (check-failures action)
   (check-features)
 
@@ -871,45 +575,33 @@ it will signal an error."
   ;; Save image. Exit.
   (save-image (first (action-output-files action))
               (action-main-function action)
-              :remove-debug-info (eq (action-compilation-mode action) :opt)
               :save-runtime-options (action-save-runtime-options-p action)
               :precompile-generics (action-precompile-generics-p action)
               :executable (eq command :binary)))
 
-(defmethod finish-action ((action action) (command (eql :binary)))
-  (check-and-save-image action command))
-(defmethod finish-action ((action action) (command (eql :core)))
-  (check-and-save-image action command))
-
-(defmethod finish-action ((action action) (command (eql :compile)))
-  "Compiles the last source file."
-  (let* ((srcs (action-source-files action))
-         ;; Currently SBCL is not binding *compile-file-pathname* when raising undefined-function.
-         ;; So handle this in at least the one-file case.
-         (*current-source-file*
-          (unless (rest srcs)
-           (first srcs))))
-    (%compile-sources srcs
-                      (action-find-output-file action "fasl")
-                      :save-locations (action-record-path-location-p action)
+(defun finish-action (action command) "Finish ACTION + COMMAND"
+  (ecase command
+    ((:binary :core) ; executable core, nonexecutable core respectively
+     (check-and-save-image action command))
+    (:compile ; "finishing" a compilation means calling COMPILE-FILE
+     ;; Currently SBCL is not binding *compile-file-pathname* when raising undefined-function.
+     ;; So handle this in at least the one-file case.
+     (let* ((srcs (action-source-files action))
+            (out (first (action-output-files action)))
+            (*current-source-file*
+             (unless (rest srcs)
+               (first srcs))))
+       (assert (string= (pathname-type out) "fasl"))
+       (%compile-sources srcs out
                       :block-compile (if (and (action-block-compile-p action)
                                               (action-block-compile-specified-only action))
                                          :specified
-                                         (action-block-compile-p action))
-                      :readtable (action-readtable action))
-    (mapc #'(lambda (source-file)
-              (write-file-hash source-file
-                               (action-find-output-file-with-name
-                                action (pathname-name source-file) "hash")))
-          (action-source-files action))
-    (check-failures action)
-    (save-deferred-warnings
-      (action-find-output-file action "warnings")
-      (action-deferred-warnings action))))
+                                         (action-block-compile-p action)))
+       (check-failures action)))))
 
 (defun parse-specs (specs)
-  "Parse the SPECS file and return values for SRCS, DEPS, LOAD, WARNINGS, and HASHES."
-  (let (srcs deps load warnings hashes)
+  "Parse the SPECS file and return values for SRCS, DEPS, LOAD."
+  (let (srcs deps load)
     (with-open-file (in specs :direction :input :element-type 'character)
       (loop for spec = (read in nil in)
             until (eq spec in)
@@ -917,10 +609,21 @@ it will signal an error."
          (ecase (first spec)
            (:srcs (setf srcs (rest spec)))
            (:deps (setf deps (rest spec)))
-           (:load (setf load (rest spec)))
-           (:warnings (setf warnings (rest spec)))
-           (:hashes (setf hashes (rest spec))))))
-    (values srcs deps load warnings hashes)))
+           (:load (setf load (rest spec))))))
+    (values srcs deps load)))
+
+(defun coverage-exclude-p (src)
+  "Return T if SRC should never be coverage-instrumented"
+  (let ((dir (pathname-directory src)))
+    (when (or (eql (mismatch src "third_party/lisp/") 17)
+              ;; Don't instrument generated sources
+              ;;   (:relative "bazel-out" ignore_this {genfiles|bin})
+              ;; where ignore_this is probably "k8-opt" but doesn't matter.
+              (and (eq (first dir) :relative)
+                   (string= (second dir) "bazel-out")
+                   (stringp (fourth dir))
+                   (find (fourth dir) '("bin" "genfiles") :test 'string=)))
+      t)))
 
 ;;;
 ;;; Main Processing Loop
@@ -928,7 +631,6 @@ it will signal an error."
 
 (defun process (command &rest args
                    &key deps load srcs outs bindir
-                   warnings hashes
                    specs
                    (compilation-mode :fastbuild)
                    block-compile
@@ -938,8 +640,7 @@ it will signal an error."
                    precompile-generics
                    save-runtime-options
                    coverage
-                   verbose
-                   interactive)
+                   verbose)
   "Main processing function for bazel.main. The keyword arguments of this function are flags for
 the compilation image.
  Arguments:
@@ -950,8 +651,6 @@ the compilation image.
   SRCS - sources for a binary core or for compilation,
   OUTS - the output files,
   BINDIR - the directory for the output files (for debug),
-  WARNINGS - is a list of files that contain deferred warnings,
-  HASHES - is a list of files with defined source hashes,
   COMPILATION-MODE - from bazel -c <compilation-mode>
   BLOCK-COMPILE - Whether to enable block compilation.
   BLOCK-COMPILE-SPECIFIED-ONLY - Whether to only combine top-level-forms into a block within
@@ -964,17 +663,14 @@ the compilation image.
   PRECOMPILE-GENERICS - if non-nil, precompile-generics before saving core,
   SAVE-RUNTIME-OPTIONS - will save the runtime options for the C runtime.
   COVERAGE - if the results should be instrumented with coverage information.
-  VERBOSE - Verbosity level from 0 to 3.
-  INTERACTIVE - Whether to enable interactive debugging."
-  (declare (ignore interactive verbose))  ; handled in execute-command
-  (multiple-value-setq (srcs deps load warnings hashes)
+  VERBOSE - Verbosity level from 0 to 3."
+  (declare (ignore verbose))  ; handled in execute-command
+  (multiple-value-setq (srcs deps load)
     (if specs
         (parse-specs specs)
         (values (split srcs)
                 (split deps)
-                (split load)
-                (split warnings)
-                (split hashes))))
+                (split load))))
 
   (let* ((command (to-keyword command))
          (outs (split outs))
@@ -990,7 +686,6 @@ the compilation image.
                         :force-compilation-p force
                         :precompile-generics-p precompile-generics
                         :save-runtime-options-p save-runtime-options
-                        :record-path-location-p coverage
                         :block-compile-p block-compile
                         :block-compile-specified-only block-compile-specified-only))
 
@@ -1004,57 +699,75 @@ the compilation image.
     ;; Rebind globally.
     (setf *action* action)
 
-    (when (>= *verbose* 1)
-      (print-action-full))
-
     (unless outs
       (fatal "Missing output file. Called with:~%~{~12T~A: ~A~%~}" args))
-    (init-action action command)
 
     (add-features features)
     (add-default-features compilation-mode)
 
     (mapc (lambda (nowarn) (action-add-nowarn nowarn action)) (split nowarn))
 
-    ;; Compiler-note failures must precede uninteresting-condition.
-    (action-add-nowarn #'bazel.warning:fail-inline-expansion-limit)
-    (action-add-nowarn #'bazel.warning:fail-stack-allocate-notes)
     ;; All notes are discarded here.
     (action-add-nowarn 'bazel.warning:uninteresting-condition)
     (action-add-nowarn #'defer-undefined-warning)
 
     #+sbcl
-    (when coverage
+    (when (and coverage (not (and (sb-int:singleton-p srcs)
+                                  (coverage-exclude-p (car srcs)))))
       (bazel.log:verbose "Turning on coverage-instrumented code generation.")
       (proclaim '(optimize (sb-c:store-coverage-data 3))))
 
-    (process-dependencies deps)
-    ;; Load in any source hash information files.
-    (mapc #'process-file* hashes)
+    ;; :core is a nonexecutable core, :binary prepends the SBCL C runtime
+    (let ((undefs (process-dependencies deps (case command ((:binary :core) t)))))
+      (when (and undefs (plusp (hash-table-count undefs)))
+        ;; We want to detect these situations:
+        ;;  - name got defined but is a macro
+        ;;  - name got defined but is an inline function
+        ;;  - name was never defined
+        ;; A few things are tricky about getting the errors entirely right,
+        ;; and we can't afford false positives because they will spuriously break
+        ;; the build. Better to have false negatives.
+        ;; - Inline functions with a locally NOTINLINE should reference the global name.
+        ;; - Reference to #'NAME is also usually ok.
+        ;; - Compiler-macros may decline to expand.
+        (let ((pivot (make-hash-table))) ; pathnames can be compared by EQ
+          ;; Take the mapping from function name to list of pathnames mentioning it and
+          ;; pivot it to a mapping from source file to list of functions it refers to.
+          (maphash (lambda (fname pathnames)
+                     (when t #+nil (or (not (fboundp fname))
+                                       (and (symbolp fname) (macro-function fname)))
+                       (dolist (pathname pathnames)
+                         (pushnew fname (gethash pathname pivot)))))
+                   undefs)
+          (maphash (lambda (pathname fnames)
+                     (message :error 0 "~A has linkage errors:~:{~% ~S - missing ~A~}"
+                              (namestring pathname)
+                              (mapcar (lambda (fname)
+                                        (list fname
+                                              (cond ((and (symbolp fname)
+                                                          (macro-function fname))
+                                                     "macro definition")
+                                                    ((inline-function-p fname)
+                                                     "inline definition")
+                                                    (t
+                                                     "definition"))))
+                                      fnames)))
+                   pivot)
+          (fatal "Build failed"))))
 
     (handler-bind ((condition #'handle-warning)
                    (non-fatal-error #'handle-error))
       (verbose "Loading ~D source file~:P..." (length load))
-      (mapc #'process-file* load)
+      (mapc #'process-file load)
 
       ;; Switch to source file processing.
       (setf (action-processing-sources-p action) t)
       (verbose "Processing ~D source file~:P..." (length srcs))
-      (mapc #'process-file* srcs)
-
-      (verbose "Processing ~D deferred warning file~:P..." (length warnings))
-      (mapc #'process-file* warnings)
+      (mapc #'process-file srcs)
 
       (verbose "Finalizing the ~A action..." command)
       (set-optimization-mode (action-compilation-mode action))
       (finish-action action command))))
-
-(defmethod execute-command ((command (eql :compile)) &rest args)
-  (apply #'process command args))
-(defmethod execute-command ((command (eql :binary)) &rest args)
-  (apply #'process command args))
-(defmethod execute-command ((command (eql :core)) &rest args)
-  (apply #'process command args))
 
 ;;;
 ;;; Main entry point
@@ -1083,33 +796,43 @@ the compilation image.
   "Parses the command-line and returns ARGS as list of keyword value pairs."
   (list* (to-keyword (first args)) (parse-rest-command-args (rest args))))
 
-(defmethod execute-command :around (command
-                                    &rest args
-                                    &key force verbose interactive
-                                    &allow-other-keys)
+(defun execute-command (command &rest args &key verbose &allow-other-keys) ; NOLINT
   ;; Process some meta-level options.
   (when verbose (setf *verbose* (read-from-string verbose)))
-  (set-interactive-mode interactive)
 
   (verbose "Program name: ~A" (program-name))
   (vv "Command line: ~{'~A'~^ ~}" (command-line-arguments))
   (verbose "Current dir: ~A" *default-pathname-defaults*)
 
+  ;; core saving seems extremely shaky as of late, failing in either of the follows ways:
+  ;;
+  ;; 1) SB-SYS:MEMORY-FAULT-ERROR: Unhandled memory fault at #x59. while executing: CORE
+  ;; 2) pre-GC failure
+  ;; Ptr 0x1200c312c7 @ b8009e6020 (lispobj b8009e600f,pg-1,h=70e0cb5835) sees junk
+  ;; fatal error encountered in SBCL pid 7999 tid 7999:
+  ;; Verify failed: 1 errors
+  ;; 3: fp=0x7f5d3ea07590 pc=0x55db1677ec64 Foreign function (null)
+  ;; 4: fp=0x7f5d3ea07620 pc=0x55db1675ccef Foreign function hexdump_and_verify_heap
+  ;; 5: fp=0x7f5d3ea076c0 pc=0x55db1677c8bf Foreign function collect_garbage
+  ;; 6: fp=0x7f5d3ea07730 pc=0x55db1674e78c Foreign function gc_and_save
+  ;;
+  ;; Maybe we can get a little more information by enabling GC debugging here.
+  (when (member command '(:binary :core))
+    (setf (sb-alien:extern-alien "pre_verify_gen_0" sb-alien:int) 0)
+    (setf (sb-alien:extern-alien "verify_gens" sb-alien:char) 0))
+
   (handler-bind ((error (lambda (e)
                           (format *error-output*
                                   "~&~S: ~A while executing: ~A~%"
                                   (type-of e) e command)
-                          (print-action-full
-                           :args args :stream *error-output*)
                           (unless verbose
                             (exit 1)))))
-    (with-continue-on-error (:when force)
-      (call-next-method))))
-
-(defmethod execute-command :after (command &rest ignore)
-  (declare (ignore ignore))
-  (verbose "BAZEL ~A finished" command))
+    (prog1 (apply #'process command args)
+      (verbose "BAZEL ~A finished" command))))
 
 (defun main ()
   "Main entry point."
+  (when (zerop (sb-alien:alien-funcall
+                (sb-alien:extern-alien "isatty" (function sb-alien:int sb-alien:int)) 0))
+    (sb-ext:disable-debugger))
   (apply #'execute-command (parse-command-args (command-line-arguments))))
