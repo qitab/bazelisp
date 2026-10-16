@@ -239,15 +239,6 @@ output
 of `lisp_library`. For `lisp_binary` and `lisp_test`, the default output is the
 executable (same name as the target).
 
-If the flag `--//:additional_dynamic_load_outputs` is
-passed, `OutputGroupInfo` has the following additional fields:
-
-*   `deps_manifest` additionally contains a plaintext representation of the
-    target's transitive Lisp features (prefixed with `feature:`) and transitive
-    source files (prefixed with `src:`).
-*   `dynamic_library` contains a shared object file with the target's transitive
-    C++ dependencies.
-
 [Runfiles](https://docs.bazel.build/versions/master/skylark/rules.html#runfiles)
 ([`DefaultInfo.default_runfiles`](https://docs.bazel.build/versions/master/skylark/lib/DefaultInfo.html#default_runfiles))
 are propagated from all dependencies that provide either runtime dependencies or
