@@ -8,30 +8,18 @@
 ;;; Simple logging utilities for the Bazel Lisp Compile utility.
 ;;;
 
-(defpackage bazel.log
-  (:use :cl)
-  (:shadow #:error #:warning)
-  (:export #:message
-           #:info
-           #:error
-           #:warning
-           #:verbose #:vv #:vvv
-           #:fatal #:fatal-error #:non-fatal-error
-           #:*verbose*
-           #:with-safe-io-syntax))
-
-(in-package #:bazel.log)
+(in-package #:bazel.utils)
 
 (declaim (fixnum *verbose*))
 (defvar *verbose* 0)
 
-(define-condition fatal-error (cl:error)
+(define-condition fatal-error (error)
   ((message :reader fatal-error-message :initarg :message :type (or null string)))
   (:documentation "An error caused by the log:fatal.")
   (:report (lambda (e s)
              (format s "~@[~A~]" (fatal-error-message e)))))
 
-(deftype non-fatal-error () '(and cl:error (not fatal-error)))
+(deftype non-fatal-error () '(and error (not fatal-error)))
 
 (defun ttyp (&optional (stream *standard-output*))
   "Returns true if the STREAM is a TTY."
@@ -87,15 +75,15 @@
   "Same as message with level 2. CONTROL is the format control string that operates on ARGS."
   (apply #'message :info 3 control args))
 
-(defun info (control &rest args)
+(defun report-info (control &rest args)
   "Same as message with level 0. CONTROL is the format control string that operates on ARGS."
   (apply #'message :info 0 control args))
 
-(defun warning (control &rest args)
+(defun report-warning (control &rest args)
   "Message with warning severity. CONTROL is the format control string that operates on ARGS."
   (apply #'message :warning 0 control args))
 
-(defun error (control &rest args)
+(defun report-error (control &rest args)
   "Message with error severity. CONTROL is the format control string that operates on ARGS."
   (apply #'message :error 0 control args))
 
@@ -105,4 +93,4 @@
   (apply #'message :fatal 0 control args)
   (with-simple-restart (continue "Continue from the fatal Bazel error.")
     (with-safe-io-syntax
-      (cl:error 'fatal-error :message (apply #'format nil control args)))))
+      (error 'fatal-error :message (apply #'format nil control args)))))
