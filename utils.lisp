@@ -9,34 +9,20 @@
 
 (defpackage #:bazel.utils
   (:use #:cl)
-  (:export #:octet
-           #:octets
-           #:simple-octets
-           #:nconcf
-           #:prefixp
+  (:export #:message
+           #:report-info
+           #:report-error
+           #:report-warning
+           #:verbose #:vv
+           #:fatal #:fatal-error
+           #:*verbose*
+           #:with-safe-io-syntax)
+  (:export #:prefixp
            #:strip-prefix
-           #:delete-existing
-           #:delete-read-only
-           #:dohash
            #:split
-           #:to-keyword
-           #:write-stringz
-           #:read-stringz
-           #:read-u64
-           #:write-u64
-           #:with-continue-on-error
-           #:funcall-named
-           #:funcall-named*))
+           #:to-keyword))
 
 (in-package #:bazel.utils)
-
-
-(deftype octet () '(unsigned-byte 8))
-(deftype octets () '(vector octet))
-(deftype simple-octets () '(and octets simple-array))
-
-(define-modify-macro nconcf (&rest lists) nconc
-  "Helper macro doing an nconc and setf to the first argument.")
 
 (defun prefixp (prefix string)
   "Test if STRING starts with the PREFIX."
@@ -51,23 +37,6 @@
   (if (prefixp prefix string)
       (values (subseq string (length prefix)) t)
       (values string nil)))
-
-(defun delete-existing (filename)
-  "Remove FILENAME from disk if it exists and its directory is writable"
-  (when (probe-file filename)
-    (delete-file filename)))
-
-(defun delete-read-only (filename &optional (mode :supersede))
-  "Remove FILENAME from disk if it is readonly.
-MODE can be :APPEND or :SUPERSEDE. True if file was deleted."
-  (when (probe-file filename)
-    (handler-case
-        (with-open-file (f filename :direction :output :if-exists mode) nil)
-      (file-error () (delete-file filename)))))
-
-(defmacro dohash ((k v table) &body body)
-  "Iterate through the hash TABLE binding the keys to K and values to V."
-  `(loop for ,k being the hash-keys in ,table using (hash-value ,v) do ,@body))
 
 (defun split (string &key (by #\Space))
   "Split the STRING by the separator BY into a list. Empty strings are not included."
@@ -85,71 +54,61 @@ MODE can be :APPEND or :SUPERSEDE. True if file was deleted."
  The string is interned in the upper case into the keyword package."
   (intern (string-upcase string) :keyword))
 
-(defun write-stringz (string out)
-  "Write a 0 terminated STRING to the OUT stream."
-  (declare (string string) (stream out))
-  (loop for c across string do
-    ;; This assumes that the CHAR-CODE is an octet.
-    (write-byte (char-code c) out))
-  (write-byte 0 out))
+(declaim (fixnum *verbose*))
+(defvar *verbose* 0 "Default verbosity")
 
-(defun read-stringz (stream)
-  "Read a 0 terminated string from the STREAM."
-  (declare (stream stream))
-  (coerce
-   (loop for code = (read-byte stream nil)
-         until (zerop code)
-         collect (code-char code))
-   'string))
+(define-condition fatal-error (error)
+  ((message :reader fatal-error-message :initarg :message :type (or null string)))
+  (:documentation "An error caused by the log:fatal.")
+  (:report (lambda (e s)
+             (format s "~@[~A~]" (fatal-error-message e)))))
 
-(defun read-u64 (in)
-  "Reads 8 bytes from the IN stream and returns an integer."
-  (declare (stream in))
-  (let ((u64 0))
-    (declare (type (unsigned-byte 64) u64))
-    (dotimes (i 8)
-      (setf (ldb (byte 8 (* i 8)) u64) (read-byte in)))
-    u64))
+(defmacro with-safe-io-syntax (&body body)
+  "Execute BODY with IO environment set to safe values."
+  `(with-standard-io-syntax
+     (let ((*print-readably* nil)
+           (*print-circle* t)
+           #+sbcl
+           (sb-ext:*suppress-print-errors* t))
+        (locally ,@body))))
 
-(defun write-u64 (u64 out)
-  "Writes 8 bytes representation of u64 to the OUT stream."
-  (declare (type (unsigned-byte 64) u64) (stream out))
-  (dotimes (i 8)
-    (write-byte (ldb (byte 8 (* i 8)) u64) out)))
+(defun message (severity level control &rest args)
+  "Format and print a log message.
+ The first argument is SEVERITY: :INFO, :WARNING, :ERROR.
+ The second argument specifies log verbosity LEVEL.
+ The ARGS are applied to the CONTROL string to produce the log output."
+  (declare (fixnum level))
+  (when (>= *verbose* level)
+    (with-safe-io-syntax
+      (let ((out (if (eq severity :info)
+                     *standard-output*
+                     *error-output*)))
+        (format out "~&~A: ~?~%" severity control args)))))
 
-(defun funcall-named (name &rest args)
-  "Call a function with NAME composed of package and function name. Passes ARGS to the function.
- If the package is not found, nothing is called and NIL is returned."
-  (let ((split (split name :by #\:)))
-    (assert (= 2 (length split))) ; NOLINT
-    (let ((package (find-package (first split))))
-      (when package
-        (let ((function (find-symbol (second split) package)))
-          (assert function) ; NOLINT
-          (assert (fboundp function)) ; NOLINT
-          (apply function args))))))
+(defun verbose (control &rest args)
+  "Same as message with level 1. CONTROL is the format control string that operates on ARGS."
+  (apply #'message :info 1 control args))
 
-(defun funcall-named* (name &rest args)
-  "Call a function with NAME composed of package and function name. Passes ARGS to the function.
- If the function is not found, nothing is called and NIL is returned."
-  (let ((split (split name :by #\:)))
-    (assert (= 2 (length split))) ; NOLINT
-    (let* ((package (find-package (first split)))
-           (function (and package (find-symbol (second split) package))))
-      (when (and function (fboundp function))
-        (apply function args)))))
+(defun vv (control &rest args)
+  "Same as message with level 2. CONTROL is the format control string that operates on ARGS."
+  (apply #'message :info 2 control args))
 
-(defun %with-continue-on-error (function test)
-  "Call FUNCTION while wrapping it conditionally (TEST) into a HANDLER-BIND that
- continues from the error if the continue restart is found."
-  (if test
-      (handler-bind ((error
-                      (lambda (c) (declare (ignore c))
-                        (let ((continue (find-restart 'continue)))
-                          (when continue (invoke-restart continue))))))
-        (funcall function))
-      (funcall function)))
+(defun report-info (control &rest args)
+  "Same as message with level 0. CONTROL is the format control string that operates on ARGS."
+  (apply #'message :info 0 control args))
 
-(defmacro with-continue-on-error ((&key (when t)) &body body)
-  "Call CONTINUE for all errors. WHEN is an optional condition form."
-  `(%with-continue-on-error (lambda () ,@body) ,when))
+(defun report-warning (control &rest args)
+  "Message with warning severity. CONTROL is the format control string that operates on ARGS."
+  (apply #'message :warning 0 control args))
+
+(defun report-error (control &rest args)
+  "Message with error severity. CONTROL is the format control string that operates on ARGS."
+  (apply #'message :error 0 control args))
+
+(defun fatal (control &rest args)
+  "Format an print a fail message then exit.
+ CONTROL is the format control string that operates on ARGS."
+  (apply #'message :fatal 0 control args)
+  (with-simple-restart (continue "Continue from the fatal Bazel error.")
+    (with-safe-io-syntax
+      (error 'fatal-error :message (apply #'format nil control args)))))
